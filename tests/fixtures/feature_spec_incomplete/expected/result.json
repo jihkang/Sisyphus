@@ -1,0 +1,6 @@
+{
+  "command": "verify",
+  "exit_code": 1,
+  "status": "blocked",
+  "stage": "spec"
+}

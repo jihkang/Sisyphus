@@ -1,0 +1,49 @@
+{
+  "type": "issue",
+  "slug": "complete",
+  "status": "verified",
+  "stage": "done",
+  "verify_status": "passed",
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Baseline retry flow still works",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Unicode payload is retried correctly",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Timeout in downstream parser is surfaced",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Baseline retry flow still works",
+        "method": "unit_test"
+      },
+      {
+        "target": "Unicode payload is retried correctly",
+        "method": "integration_test"
+      },
+      {
+        "target": "Timeout in downstream parser is surfaced",
+        "method": "manual_check"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": []
+}

@@ -1,0 +1,16 @@
+{
+  "type": "feature",
+  "slug": "close-requires",
+  "status": "blocked",
+  "stage": "audit",
+  "verify_status": "not_run",
+  "gates": [
+    {
+      "code": "VERIFY_REQUIRED",
+      "message": "task must pass verify before close"
+    }
+  ],
+  "meta": {
+    "close_override_used": false
+  }
+}

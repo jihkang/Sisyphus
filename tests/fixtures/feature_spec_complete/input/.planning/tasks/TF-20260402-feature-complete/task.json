@@ -1,0 +1,48 @@
+{
+  "id": "TF-20260402-feature-complete",
+  "type": "feature",
+  "slug": "complete",
+  "status": "open",
+  "stage": "spec",
+  "audit_attempts": 0,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-02T00:00:00Z",
+  "updated_at": "2026-04-02T00:00:00Z",
+  "closed_at": null,
+  "repo_root": "/tmp/repo",
+  "task_dir": ".planning/tasks/TF-20260402-feature-complete",
+  "worktree_path": "/tmp/_worktrees/taskflow-kit-TF-20260402-feature-complete",
+  "branch": "feat/complete",
+  "base_branch": "dev",
+  "verify_profile": "feature",
+  "verify_commands": [
+    "echo lint-ok"
+  ],
+  "verify_status": "not_run",
+  "last_verified_at": null,
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [],
+    "edge_cases": [],
+    "exception_cases": [],
+    "verification_methods": [],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false
+  }
+}

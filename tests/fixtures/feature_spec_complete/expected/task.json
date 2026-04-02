@@ -1,0 +1,49 @@
+{
+  "type": "feature",
+  "slug": "complete",
+  "status": "verified",
+  "stage": "done",
+  "verify_status": "passed",
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Happy path works",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Empty payload is rejected",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Downstream timeout is surfaced",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Happy path works",
+        "method": "unit_test"
+      },
+      {
+        "target": "Empty payload is rejected",
+        "method": "integration_test"
+      },
+      {
+        "target": "Downstream timeout is surfaced",
+        "method": "manual_check"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": []
+}

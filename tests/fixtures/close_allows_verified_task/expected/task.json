@@ -1,0 +1,11 @@
+{
+  "type": "feature",
+  "slug": "close-allows",
+  "status": "closed",
+  "stage": "done",
+  "verify_status": "passed",
+  "gates": [],
+  "meta": {
+    "close_override_used": false
+  }
+}

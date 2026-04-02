@@ -1,0 +1,42 @@
+{
+  "type": "feature",
+  "slug": "incomplete",
+  "status": "blocked",
+  "stage": "spec",
+  "verify_status": "failed",
+  "test_strategy": {
+    "normal_cases": [],
+    "edge_cases": [],
+    "exception_cases": [],
+    "verification_methods": [],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [
+    {
+      "code": "DOC_INCOMPLETE",
+      "message": "BRIEF.md is incomplete"
+    },
+    {
+      "code": "DOC_INCOMPLETE",
+      "message": "PLAN.md is incomplete"
+    },
+    {
+      "code": "ACCEPTANCE_CRITERIA_MISSING",
+      "message": "feature task requires filled acceptance criteria"
+    },
+    {
+      "code": "SPEC_INCOMPLETE",
+      "message": "task spec must define normal, edge, and exception cases before audit"
+    },
+    {
+      "code": "VERIFICATION_MAPPING_MISSING",
+      "message": "verification mapping must be completed before audit"
+    }
+  ]
+}

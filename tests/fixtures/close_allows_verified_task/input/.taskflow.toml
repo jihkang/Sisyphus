@@ -1,0 +1,13 @@
+base_branch = "dev"
+worktree_root = "../_worktrees"
+task_dir = ".planning/tasks"
+branch_prefix_feature = "feat"
+branch_prefix_issue = "fix"
+
+[commands]
+lint = "echo lint-ok"
+
+[verify]
+default = ["lint"]
+feature = ["lint"]
+issue = ["lint"]

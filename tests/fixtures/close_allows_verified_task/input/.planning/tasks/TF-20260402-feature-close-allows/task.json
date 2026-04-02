@@ -1,0 +1,79 @@
+{
+  "id": "TF-20260402-feature-close-allows",
+  "type": "feature",
+  "slug": "close-allows",
+  "status": "verified",
+  "stage": "done",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-02T00:00:00Z",
+  "updated_at": "2026-04-02T00:00:00Z",
+  "closed_at": null,
+  "repo_root": "/tmp/repo",
+  "task_dir": ".planning/tasks/TF-20260402-feature-close-allows",
+  "worktree_path": "/tmp/_worktrees/taskflow-kit-TF-20260402-feature-close-allows",
+  "branch": "feat/close-allows",
+  "base_branch": "dev",
+  "verify_profile": "feature",
+  "verify_commands": [
+    "echo lint-ok"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-02T00:00:00Z",
+  "last_verify_results": [
+    {
+      "name": "echo lint-ok",
+      "command": "echo lint-ok",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-02T00:00:00Z",
+      "finished_at": "2026-04-02T00:00:00Z",
+      "duration_ms": null,
+      "output_excerpt": "lint-ok"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Happy path works",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Edge path works",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Exception path works",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Happy path works",
+        "method": "unit_test"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false
+  }
+}

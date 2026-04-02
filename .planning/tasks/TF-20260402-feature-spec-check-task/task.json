@@ -1,0 +1,82 @@
+{
+  "id": "TF-20260402-feature-spec-check-task",
+  "type": "feature",
+  "slug": "spec-check-task",
+  "status": "blocked",
+  "stage": "spec",
+  "audit_attempts": 3,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-02T05:35:06Z",
+  "updated_at": "2026-04-02T05:35:47Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/projects/syspus/taskflow-kit",
+  "task_dir": ".planning/tasks/TF-20260402-feature-spec-check-task",
+  "worktree_path": "/Users/jihokang/Documents/projects/syspus/_worktrees/taskflow-kit-TF-20260402-feature-spec-check-task",
+  "branch": "feat/spec-check-task",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "failed",
+  "last_verified_at": "2026-04-02T05:35:47Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [],
+    "edge_cases": [],
+    "exception_cases": [],
+    "verification_methods": [],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [
+    {
+      "code": "DOC_INCOMPLETE",
+      "message": "BRIEF.md is incomplete",
+      "blocking": true,
+      "source": "docs",
+      "created_at": "2026-04-02T05:35:47Z"
+    },
+    {
+      "code": "DOC_INCOMPLETE",
+      "message": "PLAN.md is incomplete",
+      "blocking": true,
+      "source": "docs",
+      "created_at": "2026-04-02T05:35:47Z"
+    },
+    {
+      "code": "ACCEPTANCE_CRITERIA_MISSING",
+      "message": "feature task requires filled acceptance criteria",
+      "blocking": true,
+      "source": "docs",
+      "created_at": "2026-04-02T05:35:47Z"
+    },
+    {
+      "code": "SPEC_INCOMPLETE",
+      "message": "task spec must define normal, edge, and exception cases before audit",
+      "blocking": true,
+      "source": "strategy",
+      "created_at": "2026-04-02T05:35:47Z"
+    },
+    {
+      "code": "VERIFICATION_MAPPING_MISSING",
+      "message": "verification mapping must be completed before audit",
+      "blocking": true,
+      "source": "strategy",
+      "created_at": "2026-04-02T05:35:47Z"
+    }
+  ],
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false
+  }
+}

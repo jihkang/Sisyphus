@@ -1,0 +1,74 @@
+{
+  "id": "TF-20260402-feature-sample-task",
+  "type": "feature",
+  "slug": "sample-task",
+  "status": "verified",
+  "stage": "done",
+  "audit_attempts": 8,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-02T03:48:27Z",
+  "updated_at": "2026-04-02T05:35:06Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/projects/syspus/taskflow-kit",
+  "task_dir": ".planning/tasks/TF-20260402-feature-sample-task",
+  "worktree_path": "/Users/jihokang/Documents/projects/syspus/_worktrees/taskflow-kit-TF-20260402-feature-sample-task",
+  "branch": "feat/sample-task",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-02T05:35:06Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Verify parses a filled happy-path item.",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Verify handles an empty command set without crashing.",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Verify blocks close when docs or strategy are incomplete.",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Verify parses a filled happy-path item.",
+        "method": "unit_test"
+      },
+      {
+        "target": "Verify handles an empty command set without crashing.",
+        "method": "integration_test"
+      },
+      {
+        "target": "Verify blocks close when docs or strategy are incomplete.",
+        "method": "manual_check"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": "n/a",
+      "purpose": "n/a",
+      "trigger": "n/a",
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false
+  }
+}
