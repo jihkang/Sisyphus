@@ -2,12 +2,12 @@
   "id": "TF-20260402-feature-spec-check-task",
   "type": "feature",
   "slug": "spec-check-task",
-  "status": "blocked",
-  "stage": "spec",
-  "audit_attempts": 3,
+  "status": "verified",
+  "stage": "done",
+  "audit_attempts": 4,
   "max_audit_attempts": 10,
   "created_at": "2026-04-02T05:35:06Z",
-  "updated_at": "2026-04-02T05:35:47Z",
+  "updated_at": "2026-04-04T14:20:06Z",
   "closed_at": null,
   "repo_root": "/Users/jihokang/Documents/projects/syspus/taskflow-kit",
   "task_dir": ".planning/tasks/TF-20260402-feature-spec-check-task",
@@ -16,14 +16,74 @@
   "base_branch": "main",
   "verify_profile": "default",
   "verify_commands": [],
-  "verify_status": "failed",
-  "last_verified_at": "2026-04-02T05:35:47Z",
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-04T14:20:06Z",
   "last_verify_results": [],
   "test_strategy": {
-    "normal_cases": [],
-    "edge_cases": [],
-    "exception_cases": [],
-    "verification_methods": [],
+    "normal_cases": [
+      {
+        "name": "Creating a feature task from a clean repository creates the expected branch, worktree directory, task record, and template files.",
+        "checked": false
+      },
+      {
+        "name": "Creating an issue task uses the issue branch prefix and still provisions the branch from the configured base branch.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "A repository without `.taskflow.toml` still creates the branch from `main` and uses the default worktree root.",
+        "checked": false
+      },
+      {
+        "name": "A relative `worktree_root` in config resolves correctly from the repository root and is stored consistently in task metadata.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "If the target branch already exists, `taskflow new` exits with a failure and does not leave a misleading new task directory behind.",
+        "checked": false
+      },
+      {
+        "name": "If the target worktree path already exists, `taskflow new` exits with a failure and does not report success.",
+        "checked": false
+      },
+      {
+        "name": "If git setup partially succeeds and a later step fails, rollback leaves the repository in a deterministic state that can be retried manually.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Creating a feature task from a clean repository creates the expected branch, worktree directory, task record, and template files.",
+        "method": "integration_test"
+      },
+      {
+        "target": "Creating an issue task uses the issue branch prefix and still provisions the branch from the configured base branch.",
+        "method": "integration_test"
+      },
+      {
+        "target": "A repository without .taskflow.toml still creates the branch from main and uses the default worktree root.",
+        "method": "integration_test"
+      },
+      {
+        "target": "A relative worktree_root in config resolves correctly from the repository root and is stored consistently in task metadata.",
+        "method": "unit_test"
+      },
+      {
+        "target": "If the target branch already exists, taskflow new exits with a failure and does not leave a misleading new task directory behind.",
+        "method": "integration_test"
+      },
+      {
+        "target": "If the target worktree path already exists, taskflow new exits with a failure and does not report success.",
+        "method": "integration_test"
+      },
+      {
+        "target": "If git setup partially succeeds and a later step fails, rollback leaves the repository in a deterministic state that can be retried manually.",
+        "method": "manual_check"
+      }
+    ],
     "external_llm": {
       "required": false,
       "provider": null,
@@ -32,43 +92,7 @@
       "status": "not_needed"
     }
   },
-  "gates": [
-    {
-      "code": "DOC_INCOMPLETE",
-      "message": "BRIEF.md is incomplete",
-      "blocking": true,
-      "source": "docs",
-      "created_at": "2026-04-02T05:35:47Z"
-    },
-    {
-      "code": "DOC_INCOMPLETE",
-      "message": "PLAN.md is incomplete",
-      "blocking": true,
-      "source": "docs",
-      "created_at": "2026-04-02T05:35:47Z"
-    },
-    {
-      "code": "ACCEPTANCE_CRITERIA_MISSING",
-      "message": "feature task requires filled acceptance criteria",
-      "blocking": true,
-      "source": "docs",
-      "created_at": "2026-04-02T05:35:47Z"
-    },
-    {
-      "code": "SPEC_INCOMPLETE",
-      "message": "task spec must define normal, edge, and exception cases before audit",
-      "blocking": true,
-      "source": "strategy",
-      "created_at": "2026-04-02T05:35:47Z"
-    },
-    {
-      "code": "VERIFICATION_MAPPING_MISSING",
-      "message": "verification mapping must be completed before audit",
-      "blocking": true,
-      "source": "strategy",
-      "created_at": "2026-04-02T05:35:47Z"
-    }
-  ],
+  "gates": [],
   "docs": {
     "brief": "BRIEF.md",
     "plan": "PLAN.md",

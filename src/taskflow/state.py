@@ -24,6 +24,25 @@ def create_task_record(
     task_type: str,
     slug: str,
 ) -> dict:
+    task = build_task_record(
+        repo_root=repo_root,
+        config=config,
+        task_type=task_type,
+        slug=slug,
+    )
+    task_path = repo_root / task["task_dir"]
+    task_path.mkdir(parents=True, exist_ok=True)
+    task_file = task_path / "task.json"
+    save_task_record(task_file=task_file, task=task)
+    return task
+
+
+def build_task_record(
+    repo_root: Path,
+    config: TaskflowConfig,
+    task_type: str,
+    slug: str,
+) -> dict:
     task_id = task_id_for(task_type=task_type, slug=slug)
     branch = branch_name(
         task_type=task_type,
@@ -32,7 +51,6 @@ def create_task_record(
         issue_prefix=config.branch_prefix_issue,
     )
     task_path = task_dir(repo_root, config.task_dir, task_id)
-    task_path.mkdir(parents=True, exist_ok=True)
 
     verify_profile = task_type if task_type in config.verify else "default"
     verify_keys = config.verify.get(verify_profile, [])
@@ -50,7 +68,7 @@ def create_task_record(
         }
     )
 
-    task = {
+    return {
         "id": task_id,
         "type": task_type,
         "slug": slug,
@@ -91,10 +109,6 @@ def create_task_record(
             "close_override_used": False,
         },
     }
-
-    task_file = task_path / "task.json"
-    save_task_record(task_file=task_file, task=task)
-    return task
 
 
 def load_task_record(repo_root: Path, task_dir_name: str, task_id: str) -> tuple[dict, Path]:
