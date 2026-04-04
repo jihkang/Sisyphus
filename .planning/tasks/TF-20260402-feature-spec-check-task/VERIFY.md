@@ -2,10 +2,10 @@
 
 ## Audit Summary
 
-- Attempt: `4/10`
-- Stage: `done`
-- Status: `passed`
-- Result: `go next task`
+- Attempt: `3/10`
+- Stage: `spec`
+- Status: `failed`
+- Result: `return to current task`
 
 ## Command Results
 
@@ -13,10 +13,10 @@
 
 ## Test Coverage Check
 
-- Normal cases defined: `yes`
-- Edge cases defined: `yes`
-- Exception cases defined: `yes`
-- Verification methods defined: `yes`
+- Normal cases defined: `no`
+- Edge cases defined: `no`
+- Exception cases defined: `no`
+- Verification methods defined: `no`
 
 ## External LLM Review
 
@@ -28,4 +28,8 @@
 
 ## Gates
 
-- None
+- `DOC_INCOMPLETE`: BRIEF.md is incomplete
+- `DOC_INCOMPLETE`: PLAN.md is incomplete
+- `ACCEPTANCE_CRITERIA_MISSING`: feature task requires filled acceptance criteria
+- `SPEC_INCOMPLETE`: task spec must define normal, edge, and exception cases before audit
+- `VERIFICATION_MAPPING_MISSING`: verification mapping must be completed before audit
