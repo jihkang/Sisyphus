@@ -24,7 +24,7 @@ def run_close(repo_root: Path, config: TaskflowConfig, task_id: str, allow_dirty
     if task.get("verify_status") != "passed":
         gates.append(_gate("VERIFY_REQUIRED", "task must pass verify before close", source="close"))
 
-    dirty = is_dirty_worktree(Path(task.get("repo_root", str(repo_root))))
+    dirty = is_dirty_worktree(_resolve_dirty_check_path(repo_root=repo_root, task=task))
     if dirty and not allow_dirty:
         gates.append(_gate("DIRTY_WORKTREE", "working tree is dirty", source="close"))
 
@@ -69,8 +69,23 @@ def is_dirty_worktree(path: Path) -> bool:
             text=True,
         )
         return bool(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError, NotADirectoryError, OSError):
         return False
+
+
+def _resolve_dirty_check_path(repo_root: Path, task: dict) -> Path:
+    candidates = [
+        task.get("worktree_path"),
+        task.get("repo_root"),
+        str(repo_root),
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        resolved = Path(candidate)
+        if resolved.is_dir():
+            return resolved
+    return repo_root
 
 
 def _gate(code: str, message: str, source: str) -> dict:
