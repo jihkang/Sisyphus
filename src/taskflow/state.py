@@ -148,3 +148,27 @@ def list_task_records(repo_root: Path, task_dir_name: str) -> list[dict]:
 def save_task_record(task_file: Path, task: dict) -> None:
     task["updated_at"] = utc_now()
     task_file.write_text(json.dumps(task, indent=2) + "\n", encoding="utf-8")
+    sync_task_support_files(task)
+
+
+def sync_task_support_files(task: dict) -> None:
+    repo_root = Path(str(task.get("repo_root", "")))
+    worktree_path = Path(str(task.get("worktree_path", "")))
+    task_dir_value = task.get("task_dir")
+    if not task_dir_value or not repo_root.is_dir() or not worktree_path.is_dir():
+        return
+
+    source_task_dir = repo_root / str(task_dir_value)
+    target_task_dir = worktree_path / str(task_dir_value)
+    if not source_task_dir.exists():
+        return
+
+    target_task_dir.mkdir(parents=True, exist_ok=True)
+    relative_paths = ["task.json", *[str(path) for path in task.get("docs", {}).values() if path]]
+    for relative_path in relative_paths:
+        source_path = source_task_dir / relative_path
+        if not source_path.exists():
+            continue
+        target_path = target_task_dir / relative_path
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")

@@ -10,8 +10,12 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+discord = ["discord.py>=2.4,<3"]
+
 [project.scripts]
 taskflow = "taskflow.cli:main"
+sisyphus = "taskflow.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

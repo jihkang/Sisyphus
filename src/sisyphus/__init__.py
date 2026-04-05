@@ -1,6 +1,4 @@
-"""taskflow-kit package."""
-
-from .api import (
+from taskflow import (
     QueuedConversation,
     TaskRequestResult,
     get_task,
@@ -11,7 +9,6 @@ from .api import (
 )
 
 __all__ = [
-    "__version__",
     "QueuedConversation",
     "TaskRequestResult",
     "get_task",
@@ -20,5 +17,3 @@ __all__ = [
     "request_task",
     "run_until_stable",
 ]
-
-__version__ = "0.1.0"

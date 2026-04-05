@@ -12,7 +12,7 @@ from .creation import create_task_workspace
 from .paths import event_log_file, inbox_failed_dir, inbox_pending_dir, inbox_processed_dir
 from .planning import enforce_plan_approved, enforce_spec_frozen
 from .provider_wrapper import run_provider_wrapper
-from .state import load_task_record, save_task_record, utc_now
+from .state import load_task_record, save_task_record, sync_task_support_files, utc_now
 from .utils import project_fields
 from .workflow import run_workflow_cycle
 
@@ -28,6 +28,7 @@ CONVERSATION_FIELD_DEFAULTS = {
     "provider": "codex",
     "owned_paths": list,
     "provider_args": list,
+    "source_context": dict,
     "auto_run": True,
 }
 
@@ -57,6 +58,7 @@ def queue_conversation_event(
     provider: str = "codex",
     owned_paths: list[str] | None = None,
     provider_args: list[str] | None = None,
+    source_context: dict[str, object] | None = None,
     auto_run: bool = True,
 ) -> tuple[dict, Path]:
     event_id = _new_event_id()
@@ -79,6 +81,7 @@ def queue_conversation_event(
             "provider": provider,
             "owned_paths": owned_paths or [],
             "provider_args": provider_args or [],
+            "source_context": source_context or {},
             "auto_run": auto_run,
         },
         CONVERSATION_FIELD_DEFAULTS,
@@ -226,6 +229,7 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
     agent_id = str(payload["agent_id"]).strip() or "worker-1"
     owned_paths = [str(path) for path in payload["owned_paths"]]
     provider_args = [str(arg) for arg in payload["provider_args"]]
+    source_context = dict(payload["source_context"])
     auto_run = bool(payload["auto_run"])
     requested_auto_run = auto_run
 
@@ -243,6 +247,7 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
         event_id=event["id"],
         provider=provider,
         auto_loop_enabled=requested_auto_run,
+        source_context=source_context,
     )
 
     agent_exit_code = None
@@ -301,6 +306,7 @@ def _hydrate_task_from_conversation(
     event_id: str,
     provider: str,
     auto_loop_enabled: bool,
+    source_context: dict[str, object],
 ) -> None:
     repo_root = Path(task["repo_root"])
     task_dir = repo_root / task["task_dir"]
@@ -324,7 +330,10 @@ def _hydrate_task_from_conversation(
     task_record["meta"]["source_event_type"] = "conversation"
     task_record["meta"]["default_provider"] = provider
     task_record["meta"]["auto_loop_enabled"] = auto_loop_enabled
+    if source_context:
+        task_record["meta"]["source_context"] = source_context
     save_task_record(task_file=task_file, task=task_record)
+    sync_task_support_files(task_record)
 
 
 def _render_brief(task: dict, title: str, message: str) -> str:

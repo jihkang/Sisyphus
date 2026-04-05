@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .state import sync_task_support_files
+
 
 def template_root() -> Path:
     return Path(__file__).resolve().parents[2] / "templates"
@@ -23,3 +25,4 @@ def materialize_task_templates(task: dict) -> None:
         content = content.replace("{{SLUG}}", task["slug"])
         content = content.replace("{{BRANCH}}", task["branch"])
         target.write_text(content, encoding="utf-8")
+    sync_task_support_files(task)

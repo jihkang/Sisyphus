@@ -13,12 +13,13 @@ from .agents import (
     register_agent,
     update_agent,
 )
+from .api import queue_conversation, request_task
 from .agent_runtime import run_tracked_agent
 from .audit import run_verify
 from .closeout import run_close
 from .config import load_config
 from .creation import TaskCreationError, create_task_workspace
-from .daemon import queue_conversation_event, run_daemon
+from .daemon import run_daemon
 from .discovery import detect_repo_root
 from .planning import (
     approve_task_plan,
@@ -29,7 +30,8 @@ from .planning import (
     request_plan_changes,
     revise_task_plan,
 )
-from .state import list_task_records
+from .service import run_service
+from .state import list_task_records, load_task_record
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -79,25 +81,26 @@ def build_parser() -> argparse.ArgumentParser:
     subtasks_generate_parser = subtasks_subparsers.add_parser("generate")
     subtasks_generate_parser.add_argument("task_id")
 
+    request_parser = subparsers.add_parser("request")
+    _add_conversation_arguments(request_parser)
+
     ingest_parser = subparsers.add_parser("ingest")
     ingest_subparsers = ingest_parser.add_subparsers(dest="ingest_command", required=True)
     ingest_conversation_parser = ingest_subparsers.add_parser("conversation")
-    ingest_conversation_parser.add_argument("message")
-    ingest_conversation_parser.add_argument("--title")
-    ingest_conversation_parser.add_argument("--task-type", choices=["feature", "issue"], default="feature")
-    ingest_conversation_parser.add_argument("--slug")
-    ingest_conversation_parser.add_argument("--instruction")
-    ingest_conversation_parser.add_argument("--agent-id", default="worker-1")
-    ingest_conversation_parser.add_argument("--role", default="worker")
-    ingest_conversation_parser.add_argument("--provider", default="codex")
-    ingest_conversation_parser.add_argument("--owned-path", action="append", dest="owned_paths")
-    ingest_conversation_parser.add_argument("--provider-arg", action="append", dest="provider_args")
-    ingest_conversation_parser.add_argument("--no-run", action="store_true")
+    _add_conversation_arguments(ingest_conversation_parser)
 
     daemon_parser = subparsers.add_parser("daemon")
     daemon_parser.add_argument("--once", action="store_true")
     daemon_parser.add_argument("--poll-interval-seconds", type=int, default=5)
     daemon_parser.add_argument("--max-events", type=int)
+
+    serve_parser = subparsers.add_parser("serve")
+    serve_parser.add_argument("--poll-interval-seconds", type=int, default=5)
+
+    discord_parser = subparsers.add_parser("discord-bot")
+    discord_parser.add_argument("--token")
+    discord_parser.add_argument("--poll-interval-seconds", type=int, default=5)
+    discord_parser.add_argument("--channel-id", type=int, action="append", dest="channel_ids")
 
     status_parser = subparsers.add_parser("status")
     status_parser.add_argument("--json", action="store_true")
@@ -150,6 +153,20 @@ def build_parser() -> argparse.ArgumentParser:
     agent_run_parser.add_argument("--heartbeat-seconds", type=int, default=10)
 
     return parser
+
+
+def _add_conversation_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("message")
+    parser.add_argument("--title")
+    parser.add_argument("--task-type", choices=["feature", "issue"], default="feature")
+    parser.add_argument("--slug")
+    parser.add_argument("--instruction")
+    parser.add_argument("--agent-id", default="worker-1")
+    parser.add_argument("--role", default="worker")
+    parser.add_argument("--provider", default="codex")
+    parser.add_argument("--owned-path", action="append", dest="owned_paths")
+    parser.add_argument("--provider-arg", action="append", dest="provider_args")
+    parser.add_argument("--no-run", action="store_true")
 
 
 def handle_new(task_type: str, slug: str) -> int:
@@ -301,7 +318,7 @@ def handle_ingest_conversation(
 ) -> int:
     repo_root = detect_repo_root(Path.cwd())
     try:
-        event, event_path = queue_conversation_event(
+        queued = queue_conversation(
             repo_root=repo_root,
             message=message,
             title=title,
@@ -319,10 +336,57 @@ def handle_ingest_conversation(
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
-    print(f"queued {event['id']}")
-    print(f"event_file: {event_path}")
-    print(f"task_type: {event['payload']['task_type']}")
-    print(f"slug: {event['payload']['slug']}")
+    print(f"queued {queued.event_id}")
+    print(f"event_file: {queued.event_path}")
+    print(f"task_type: {queued.event['payload']['task_type']}")
+    print(f"slug: {queued.event['payload']['slug']}")
+    return 0
+
+
+def handle_request(
+    message: str,
+    title: str | None,
+    task_type: str,
+    slug: str | None,
+    instruction: str | None,
+    agent_id: str,
+    role: str,
+    provider: str,
+    owned_paths: list[str] | None,
+    provider_args: list[str] | None,
+    no_run: bool,
+) -> int:
+    repo_root = detect_repo_root(Path.cwd())
+    result = request_task(
+        repo_root=repo_root,
+        message=message,
+        title=title,
+        task_type=task_type,
+        slug=slug,
+        instruction=instruction,
+        agent_id=agent_id,
+        role=role,
+        provider=provider,
+        owned_paths=owned_paths,
+        provider_args=provider_args,
+        auto_run=not no_run,
+    )
+    if not result.ok:
+        print(f"error: {result.error or 'request processing failed'}", file=sys.stderr)
+        return 1
+
+    if not result.task_id or not result.task:
+        print(f"error: request completed without task id for event {result.event_id}", file=sys.stderr)
+        return 1
+    task = result.task
+
+    print(f"request {result.event_id}")
+    print(f"task_id: {task['id']}")
+    print(f"status: {task.get('status')}")
+    print(f"plan_status: {task.get('plan_status')}")
+    print(f"spec_status: {task.get('spec_status')}")
+    print(f"workflow_phase: {task.get('workflow_phase')}")
+    print(f"orchestrated: {result.orchestrated}")
     return 0
 
 
@@ -341,6 +405,35 @@ def handle_daemon(once: bool, poll_interval_seconds: int, max_events: int | None
     print(f"skipped: {stats.skipped}")
     print(f"orchestrated: {stats.orchestrated}")
     return 0 if stats.failed == 0 else 1
+
+
+def handle_serve(poll_interval_seconds: int) -> int:
+    repo_root = detect_repo_root(Path.cwd())
+    config = load_config(repo_root)
+    run_service(
+        repo_root=repo_root,
+        config=config,
+        poll_interval_seconds=poll_interval_seconds,
+    )
+    return 0
+
+
+def handle_discord_bot(token: str | None, poll_interval_seconds: int, channel_ids: list[int] | None) -> int:
+    from .discord_bot import run_discord_bot
+
+    repo_root = detect_repo_root(Path.cwd())
+    config = load_config(repo_root)
+    try:
+        return run_discord_bot(
+            repo_root=repo_root,
+            config=config,
+            token=token,
+            poll_interval_seconds=poll_interval_seconds,
+            allowed_channel_ids=channel_ids,
+        )
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
 
 def handle_agents(task_id: str | None, as_json: bool, stale_after_seconds: int) -> int:
@@ -490,6 +583,7 @@ def handle_agent_run(
     heartbeat_seconds: int,
     command: list[str],
     stdin_text: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> int:
     repo_root = detect_repo_root(Path.cwd())
     config = load_config(repo_root)
@@ -533,6 +627,7 @@ def handle_agent_run(
             heartbeat_seconds=heartbeat_seconds,
             run_cwd=Path.cwd(),
             stdin_text=stdin_text,
+            env=env,
         )
     except (AgentTrackingError, FileNotFoundError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -638,6 +733,20 @@ def main() -> int:
 
     if args.command == "new":
         return handle_new(task_type=args.task_type, slug=args.slug)
+    if args.command == "request":
+        return handle_request(
+            message=args.message,
+            title=args.title,
+            task_type=args.task_type,
+            slug=args.slug,
+            instruction=args.instruction,
+            agent_id=args.agent_id,
+            role=args.role,
+            provider=args.provider,
+            owned_paths=args.owned_paths,
+            provider_args=args.provider_args,
+            no_run=args.no_run,
+        )
     if args.command == "verify":
         return handle_verify(task_id=args.task_id)
     if args.command == "close":
@@ -742,6 +851,16 @@ def main() -> int:
             once=args.once,
             poll_interval_seconds=args.poll_interval_seconds,
             max_events=args.max_events,
+        )
+    if args.command == "serve":
+        return handle_serve(
+            poll_interval_seconds=args.poll_interval_seconds,
+        )
+    if args.command == "discord-bot":
+        return handle_discord_bot(
+            token=args.token,
+            poll_interval_seconds=args.poll_interval_seconds,
+            channel_ids=args.channel_ids,
         )
     if args.command == "status":
         return handle_status(

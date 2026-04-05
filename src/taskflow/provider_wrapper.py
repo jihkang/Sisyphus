@@ -29,7 +29,6 @@ def run_provider_wrapper(provider: str, argv: list[str], *, repo_root: Path | No
     task_parser.add_argument("--owned-path", action="append", dest="owned_paths")
     task_parser.add_argument("--heartbeat-seconds", type=int, default=10)
     task_parser.add_argument("--provider-arg", action="append", dest="provider_args")
-    task_parser.add_argument("command", nargs=argparse.REMAINDER)
 
     conversation_parser = subparsers.add_parser("conversation")
     conversation_parser.add_argument("message")
@@ -42,7 +41,7 @@ def run_provider_wrapper(provider: str, argv: list[str], *, repo_root: Path | No
     conversation_parser.add_argument("--owned-path", action="append", dest="owned_paths")
     conversation_parser.add_argument("--provider-arg", action="append", dest="provider_args")
 
-    args = parser.parse_args(normalized_argv)
+    args, extras = parser.parse_known_args(normalized_argv)
 
     if args.launch_mode == "conversation":
         return _run_conversation_mode(
@@ -60,16 +59,16 @@ def run_provider_wrapper(provider: str, argv: list[str], *, repo_root: Path | No
             provider_args=args.provider_args,
         )
 
-    command = list(args.command)
+    command = list(extras)
     stdin_text: str | None = None
+    env: dict[str, str] | None = None
     step = args.step
     summary = args.summary
-
     if command and command[0] == "--":
         command = command[1:]
 
     if not command:
-        command, stdin_text, default_step, default_summary = _build_default_launch(
+        command, stdin_text, default_step, default_summary, env = _build_default_launch(
             provider=provider,
             repo_root=repo_root,
             config=config,
@@ -91,6 +90,7 @@ def run_provider_wrapper(provider: str, argv: list[str], *, repo_root: Path | No
         heartbeat_seconds=args.heartbeat_seconds,
         command=command,
         stdin_text=stdin_text,
+        env=env,
     )
 
 
@@ -151,7 +151,7 @@ def _build_default_launch(
     task_id: str,
     extra_instruction: str | None,
     provider_args: list[str],
-) -> tuple[list[str], str | None, str, str]:
+) -> tuple[list[str], str | None, str, str, dict[str, str]]:
     if provider != "codex":
         raise RuntimeError(f"default launch is not configured for provider: {provider}")
 
@@ -162,6 +162,11 @@ def _build_default_launch(
         task_id=task_id,
         extra_instruction=extra_instruction,
     )
+    git_env = {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "safe.directory",
+        "GIT_CONFIG_VALUE_0": str(prompt.workdir),
+    }
     command = [
         codex,
         "exec",
@@ -175,6 +180,7 @@ def _build_default_launch(
         prompt.prompt,
         f"running codex task {task_id}",
         f"codex exec started for {task_id}",
+        git_env,
     )
 
 
