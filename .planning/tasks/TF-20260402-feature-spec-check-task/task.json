@@ -2,13 +2,13 @@
   "id": "TF-20260402-feature-spec-check-task",
   "type": "feature",
   "slug": "spec-check-task",
-  "status": "verified",
+  "status": "closed",
   "stage": "done",
   "audit_attempts": 4,
   "max_audit_attempts": 10,
   "created_at": "2026-04-02T05:35:06Z",
-  "updated_at": "2026-04-04T14:20:06Z",
-  "closed_at": null,
+  "updated_at": "2026-04-05T08:50:27Z",
+  "closed_at": "2026-04-05T08:50:27Z",
   "repo_root": "/Users/jihokang/Documents/projects/syspus/taskflow-kit",
   "task_dir": ".planning/tasks/TF-20260402-feature-spec-check-task",
   "worktree_path": "/Users/jihokang/Documents/projects/syspus/_worktrees/taskflow-kit-TF-20260402-feature-spec-check-task",
@@ -23,35 +23,35 @@
     "normal_cases": [
       {
         "name": "Creating a feature task from a clean repository creates the expected branch, worktree directory, task record, and template files.",
-        "checked": false
+        "checked": true
       },
       {
         "name": "Creating an issue task uses the issue branch prefix and still provisions the branch from the configured base branch.",
-        "checked": false
+        "checked": true
       }
     ],
     "edge_cases": [
       {
         "name": "A repository without `.taskflow.toml` still creates the branch from `main` and uses the default worktree root.",
-        "checked": false
+        "checked": true
       },
       {
         "name": "A relative `worktree_root` in config resolves correctly from the repository root and is stored consistently in task metadata.",
-        "checked": false
+        "checked": true
       }
     ],
     "exception_cases": [
       {
         "name": "If the target branch already exists, `taskflow new` exits with a failure and does not leave a misleading new task directory behind.",
-        "checked": false
+        "checked": true
       },
       {
         "name": "If the target worktree path already exists, `taskflow new` exits with a failure and does not report success.",
-        "checked": false
+        "checked": true
       },
       {
         "name": "If git setup partially succeeds and a later step fails, rollback leaves the repository in a deterministic state that can be retried manually.",
-        "checked": false
+        "checked": true
       }
     ],
     "verification_methods": [
@@ -101,6 +101,6 @@
   },
   "meta": {
     "sequence": null,
-    "close_override_used": false
+    "close_override_used": true
   }
 }
