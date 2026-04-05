@@ -21,10 +21,10 @@
 
 ## Acceptance Criteria
 
-- [ ] `taskflow new` creates the task record, materializes task docs, creates the branch, and creates the worktree in one flow.
-- [ ] If the branch already exists or the target worktree path already exists, the command fails with a clear error and does not leave a misleading partial task record behind.
-- [ ] The created branch starts from `base_branch` in `.taskflow.toml` or the default `main` when no config is present.
-- [ ] The stored `branch`, `base_branch`, and `worktree_path` metadata match the real git objects that were created.
+- [x] `taskflow new` creates the task record, materializes task docs, creates the branch, and creates the worktree in one flow.
+- [x] If the branch already exists or the target worktree path already exists, the command fails with a clear error and does not leave a misleading partial task record behind.
+- [x] The created branch starts from `base_branch` in `.taskflow.toml` or the default `main` when no config is present.
+- [x] The stored `branch`, `base_branch`, and `worktree_path` metadata match the real git objects that were created.
 
 ## Constraints
 

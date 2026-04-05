@@ -2,13 +2,13 @@
   "id": "TF-20260402-feature-sample-task",
   "type": "feature",
   "slug": "sample-task",
-  "status": "verified",
+  "status": "closed",
   "stage": "done",
   "audit_attempts": 8,
   "max_audit_attempts": 10,
   "created_at": "2026-04-02T03:48:27Z",
-  "updated_at": "2026-04-02T05:35:06Z",
-  "closed_at": null,
+  "updated_at": "2026-04-05T08:49:46Z",
+  "closed_at": "2026-04-05T08:49:46Z",
   "repo_root": "/Users/jihokang/Documents/projects/syspus/taskflow-kit",
   "task_dir": ".planning/tasks/TF-20260402-feature-sample-task",
   "worktree_path": "/Users/jihokang/Documents/projects/syspus/_worktrees/taskflow-kit-TF-20260402-feature-sample-task",
@@ -69,6 +69,6 @@
   },
   "meta": {
     "sequence": null,
-    "close_override_used": false
+    "close_override_used": true
   }
 }

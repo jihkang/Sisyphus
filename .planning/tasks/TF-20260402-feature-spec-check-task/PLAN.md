@@ -17,19 +17,19 @@
 
 ### Normal Cases
 
-- [ ] Creating a feature task from a clean repository creates the expected branch, worktree directory, task record, and template files.
-- [ ] Creating an issue task uses the issue branch prefix and still provisions the branch from the configured base branch.
+- [x] Creating a feature task from a clean repository creates the expected branch, worktree directory, task record, and template files.
+- [x] Creating an issue task uses the issue branch prefix and still provisions the branch from the configured base branch.
 
 ### Edge Cases
 
-- [ ] A repository without `.taskflow.toml` still creates the branch from `main` and uses the default worktree root.
-- [ ] A relative `worktree_root` in config resolves correctly from the repository root and is stored consistently in task metadata.
+- [x] A repository without `.taskflow.toml` still creates the branch from `main` and uses the default worktree root.
+- [x] A relative `worktree_root` in config resolves correctly from the repository root and is stored consistently in task metadata.
 
 ### Exception Cases
 
-- [ ] If the target branch already exists, `taskflow new` exits with a failure and does not leave a misleading new task directory behind.
-- [ ] If the target worktree path already exists, `taskflow new` exits with a failure and does not report success.
-- [ ] If git setup partially succeeds and a later step fails, rollback leaves the repository in a deterministic state that can be retried manually.
+- [x] If the target branch already exists, `taskflow new` exits with a failure and does not leave a misleading new task directory behind.
+- [x] If the target worktree path already exists, `taskflow new` exits with a failure and does not report success.
+- [x] If git setup partially succeeds and a later step fails, rollback leaves the repository in a deterministic state that can be retried manually.
 
 ## Verification Mapping
 

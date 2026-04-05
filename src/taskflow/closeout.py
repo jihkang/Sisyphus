@@ -19,7 +19,7 @@ class CloseOutcome:
 
 def run_close(repo_root: Path, config: TaskflowConfig, task_id: str, allow_dirty: bool) -> CloseOutcome:
     task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
-    gates = list(task.get("gates", []))
+    gates = [gate for gate in task.get("gates", []) if gate.get("source") != "close"]
 
     if task.get("verify_status") != "passed":
         gates.append(_gate("VERIFY_REQUIRED", "task must pass verify before close", source="close"))

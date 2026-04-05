@@ -186,6 +186,28 @@ class TaskflowVerifyTests(unittest.TestCase):
         reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
         self.assertEqual(reloaded["status"], "blocked")
 
+    def test_close_allow_dirty_clears_previous_close_gate(self) -> None:
+        task = self._new_feature_task("close-allow-dirty")
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "verified"
+        persisted["stage"] = "done"
+        persisted["verify_status"] = "passed"
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        with mock.patch("taskflow.closeout.is_dirty_worktree", return_value=True):
+            blocked = run_close(self.repo_root, self.config, task["id"], allow_dirty=False)
+            closed = run_close(self.repo_root, self.config, task["id"], allow_dirty=True)
+
+        self.assertFalse(blocked.closed)
+        self.assertTrue(closed.closed)
+        self.assertEqual(closed.gates, [])
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded["status"], "closed")
+        self.assertEqual(reloaded["gates"], [])
+        self.assertTrue(reloaded["meta"]["close_override_used"])
+
 class TaskflowNewTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
