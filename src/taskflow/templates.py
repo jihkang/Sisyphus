@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from importlib.resources import files
 from pathlib import Path
 
 from .state import sync_task_support_files
 
 
-def template_root() -> Path:
-    return Path(__file__).resolve().parents[2] / "templates"
+def template_root():
+    return files("taskflow").joinpath("templates_data")
 
 
 def materialize_task_templates(task: dict) -> None:

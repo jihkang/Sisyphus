@@ -4,7 +4,9 @@ import argparse
 from pathlib import Path
 import shutil
 import sys
+import tempfile
 
+from .agents import AgentTrackingError, update_agent
 from .codex_prompt import build_codex_prompt
 from .config import load_config
 from .discovery import detect_repo_root
@@ -62,13 +64,14 @@ def run_provider_wrapper(provider: str, argv: list[str], *, repo_root: Path | No
     command = list(extras)
     stdin_text: str | None = None
     env: dict[str, str] | None = None
+    output_last_message_path: Path | None = None
     step = args.step
     summary = args.summary
     if command and command[0] == "--":
         command = command[1:]
 
     if not command:
-        command, stdin_text, default_step, default_summary, env = _build_default_launch(
+        command, stdin_text, default_step, default_summary, env, output_last_message_path = _build_default_launch(
             provider=provider,
             repo_root=repo_root,
             config=config,
@@ -79,7 +82,7 @@ def run_provider_wrapper(provider: str, argv: list[str], *, repo_root: Path | No
         step = step or default_step
         summary = summary or default_summary
 
-    return handle_agent_run(
+    exit_code = handle_agent_run(
         task_id=args.task_id,
         agent_id=args.agent_id,
         role=args.role,
@@ -91,6 +94,15 @@ def run_provider_wrapper(provider: str, argv: list[str], *, repo_root: Path | No
         command=command,
         stdin_text=stdin_text,
         env=env,
+    )
+    return _finalize_default_launch(
+        repo_root=repo_root,
+        config=config,
+        task_id=args.task_id,
+        agent_id=args.agent_id,
+        provider=provider,
+        exit_code=exit_code,
+        output_last_message_path=output_last_message_path,
     )
 
 
@@ -151,7 +163,7 @@ def _build_default_launch(
     task_id: str,
     extra_instruction: str | None,
     provider_args: list[str],
-) -> tuple[list[str], str | None, str, str, dict[str, str]]:
+) -> tuple[list[str], str | None, str, str, dict[str, str], Path]:
     if provider != "codex":
         raise RuntimeError(f"default launch is not configured for provider: {provider}")
 
@@ -167,9 +179,15 @@ def _build_default_launch(
         "GIT_CONFIG_KEY_0": "safe.directory",
         "GIT_CONFIG_VALUE_0": str(prompt.workdir),
     }
+    output_last_message_path = _allocate_last_message_path(task_id)
     command = [
         codex,
         "exec",
+        "--full-auto",
+        "--sandbox",
+        "workspace-write",
+        "--output-last-message",
+        str(output_last_message_path),
         "-C",
         str(prompt.workdir),
         *provider_args,
@@ -181,6 +199,7 @@ def _build_default_launch(
         f"running codex task {task_id}",
         f"codex exec started for {task_id}",
         git_env,
+        output_last_message_path,
     )
 
 
@@ -196,3 +215,77 @@ def _normalize_wrapper_argv(argv: list[str]) -> list[str]:
     if argv and argv[0] in {"task", "conversation"}:
         return list(argv)
     return ["task", *argv]
+
+
+def _allocate_last_message_path(task_id: str) -> Path:
+    with tempfile.NamedTemporaryFile(prefix=f"sisyphus-{task_id}-", suffix=".last.txt", delete=False) as handle:
+        return Path(handle.name)
+
+
+def _finalize_default_launch(
+    *,
+    repo_root: Path,
+    config,
+    task_id: str,
+    agent_id: str,
+    provider: str,
+    exit_code: int,
+    output_last_message_path: Path | None,
+) -> int:
+    if output_last_message_path is None:
+        return exit_code
+
+    try:
+        last_message = _read_last_message(output_last_message_path)
+    finally:
+        output_last_message_path.unlink(missing_ok=True)
+
+    if exit_code != 0:
+        return exit_code
+
+    final_status = _classify_last_message(last_message)
+    if final_status == "completed":
+        return 0
+
+    if final_status in {"blocked", "failed"}:
+        try:
+            update_agent(
+                repo_root=repo_root,
+                config=config,
+                task_id=task_id,
+                agent_id=agent_id,
+                status="failed",
+                provider=provider,
+                error=f"agent reported {final_status}",
+                last_message_summary=last_message or f"agent reported {final_status}",
+            )
+        except (AgentTrackingError, FileNotFoundError):
+            pass
+        return 1
+
+    return 0
+
+
+def _read_last_message(output_last_message_path: Path) -> str | None:
+    if not output_last_message_path.exists():
+        return None
+    content = output_last_message_path.read_text(encoding="utf-8", errors="replace").strip()
+    return content or None
+
+
+def _classify_last_message(last_message: str | None) -> str | None:
+    if not last_message:
+        return None
+
+    first_line = last_message.splitlines()[0].strip().lower()
+    if first_line == "status: completed":
+        return "completed"
+    if first_line == "status: blocked":
+        return "blocked"
+    if first_line == "status: failed":
+        return "failed"
+    if first_line.startswith("**blocked"):
+        return "blocked"
+    if first_line.startswith("**failed"):
+        return "failed"
+    return None

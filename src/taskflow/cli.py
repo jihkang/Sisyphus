@@ -36,6 +36,7 @@ from .state import list_task_records, load_task_record
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="taskflow")
+    parser.add_argument("--repo", dest="repo_root", help="Target repository root to manage.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     new_parser = subparsers.add_parser("new")
@@ -169,8 +170,14 @@ def _add_conversation_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no-run", action="store_true")
 
 
-def handle_new(task_type: str, slug: str) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+def _resolve_repo_root(repo_root: str | Path | None) -> Path:
+    if repo_root is None:
+        return detect_repo_root(Path.cwd())
+    return detect_repo_root(Path(repo_root).resolve())
+
+
+def handle_new(task_type: str, slug: str, repo_root: str | Path | None = None) -> int:
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     try:
         outcome = create_task_workspace(repo_root=repo_root, config=config, task_type=task_type, slug=slug)
@@ -187,8 +194,8 @@ def handle_new(task_type: str, slug: str) -> int:
     return 0
 
 
-def handle_verify(task_id: str) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+def handle_verify(task_id: str, repo_root: str | Path | None = None) -> int:
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     outcome = run_verify(repo_root=repo_root, config=config, task_id=task_id)
     print(f"verified {outcome.task_id}")
@@ -204,8 +211,8 @@ def handle_verify(task_id: str) -> int:
     return 0
 
 
-def handle_close(task_id: str, allow_dirty: bool) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+def handle_close(task_id: str, allow_dirty: bool, repo_root: str | Path | None = None) -> int:
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     outcome = run_close(repo_root=repo_root, config=config, task_id=task_id, allow_dirty=allow_dirty)
     print(f"close {outcome.task_id}")
@@ -220,8 +227,13 @@ def handle_close(task_id: str, allow_dirty: bool) -> int:
     return 0
 
 
-def handle_plan_approve(task_id: str, reviewer: str, notes: str | None) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+def handle_plan_approve(
+    task_id: str,
+    reviewer: str,
+    notes: str | None,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     outcome = approve_task_plan(
         repo_root=repo_root,
@@ -236,8 +248,13 @@ def handle_plan_approve(task_id: str, reviewer: str, notes: str | None) -> int:
     return 0
 
 
-def handle_plan_request_changes(task_id: str, reviewer: str, notes: str | None) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+def handle_plan_request_changes(
+    task_id: str,
+    reviewer: str,
+    notes: str | None,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     outcome = request_plan_changes(
         repo_root=repo_root,
@@ -256,8 +273,13 @@ def handle_plan_request_changes(task_id: str, reviewer: str, notes: str | None) 
     return 0
 
 
-def handle_plan_revise(task_id: str, author: str, notes: str | None) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+def handle_plan_revise(
+    task_id: str,
+    author: str,
+    notes: str | None,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     outcome = revise_task_plan(
         repo_root=repo_root,
@@ -272,8 +294,13 @@ def handle_plan_revise(task_id: str, author: str, notes: str | None) -> int:
     return 0
 
 
-def handle_spec_freeze(task_id: str, reviewer: str, notes: str | None) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+def handle_spec_freeze(
+    task_id: str,
+    reviewer: str,
+    notes: str | None,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     outcome = freeze_task_spec(
         repo_root=repo_root,
@@ -289,8 +316,8 @@ def handle_spec_freeze(task_id: str, reviewer: str, notes: str | None) -> int:
     return 0
 
 
-def handle_subtasks_generate(task_id: str) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+def handle_subtasks_generate(task_id: str, repo_root: str | Path | None = None) -> int:
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     outcome = generate_subtasks(
         repo_root=repo_root,
@@ -315,8 +342,9 @@ def handle_ingest_conversation(
     owned_paths: list[str] | None,
     provider_args: list[str] | None,
     no_run: bool,
+    repo_root: str | Path | None = None,
 ) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+    repo_root = _resolve_repo_root(repo_root)
     try:
         queued = queue_conversation(
             repo_root=repo_root,
@@ -355,8 +383,9 @@ def handle_request(
     owned_paths: list[str] | None,
     provider_args: list[str] | None,
     no_run: bool,
+    repo_root: str | Path | None = None,
 ) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+    repo_root = _resolve_repo_root(repo_root)
     result = request_task(
         repo_root=repo_root,
         message=message,
@@ -382,6 +411,13 @@ def handle_request(
 
     print(f"request {result.event_id}")
     print(f"task_id: {task['id']}")
+    print(f"slug: {task.get('slug')}")
+    requested_slug = task.get("meta", {}).get("requested_slug")
+    if requested_slug and requested_slug != task.get("slug"):
+        print(f"requested_slug: {requested_slug}")
+    followup_of_task_id = task.get("meta", {}).get("followup_of_task_id")
+    if followup_of_task_id:
+        print(f"followup_of_task_id: {followup_of_task_id}")
     print(f"status: {task.get('status')}")
     print(f"plan_status: {task.get('plan_status')}")
     print(f"spec_status: {task.get('spec_status')}")
@@ -390,8 +426,13 @@ def handle_request(
     return 0
 
 
-def handle_daemon(once: bool, poll_interval_seconds: int, max_events: int | None) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+def handle_daemon(
+    once: bool,
+    poll_interval_seconds: int,
+    max_events: int | None,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     stats = run_daemon(
         repo_root=repo_root,
@@ -407,8 +448,8 @@ def handle_daemon(once: bool, poll_interval_seconds: int, max_events: int | None
     return 0 if stats.failed == 0 else 1
 
 
-def handle_serve(poll_interval_seconds: int) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+def handle_serve(poll_interval_seconds: int, repo_root: str | Path | None = None) -> int:
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     run_service(
         repo_root=repo_root,
@@ -418,10 +459,15 @@ def handle_serve(poll_interval_seconds: int) -> int:
     return 0
 
 
-def handle_discord_bot(token: str | None, poll_interval_seconds: int, channel_ids: list[int] | None) -> int:
+def handle_discord_bot(
+    token: str | None,
+    poll_interval_seconds: int,
+    channel_ids: list[int] | None,
+    repo_root: str | Path | None = None,
+) -> int:
     from .discord_bot import run_discord_bot
 
-    repo_root = detect_repo_root(Path.cwd())
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     try:
         return run_discord_bot(
@@ -436,8 +482,13 @@ def handle_discord_bot(token: str | None, poll_interval_seconds: int, channel_id
         return 1
 
 
-def handle_agents(task_id: str | None, as_json: bool, stale_after_seconds: int) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+def handle_agents(
+    task_id: str | None,
+    as_json: bool,
+    stale_after_seconds: int,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     agents = list_agents(
         repo_root=repo_root,
@@ -486,8 +537,9 @@ def handle_agent_start(
     step: str | None,
     summary: str | None,
     owned_paths: list[str] | None,
+    repo_root: str | Path | None = None,
 ) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     try:
         agent = register_agent(
@@ -523,8 +575,9 @@ def handle_agent_update(
     command: list[str] | None,
     pid: int | None,
     error: str | None,
+    repo_root: str | Path | None = None,
 ) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     try:
         agent = update_agent(
@@ -557,6 +610,7 @@ def handle_agent_finish(
     status: str,
     summary: str | None,
     error: str | None,
+    repo_root: str | Path | None = None,
 ) -> int:
     return handle_agent_update(
         task_id=task_id,
@@ -569,6 +623,7 @@ def handle_agent_finish(
         command=None,
         pid=None,
         error=error,
+        repo_root=repo_root,
     )
 
 
@@ -584,8 +639,9 @@ def handle_agent_run(
     command: list[str],
     stdin_text: str | None = None,
     env: dict[str, str] | None = None,
+    repo_root: str | Path | None = None,
 ) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     if command and command[0] == "--":
         command = command[1:]
@@ -625,7 +681,7 @@ def handle_agent_run(
             last_message_summary=summary,
             owned_paths=owned_paths,
             heartbeat_seconds=heartbeat_seconds,
-            run_cwd=Path.cwd(),
+            run_cwd=repo_root,
             stdin_text=stdin_text,
             env=env,
         )
@@ -646,8 +702,9 @@ def handle_status(
     only_blocked: bool,
     show_agents: bool,
     stale_after_seconds: int,
+    repo_root: str | Path | None = None,
 ) -> int:
-    repo_root = detect_repo_root(Path.cwd())
+    repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     tasks = list_task_records(repo_root=repo_root, task_dir_name=config.task_dir)
 
@@ -732,7 +789,7 @@ def main() -> int:
         parser.error(f"unrecognized arguments: {' '.join(extras)}")
 
     if args.command == "new":
-        return handle_new(task_type=args.task_type, slug=args.slug)
+        return handle_new(task_type=args.task_type, slug=args.slug, repo_root=args.repo_root)
     if args.command == "request":
         return handle_request(
             message=args.message,
@@ -746,29 +803,33 @@ def main() -> int:
             owned_paths=args.owned_paths,
             provider_args=args.provider_args,
             no_run=args.no_run,
+            repo_root=args.repo_root,
         )
     if args.command == "verify":
-        return handle_verify(task_id=args.task_id)
+        return handle_verify(task_id=args.task_id, repo_root=args.repo_root)
     if args.command == "close":
-        return handle_close(task_id=args.task_id, allow_dirty=args.allow_dirty)
+        return handle_close(task_id=args.task_id, allow_dirty=args.allow_dirty, repo_root=args.repo_root)
     if args.command == "plan":
         if args.plan_command == "approve":
             return handle_plan_approve(
                 task_id=args.task_id,
                 reviewer=args.reviewer,
                 notes=args.notes,
+                repo_root=args.repo_root,
             )
         if args.plan_command == "request-changes":
             return handle_plan_request_changes(
                 task_id=args.task_id,
                 reviewer=args.reviewer,
                 notes=args.notes,
+                repo_root=args.repo_root,
             )
         if args.plan_command == "revise":
             return handle_plan_revise(
                 task_id=args.task_id,
                 author=args.author,
                 notes=args.notes,
+                repo_root=args.repo_root,
             )
     if args.command == "spec":
         if args.spec_command == "freeze":
@@ -776,15 +837,17 @@ def main() -> int:
                 task_id=args.task_id,
                 reviewer=args.reviewer,
                 notes=args.notes,
+                repo_root=args.repo_root,
             )
     if args.command == "subtasks":
         if args.subtasks_command == "generate":
-            return handle_subtasks_generate(task_id=args.task_id)
+            return handle_subtasks_generate(task_id=args.task_id, repo_root=args.repo_root)
     if args.command == "agents":
         return handle_agents(
             task_id=args.task_id,
             as_json=args.json,
             stale_after_seconds=args.stale_after_seconds,
+            repo_root=args.repo_root,
         )
     if args.command == "agent":
         if args.agent_command == "start":
@@ -797,6 +860,7 @@ def main() -> int:
                 step=args.step,
                 summary=args.summary,
                 owned_paths=args.owned_paths,
+                repo_root=args.repo_root,
             )
         if args.agent_command == "update":
             return handle_agent_update(
@@ -810,6 +874,7 @@ def main() -> int:
                 command=None,
                 pid=None,
                 error=args.error,
+                repo_root=args.repo_root,
             )
         if args.agent_command == "finish":
             return handle_agent_finish(
@@ -818,6 +883,7 @@ def main() -> int:
                 status=args.status,
                 summary=args.summary,
                 error=args.error,
+                repo_root=args.repo_root,
             )
         if args.agent_command == "run":
             return handle_agent_run(
@@ -830,6 +896,7 @@ def main() -> int:
                 owned_paths=args.owned_paths,
                 heartbeat_seconds=args.heartbeat_seconds,
                 command=extras,
+                repo_root=args.repo_root,
             )
     if args.command == "ingest":
         if args.ingest_command == "conversation":
@@ -845,22 +912,26 @@ def main() -> int:
                 owned_paths=args.owned_paths,
                 provider_args=args.provider_args,
                 no_run=args.no_run,
+                repo_root=args.repo_root,
             )
     if args.command == "daemon":
         return handle_daemon(
             once=args.once,
             poll_interval_seconds=args.poll_interval_seconds,
             max_events=args.max_events,
+            repo_root=args.repo_root,
         )
     if args.command == "serve":
         return handle_serve(
             poll_interval_seconds=args.poll_interval_seconds,
+            repo_root=args.repo_root,
         )
     if args.command == "discord-bot":
         return handle_discord_bot(
             token=args.token,
             poll_interval_seconds=args.poll_interval_seconds,
             channel_ids=args.channel_ids,
+            repo_root=args.repo_root,
         )
     if args.command == "status":
         return handle_status(
@@ -869,6 +940,7 @@ def main() -> int:
             only_blocked=args.only_blocked,
             show_agents=args.agents,
             stale_after_seconds=args.stale_after_seconds,
+            repo_root=args.repo_root,
         )
 
     parser.error("unknown command")

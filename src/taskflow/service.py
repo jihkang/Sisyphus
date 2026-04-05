@@ -111,6 +111,12 @@ def run_service(
 def build_task_update_summary(task: dict) -> str:
     completed = sum(1 for subtask in task.get("subtasks", []) if subtask.get("status") == "completed")
     total = len(task.get("subtasks", []))
+    meta = task.get("meta", {}) if isinstance(task.get("meta"), dict) else {}
+    requested_slug = meta.get("requested_slug")
+    followup_of_task_id = meta.get("followup_of_task_id")
+    followup_segment = ""
+    if followup_of_task_id:
+        followup_segment = f" requested_slug={requested_slug or task.get('slug')} followup_of={followup_of_task_id}"
     return (
         f"{task.get('id')} "
         f"status={task.get('status')} "
@@ -118,6 +124,7 @@ def build_task_update_summary(task: dict) -> str:
         f"plan={task.get('plan_status')} "
         f"spec={task.get('spec_status')} "
         f"subtasks={completed}/{total}"
+        f"{followup_segment}"
     )
 
 

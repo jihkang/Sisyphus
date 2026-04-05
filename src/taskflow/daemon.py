@@ -12,7 +12,7 @@ from .creation import create_task_workspace
 from .paths import event_log_file, inbox_failed_dir, inbox_pending_dir, inbox_processed_dir
 from .planning import enforce_plan_approved, enforce_spec_frozen
 from .provider_wrapper import run_provider_wrapper
-from .state import load_task_record, save_task_record, sync_task_support_files, utc_now
+from .state import list_task_records, load_task_record, save_task_record, sync_task_support_files, utc_now
 from .utils import project_fields
 from .workflow import run_workflow_cycle
 
@@ -222,7 +222,13 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
     title = str(payload["title"]).strip()
     message = str(payload["message"]).strip()
     task_type = str(payload["task_type"]).strip()
-    slug = str(payload["slug"]).strip() or _slugify(title or message, fallback=f"conversation-task-{event['id'][-4:]}")
+    requested_slug = str(payload["slug"]).strip() or _slugify(title or message, fallback=f"conversation-task-{event['id'][-4:]}")
+    slug, parent_task_id = _resolve_followup_slug(
+        repo_root=repo_root,
+        config=config,
+        task_type=task_type,
+        requested_slug=requested_slug,
+    )
     provider = str(payload["provider"]).strip() or "codex"
     role = str(payload["role"]).strip() or "worker"
     instruction = payload["instruction"]
@@ -248,6 +254,8 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
         provider=provider,
         auto_loop_enabled=requested_auto_run,
         source_context=source_context,
+        requested_slug=requested_slug,
+        parent_task_id=parent_task_id,
     )
 
     agent_exit_code = None
@@ -287,6 +295,9 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
     return {
         "task_id": task["id"],
         "task_type": task["type"],
+        "slug": task["slug"],
+        "requested_slug": requested_slug,
+        "followup_of_task_id": parent_task_id,
         "branch": task["branch"],
         "worktree_path": task["worktree_path"],
         "agent_id": agent_id if auto_run else None,
@@ -307,13 +318,24 @@ def _hydrate_task_from_conversation(
     provider: str,
     auto_loop_enabled: bool,
     source_context: dict[str, object],
+    requested_slug: str,
+    parent_task_id: str | None,
 ) -> None:
     repo_root = Path(task["repo_root"])
     task_dir = repo_root / task["task_dir"]
     title_line = title or _title_from_message(message)
 
     brief_path = task_dir / task["docs"]["brief"]
-    brief_path.write_text(_render_brief(task, title_line, message), encoding="utf-8")
+    brief_path.write_text(
+        _render_brief(
+            task,
+            title_line,
+            message,
+            requested_slug=requested_slug,
+            parent_task_id=parent_task_id,
+        ),
+        encoding="utf-8",
+    )
 
     if task["type"] == "feature":
         plan_path = task_dir / task["docs"]["plan"]
@@ -330,28 +352,97 @@ def _hydrate_task_from_conversation(
     task_record["meta"]["source_event_type"] = "conversation"
     task_record["meta"]["default_provider"] = provider
     task_record["meta"]["auto_loop_enabled"] = auto_loop_enabled
+    task_record["meta"]["requested_slug"] = requested_slug
+    if parent_task_id:
+        task_record["meta"]["followup_of_task_id"] = parent_task_id
     if source_context:
         task_record["meta"]["source_context"] = source_context
     save_task_record(task_file=task_file, task=task_record)
     sync_task_support_files(task_record)
 
 
-def _render_brief(task: dict, title: str, message: str) -> str:
-    return "\n".join(
+def _resolve_followup_slug(
+    *,
+    repo_root: Path,
+    config: TaskflowConfig,
+    task_type: str,
+    requested_slug: str,
+) -> tuple[str, str | None]:
+    matching = [
+        task
+        for task in list_task_records(repo_root=repo_root, task_dir_name=config.task_dir)
+        if str(task.get("type")) == task_type and str(task.get("slug")) == requested_slug
+    ]
+    if not matching:
+        return requested_slug, None
+
+    latest = sorted(
+        matching,
+        key=lambda task: (
+            str(task.get("updated_at", "")),
+            str(task.get("created_at", "")),
+            str(task.get("id", "")),
+        ),
+    )[-1]
+    if str(latest.get("status")) != "closed":
+        return requested_slug, None
+
+    sibling_slugs = {
+        str(task.get("slug"))
+        for task in list_task_records(repo_root=repo_root, task_dir_name=config.task_dir)
+        if str(task.get("type")) == task_type
+    }
+    return _next_followup_slug(requested_slug, sibling_slugs), str(latest.get("id"))
+
+
+def _next_followup_slug(requested_slug: str, sibling_slugs: set[str]) -> str:
+    base = f"{requested_slug}-followup"
+    if base not in sibling_slugs:
+        return base
+
+    index = 2
+    while True:
+        candidate = f"{base}-{index}"
+        if candidate not in sibling_slugs:
+            return candidate
+        index += 1
+
+
+def _render_brief(
+    task: dict,
+    title: str,
+    message: str,
+    *,
+    requested_slug: str,
+    parent_task_id: str | None,
+) -> str:
+    lines = [
+        "# Brief",
+        "",
+        "## Task",
+        "",
+        f"- Task ID: `{task['id']}`",
+        f"- Type: `{task['type']}`",
+        f"- Slug: `{task['slug']}`",
+        f"- Branch: `{task['branch']}`",
+    ]
+    if requested_slug and requested_slug != str(task["slug"]):
+        lines.append(f"- Requested Slug: `{requested_slug}`")
+    if parent_task_id:
+        lines.append(f"- Follow-up Of: `{parent_task_id}`")
+    lines.extend(
         [
-            "# Brief",
-            "",
-            "## Task",
-            "",
-            f"- Task ID: `{task['id']}`",
-            f"- Type: `{task['type']}`",
-            f"- Slug: `{task['slug']}`",
-            f"- Branch: `{task['branch']}`",
             "",
             "## Problem" if task["type"] == "feature" else "## Symptom",
             "",
             f"- {title}",
             f"- Original request: {message}",
+        ]
+    )
+    if parent_task_id:
+        lines.append(f"- This task continues implementation work after `{parent_task_id}` was closed.")
+    lines.extend(
+        [
             "",
             "## Desired Outcome" if task["type"] == "feature" else "## Expected Behavior",
             "",
@@ -371,6 +462,7 @@ def _render_brief(task: dict, title: str, message: str) -> str:
             "",
         ]
     )
+    return "\n".join(lines)
 
 
 def _render_feature_plan(task: dict, title: str, message: str) -> str:

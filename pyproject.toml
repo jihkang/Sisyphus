@@ -24,4 +24,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-taskflow = ["py.typed"]
+taskflow = ["py.typed", "templates_data/*/*.md"]

@@ -38,7 +38,7 @@ from taskflow.planning import approve_task_plan, freeze_task_spec, request_plan_
 from taskflow.provider_wrapper import run_provider_wrapper
 from taskflow.service import TaskNotificationTracker, build_task_update_summary, run_service_step
 from taskflow.state import build_task_record, create_task_record, load_task_record
-from taskflow.templates import materialize_task_templates
+from taskflow.templates import materialize_task_templates, template_root
 from taskflow.workflow import run_workflow_cycle
 import sisyphus
 
@@ -397,6 +397,28 @@ class TaskflowNewTests(unittest.TestCase):
 
         self.assertFalse((self.repo_root / preview["task_dir"]).exists())
 
+    def test_create_task_reports_existing_task_details_when_task_dir_exists(self) -> None:
+        outcome = create_task_workspace(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="ship-it",
+        )
+
+        with self.assertRaises(TaskCreationError) as ctx:
+            create_task_workspace(
+                repo_root=self.repo_root,
+                config=self.config,
+                task_type="feature",
+                slug="ship-it",
+            )
+
+        message = str(ctx.exception)
+        self.assertIn(f"task already exists: {outcome.task['id']}", message)
+        self.assertIn("status: open", message)
+        self.assertIn(f"branch: {outcome.task['branch']}", message)
+        self.assertIn("use a new slug to create another task", message)
+
     def test_create_task_rolls_back_on_template_failure(self) -> None:
         preview = build_task_record(self.repo_root, self.config, "feature", "rollback-check")
 
@@ -750,7 +772,8 @@ class TaskflowAgentTests(unittest.TestCase):
         self.assertIn('"id":', prompt.prompt)
         self.assertIn('"test_strategy":', prompt.prompt)
         self.assertIn("Additional operator instruction: focus on the task docs", prompt.prompt)
-        self.assertIn("## BRIEF (BRIEF.md)", prompt.prompt)
+        self.assertIn("STATUS: completed", prompt.prompt)
+        self.assertIn(f"## BRIEF ({self.task['task_dir'].replace('\\', '/')}/BRIEF.md)", prompt.prompt)
 
     def test_codex_wrapper_builds_default_codex_exec_command(self) -> None:
         with mock.patch("taskflow.provider_wrapper.Path.cwd", return_value=self.repo_root):
@@ -764,7 +787,8 @@ class TaskflowAgentTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         kwargs = mocked_run.call_args.kwargs
         self.assertEqual(kwargs["provider"], "codex")
-        self.assertEqual(kwargs["command"][:4], ["codex.cmd", "exec", "-C", str(self.repo_root)])
+        self.assertEqual(kwargs["command"][:7], ["codex.cmd", "exec", "--full-auto", "--sandbox", "workspace-write", "--output-last-message", kwargs["command"][6]])
+        self.assertEqual(kwargs["command"][7:9], ["-C", str(self.repo_root)])
         self.assertEqual(kwargs["command"][-1], "-")
         self.assertIn("You are the local Codex worker for this task.", kwargs["stdin_text"])
         self.assertEqual(kwargs["env"]["GIT_CONFIG_KEY_0"], "safe.directory")
@@ -789,10 +813,30 @@ class TaskflowAgentTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         kwargs = mocked_run.call_args.kwargs
         self.assertEqual(kwargs["role"], "worker")
-        self.assertEqual(kwargs["command"][:4], ["codex.cmd", "exec", "-C", str(self.repo_root)])
+        self.assertEqual(kwargs["command"][:5], ["codex.cmd", "exec", "--full-auto", "--sandbox", "workspace-write"])
         self.assertEqual(kwargs["command"][-1], "-")
         self.assertIn("Additional operator instruction: focus on the first subtask", kwargs["stdin_text"])
         self.assertEqual(kwargs["env"]["GIT_CONFIG_VALUE_0"], str(self.repo_root))
+
+    def test_codex_wrapper_converts_blocked_last_message_into_failure(self) -> None:
+        def fake_handle_agent_run(**kwargs):
+            output_path = Path(kwargs["command"][kwargs["command"].index("--output-last-message") + 1])
+            output_path.write_text("STATUS: blocked\nworkspace is read-only\n", encoding="utf-8")
+            return 0
+
+        with mock.patch("taskflow.provider_wrapper.Path.cwd", return_value=self.repo_root):
+            with mock.patch("taskflow.provider_wrapper._resolve_codex_executable", return_value="codex.cmd"):
+                with mock.patch("taskflow.cli.handle_agent_run", side_effect=fake_handle_agent_run):
+                    with mock.patch("taskflow.provider_wrapper.update_agent") as mocked_update:
+                        exit_code = run_provider_wrapper(
+                            "codex",
+                            [self.task["id"], "worker-blocked-result"],
+                        )
+
+        self.assertEqual(exit_code, 1)
+        mocked_update.assert_called_once()
+        self.assertEqual(mocked_update.call_args.kwargs["status"], "failed")
+        self.assertIn("blocked", mocked_update.call_args.kwargs["error"])
 
     def test_codex_wrapper_conversation_mode_creates_task_and_waits_for_plan_approval(self) -> None:
         subprocess.run(["git", "init", "-b", "main"], cwd=self.repo_root, check=True, capture_output=True, text=True)
@@ -1129,6 +1173,54 @@ class TaskflowDaemonTests(unittest.TestCase):
         self.assertEqual(result.task["status"], "open")
         self.assertEqual(result.task["plan_status"], "pending_review")
 
+    def test_process_inbox_event_creates_followup_task_for_closed_duplicate_slug(self) -> None:
+        existing = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="stt",
+        )
+        materialize_task_templates(existing)
+        existing_file = self.repo_root / existing["task_dir"] / "task.json"
+        persisted_existing = json.loads(existing_file.read_text(encoding="utf-8"))
+        persisted_existing["status"] = "closed"
+        persisted_existing["stage"] = "done"
+        persisted_existing["workflow_phase"] = "closed"
+        persisted_existing["verify_status"] = "passed"
+        persisted_existing["closed_at"] = "2026-04-05T14:59:45Z"
+        existing_file.write_text(json.dumps(persisted_existing, indent=2) + "\n", encoding="utf-8")
+
+        _, event_path = queue_conversation_event(
+            self.repo_root,
+            title="Implement the real STT workflow",
+            message="continue the actual implementation work",
+            task_type="feature",
+            slug="stt",
+            auto_run=False,
+        )
+
+        event = process_inbox_event(
+            repo_root=self.repo_root,
+            config=self.config,
+            event_path=event_path,
+        )
+
+        self.assertEqual(event["status"], "processed")
+        processed_files = list(inbox_processed_dir(self.repo_root).glob("*.json"))
+        persisted_event = json.loads(processed_files[0].read_text(encoding="utf-8"))
+        self.assertEqual(persisted_event["result"]["requested_slug"], "stt")
+        self.assertEqual(persisted_event["result"]["slug"], "stt-followup")
+        self.assertEqual(persisted_event["result"]["followup_of_task_id"], existing["id"])
+
+        task_id = persisted_event["result"]["task_id"]
+        task, _ = load_task_record(self.repo_root, self.config.task_dir, task_id)
+        self.assertEqual(task["slug"], "stt-followup")
+        self.assertEqual(task["meta"]["requested_slug"], "stt")
+        self.assertEqual(task["meta"]["followup_of_task_id"], existing["id"])
+        brief = (self.repo_root / task["task_dir"] / "BRIEF.md").read_text(encoding="utf-8")
+        self.assertIn("- Requested Slug: `stt`", brief)
+        self.assertIn(f"- Follow-up Of: `{existing['id']}`", brief)
+
     def test_plan_request_changes_and_approve_update_task_state(self) -> None:
         task = create_task_record(
             repo_root=self.repo_root,
@@ -1295,14 +1387,14 @@ class TaskflowDaemonTests(unittest.TestCase):
         self.assertFalse(persisted["result"]["auto_run"])
         self.assertIsNone(persisted["result"]["agent_id"])
 
-    def test_run_daemon_once_orchestrates_task_until_closed(self) -> None:
+    def test_run_daemon_once_stops_at_pending_review_until_user_approval(self) -> None:
         queue_conversation_event(
             self.repo_root,
             title="Add agent dashboard",
             message="show agent status in one place",
         )
 
-        with mock.patch("taskflow.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper):
+        with mock.patch("taskflow.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper) as mocked_wrapper:
             stats = run_daemon(
                 repo_root=self.repo_root,
                 config=self.config,
@@ -1310,22 +1402,23 @@ class TaskflowDaemonTests(unittest.TestCase):
                 poll_interval_seconds=1,
             )
 
-        self.assertGreaterEqual(stats.orchestrated, 1)
+        self.assertEqual(stats.orchestrated, 0)
+        self.assertFalse(mocked_wrapper.called)
         processed_files = list(inbox_processed_dir(self.repo_root).glob("*.json"))
         self.assertEqual(len(processed_files), 1)
         persisted_event = json.loads(processed_files[0].read_text(encoding="utf-8"))
         task_id = persisted_event["result"]["task_id"]
         task, _ = load_task_record(self.repo_root, self.config.task_dir, task_id)
-        self.assertEqual(task["status"], "closed")
-        self.assertEqual(task["workflow_phase"], "closed")
-        self.assertEqual(task["plan_status"], "approved")
-        self.assertEqual(task["spec_status"], "frozen")
-        self.assertTrue(all(subtask["status"] == "completed" for subtask in task["subtasks"]))
+        self.assertEqual(task["status"], "blocked")
+        self.assertEqual(task["workflow_phase"], "plan_in_review")
+        self.assertEqual(task["plan_status"], "pending_review")
+        self.assertEqual(task["spec_status"], "draft")
+        self.assertEqual(task["subtasks"], [])
 
-    def test_request_command_orchestrates_task_until_closed(self) -> None:
+    def test_request_command_stops_at_pending_review_until_user_approval(self) -> None:
         buffer = io.StringIO()
         with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
-            with mock.patch("taskflow.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper):
+            with mock.patch("taskflow.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper) as mocked_wrapper:
                 with redirect_stdout(buffer):
                     exit_code = handle_request(
                         message="show agent status in one place",
@@ -1342,17 +1435,20 @@ class TaskflowDaemonTests(unittest.TestCase):
                     )
 
         self.assertEqual(exit_code, 0)
+        self.assertFalse(mocked_wrapper.called)
         rendered = buffer.getvalue()
         self.assertIn("request evt-", rendered)
-        self.assertIn("status: closed", rendered)
-        self.assertIn("spec_status: frozen", rendered)
+        self.assertIn("status: blocked", rendered)
+        self.assertIn("plan_status: pending_review", rendered)
+        self.assertIn("workflow_phase: plan_in_review", rendered)
         processed_files = list(inbox_processed_dir(self.repo_root).glob("*.json"))
         self.assertEqual(len(processed_files), 1)
         persisted_event = json.loads(processed_files[0].read_text(encoding="utf-8"))
         task_id = persisted_event["result"]["task_id"]
         task, _ = load_task_record(self.repo_root, self.config.task_dir, task_id)
-        self.assertEqual(task["status"], "closed")
-        self.assertEqual(task["workflow_phase"], "closed")
+        self.assertEqual(task["status"], "blocked")
+        self.assertEqual(task["workflow_phase"], "plan_in_review")
+        self.assertEqual(task["plan_status"], "pending_review")
 
     def test_request_command_respects_no_run(self) -> None:
         buffer = io.StringIO()
@@ -1387,6 +1483,75 @@ class TaskflowDaemonTests(unittest.TestCase):
         task, _ = load_task_record(self.repo_root, self.config.task_dir, task_id)
         self.assertEqual(task["status"], "open")
         self.assertEqual(task["plan_status"], "pending_review")
+
+    def test_request_command_prints_followup_context_for_closed_duplicate_slug(self) -> None:
+        existing = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="stt",
+        )
+        materialize_task_templates(existing)
+        existing_file = self.repo_root / existing["task_dir"] / "task.json"
+        persisted_existing = json.loads(existing_file.read_text(encoding="utf-8"))
+        persisted_existing["status"] = "closed"
+        persisted_existing["stage"] = "done"
+        persisted_existing["workflow_phase"] = "closed"
+        persisted_existing["verify_status"] = "passed"
+        persisted_existing["closed_at"] = "2026-04-05T14:59:45Z"
+        existing_file.write_text(json.dumps(persisted_existing, indent=2) + "\n", encoding="utf-8")
+
+        buffer = io.StringIO()
+        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+            with redirect_stdout(buffer):
+                exit_code = handle_request(
+                    message="continue the actual implementation work",
+                    title="Implement the real STT workflow",
+                    task_type="feature",
+                    slug="stt",
+                    instruction=None,
+                    agent_id="worker-1",
+                    role="worker",
+                    provider="codex",
+                    owned_paths=None,
+                    provider_args=None,
+                    no_run=True,
+                )
+
+        self.assertEqual(exit_code, 0)
+        rendered = buffer.getvalue()
+        self.assertIn("slug: stt-followup", rendered)
+        self.assertIn("requested_slug: stt", rendered)
+        self.assertIn(f"followup_of_task_id: {existing['id']}", rendered)
+
+    def test_request_command_honors_explicit_repo_root(self) -> None:
+        outside_root = self.repo_root.parent / "outside"
+        outside_root.mkdir(parents=True, exist_ok=True)
+        buffer = io.StringIO()
+
+        with mock.patch("taskflow.cli.Path.cwd", return_value=outside_root):
+            with mock.patch("taskflow.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper):
+                with redirect_stdout(buffer):
+                    exit_code = handle_request(
+                        message="show agent status in one place",
+                        title="Add agent dashboard",
+                        task_type="feature",
+                        slug=None,
+                        instruction=None,
+                        agent_id="worker-1",
+                        role="worker",
+                        provider="codex",
+                        owned_paths=None,
+                        provider_args=None,
+                        no_run=True,
+                        repo_root=self.repo_root,
+                    )
+
+        self.assertEqual(exit_code, 0)
+        rendered = buffer.getvalue()
+        self.assertIn("status: open", rendered)
+        self.assertTrue(list(inbox_processed_dir(self.repo_root).glob("*.json")))
+        self.assertFalse((outside_root / ".planning").exists())
 
     def test_run_service_step_emits_notification_for_discord_task(self) -> None:
         queue_discord_conversation(
@@ -1432,7 +1597,27 @@ class TaskflowDaemonTests(unittest.TestCase):
         self.assertIn("TF-20260405-feature-summary", summary)
         self.assertIn("subtasks=1/2", summary)
 
-    def test_workflow_cycle_stops_at_plan_review_limit(self) -> None:
+    def test_build_task_update_summary_includes_followup_context(self) -> None:
+        task = {
+            "id": "TF-20260405-feature-stt-followup",
+            "slug": "stt-followup",
+            "status": "open",
+            "workflow_phase": "plan_in_review",
+            "plan_status": "pending_review",
+            "spec_status": "draft",
+            "subtasks": [],
+            "meta": {
+                "requested_slug": "stt",
+                "followup_of_task_id": "TF-20260405-feature-stt",
+            },
+        }
+
+        summary = build_task_update_summary(task)
+
+        self.assertIn("requested_slug=stt", summary)
+        self.assertIn("followup_of=TF-20260405-feature-stt", summary)
+
+    def test_workflow_cycle_does_not_auto_advance_pending_review_tasks(self) -> None:
         task = create_task_record(
             repo_root=self.repo_root,
             config=self.config,
@@ -1445,15 +1630,12 @@ class TaskflowDaemonTests(unittest.TestCase):
         persisted["max_plan_review_rounds"] = 1
         task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
 
-        progressed_first = run_workflow_cycle(repo_root=self.repo_root, config=self.config)
-        progressed_second = run_workflow_cycle(repo_root=self.repo_root, config=self.config)
+        progressed = run_workflow_cycle(repo_root=self.repo_root, config=self.config)
 
-        self.assertEqual(progressed_first, 1)
-        self.assertEqual(progressed_second, 0)
+        self.assertEqual(progressed, 0)
         reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
-        self.assertEqual(reloaded["workflow_phase"], "needs_user_input")
-        gate_codes = {gate["code"] for gate in reloaded["gates"]}
-        self.assertIn("PLAN_REVIEW_LIMIT_REACHED", gate_codes)
+        self.assertEqual(reloaded["workflow_phase"], "plan_in_review")
+        self.assertEqual(reloaded["plan_status"], "pending_review")
 
     def test_process_inbox_event_moves_failure_to_failed_folder(self) -> None:
         _, event_path = queue_conversation_event(
@@ -1523,17 +1705,46 @@ class TaskflowDaemonTests(unittest.TestCase):
         self.assertEqual(args.agent_id, "worker-1")
         self.assertTrue(args.no_run)
 
+    def test_parser_accepts_global_repo_override(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "request",
+                "add agent dashboard",
+                "--no-run",
+            ]
+        )
+
+        self.assertEqual(args.repo_root, str(self.repo_root))
+        self.assertEqual(args.command, "request")
+        self.assertTrue(args.no_run)
+
     def test_parser_accepts_serve_and_discord_bot_commands(self) -> None:
         parser = build_parser()
 
-        serve_args = parser.parse_args(["serve", "--poll-interval-seconds", "7"])
+        serve_args = parser.parse_args(["--repo", str(self.repo_root), "serve", "--poll-interval-seconds", "7"])
         discord_args = parser.parse_args(
-            ["discord-bot", "--token", "secret", "--channel-id", "12345", "--poll-interval-seconds", "9"]
+            [
+                "--repo",
+                str(self.repo_root),
+                "discord-bot",
+                "--token",
+                "secret",
+                "--channel-id",
+                "12345",
+                "--poll-interval-seconds",
+                "9",
+            ]
         )
 
         self.assertEqual(serve_args.command, "serve")
+        self.assertEqual(serve_args.repo_root, str(self.repo_root))
         self.assertEqual(serve_args.poll_interval_seconds, 7)
         self.assertEqual(discord_args.command, "discord-bot")
+        self.assertEqual(discord_args.repo_root, str(self.repo_root))
         self.assertEqual(discord_args.token, "secret")
         self.assertEqual(discord_args.channel_ids, [12345])
         self.assertEqual(discord_args.poll_interval_seconds, 9)
@@ -1541,6 +1752,14 @@ class TaskflowDaemonTests(unittest.TestCase):
     def test_sisyphus_package_reexports_library_api(self) -> None:
         self.assertIs(sisyphus.request_task, request_task)
         self.assertIs(sisyphus.queue_conversation, queue_conversation)
+
+    def test_template_resources_are_packaged_under_taskflow(self) -> None:
+        root = template_root()
+
+        self.assertTrue(root.joinpath("feature", "BRIEF.md").is_file())
+        self.assertTrue(root.joinpath("feature", "PLAN.md").is_file())
+        self.assertTrue(root.joinpath("issue", "BRIEF.md").is_file())
+        self.assertTrue(root.joinpath("issue", "REPRO.md").is_file())
 
     def _init_git_repo(self, repo_root: Path, initial_branch: str) -> None:
         self._run_git(repo_root, "init", "-b", initial_branch)
