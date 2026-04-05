@@ -10,9 +10,11 @@ import uuid
 from .config import TaskflowConfig
 from .creation import create_task_workspace
 from .paths import event_log_file, inbox_failed_dir, inbox_pending_dir, inbox_processed_dir
+from .planning import enforce_plan_approved, enforce_spec_frozen
 from .provider_wrapper import run_provider_wrapper
 from .state import load_task_record, save_task_record, utc_now
 from .utils import project_fields
+from .workflow import run_workflow_cycle
 
 
 CONVERSATION_FIELD_DEFAULTS = {
@@ -35,6 +37,7 @@ class DaemonStats:
     processed: int = 0
     failed: int = 0
     skipped: int = 0
+    orchestrated: int = 0
 
 
 class DaemonError(RuntimeError):
@@ -121,18 +124,25 @@ def run_daemon(
     stats = DaemonStats()
     while True:
         available = sorted(inbox_pending_dir(repo_root).glob("*.json"))
-        if not available:
-            if once:
-                return stats
-            time.sleep(max(poll_interval_seconds, 1))
-            continue
+        progressed = False
 
         for event_path in available:
             process_inbox_event(repo_root=repo_root, config=config, event_path=event_path, stats=stats)
+            progressed = True
             if max_events is not None and (stats.processed + stats.failed) >= max_events:
                 return stats
-        if once:
+
+        orchestrated = run_workflow_cycle(repo_root=repo_root, config=config)
+        if orchestrated:
+            stats.orchestrated += orchestrated
+            progressed = True
+
+        if once and not progressed:
             return stats
+        if once:
+            continue
+        if not progressed:
+            time.sleep(max(poll_interval_seconds, 1))
 
 
 def process_inbox_event(
@@ -217,6 +227,7 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
     owned_paths = [str(path) for path in payload["owned_paths"]]
     provider_args = [str(arg) for arg in payload["provider_args"]]
     auto_run = bool(payload["auto_run"])
+    requested_auto_run = auto_run
 
     outcome = create_task_workspace(
         repo_root=repo_root,
@@ -225,20 +236,48 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
         slug=slug,
     )
     task = outcome.task
-    _hydrate_task_from_conversation(task=task, title=title, message=message, event_id=event["id"])
+    _hydrate_task_from_conversation(
+        task=task,
+        title=title,
+        message=message,
+        event_id=event["id"],
+        provider=provider,
+        auto_loop_enabled=requested_auto_run,
+    )
 
     agent_exit_code = None
+    blocked_reason = None
     if auto_run:
-        wrapper_args = [task["id"], agent_id, "--role", role]
-        if instruction:
-            wrapper_args.extend(["--instruction", str(instruction)])
-        for path in owned_paths:
-            wrapper_args.extend(["--owned-path", path])
-        for arg in provider_args:
-            wrapper_args.extend(["--provider-arg", arg])
-        agent_exit_code = run_provider_wrapper(provider, wrapper_args, repo_root=repo_root)
-        if agent_exit_code != 0:
-            raise DaemonError(f"{provider} worker exited with code {agent_exit_code}")
+        approved, task = enforce_plan_approved(
+            repo_root=repo_root,
+            config=config,
+            task_id=task["id"],
+            action="auto-run",
+        )
+        if approved:
+            frozen, task = enforce_spec_frozen(
+                repo_root=repo_root,
+                config=config,
+                task_id=task["id"],
+                action="auto-run",
+            )
+            if frozen:
+                wrapper_args = [task["id"], agent_id, "--role", role]
+                if instruction:
+                    wrapper_args.extend(["--instruction", str(instruction)])
+                for path in owned_paths:
+                    wrapper_args.extend(["--owned-path", path])
+                for arg in provider_args:
+                    wrapper_args.extend(["--provider-arg", arg])
+                agent_exit_code = run_provider_wrapper(provider, wrapper_args, repo_root=repo_root)
+                if agent_exit_code != 0:
+                    raise DaemonError(f"{provider} worker exited with code {agent_exit_code}")
+            else:
+                auto_run = False
+                blocked_reason = "task spec must be frozen before auto-run"
+        else:
+            auto_run = False
+            blocked_reason = "task plan must be approved before auto-run"
 
     return {
         "task_id": task["id"],
@@ -248,10 +287,21 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
         "agent_id": agent_id if auto_run else None,
         "agent_exit_code": agent_exit_code,
         "auto_run": auto_run,
+        "plan_status": task.get("plan_status"),
+        "spec_status": task.get("spec_status"),
+        "blocked_reason": blocked_reason,
     }
 
 
-def _hydrate_task_from_conversation(task: dict, *, title: str, message: str, event_id: str) -> None:
+def _hydrate_task_from_conversation(
+    task: dict,
+    *,
+    title: str,
+    message: str,
+    event_id: str,
+    provider: str,
+    auto_loop_enabled: bool,
+) -> None:
     repo_root = Path(task["repo_root"])
     task_dir = repo_root / task["task_dir"]
     title_line = title or _title_from_message(message)
@@ -272,6 +322,8 @@ def _hydrate_task_from_conversation(task: dict, *, title: str, message: str, eve
     task_record.setdefault("meta", {})
     task_record["meta"]["source_event_id"] = event_id
     task_record["meta"]["source_event_type"] = "conversation"
+    task_record["meta"]["default_provider"] = provider
+    task_record["meta"]["auto_loop_enabled"] = auto_loop_enabled
     save_task_record(task_file=task_file, task=task_record)
 
 

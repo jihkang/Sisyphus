@@ -102,6 +102,12 @@ taskflow <command>
 uv run python -m taskflow.cli new feature sample-task
 uv run python -m taskflow.cli new issue broken-login
 
+uv run python -m taskflow.cli plan approve TF-20260405-feature-sample-task --by reviewer
+uv run python -m taskflow.cli plan request-changes TF-20260405-feature-sample-task --by reviewer --notes "split API and UI work"
+uv run python -m taskflow.cli plan revise TF-20260405-feature-sample-task --by worker --notes "updated the plan after review"
+uv run python -m taskflow.cli spec freeze TF-20260405-feature-sample-task --by reviewer
+uv run python -m taskflow.cli subtasks generate TF-20260405-feature-sample-task
+
 uv run python -m taskflow.cli verify TF-20260405-feature-sample-task
 uv run python -m taskflow.cli close TF-20260405-feature-sample-task
 uv run python -m taskflow.cli close TF-20260405-feature-sample-task --allow-dirty

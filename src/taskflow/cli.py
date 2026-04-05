@@ -20,6 +20,15 @@ from .config import load_config
 from .creation import TaskCreationError, create_task_workspace
 from .daemon import queue_conversation_event, run_daemon
 from .discovery import detect_repo_root
+from .planning import (
+    approve_task_plan,
+    enforce_plan_approved,
+    enforce_spec_frozen,
+    freeze_task_spec,
+    generate_subtasks,
+    request_plan_changes,
+    revise_task_plan,
+)
 from .state import list_task_records
 
 
@@ -42,6 +51,33 @@ def build_parser() -> argparse.ArgumentParser:
     close_parser = subparsers.add_parser("close")
     close_parser.add_argument("task_id")
     close_parser.add_argument("--allow-dirty", action="store_true")
+
+    plan_parser = subparsers.add_parser("plan")
+    plan_subparsers = plan_parser.add_subparsers(dest="plan_command", required=True)
+    plan_approve_parser = plan_subparsers.add_parser("approve")
+    plan_approve_parser.add_argument("task_id")
+    plan_approve_parser.add_argument("--by", dest="reviewer", default="operator")
+    plan_approve_parser.add_argument("--notes")
+    plan_changes_parser = plan_subparsers.add_parser("request-changes")
+    plan_changes_parser.add_argument("task_id")
+    plan_changes_parser.add_argument("--by", dest="reviewer", default="operator")
+    plan_changes_parser.add_argument("--notes")
+    plan_revise_parser = plan_subparsers.add_parser("revise")
+    plan_revise_parser.add_argument("task_id")
+    plan_revise_parser.add_argument("--by", dest="author", default="operator")
+    plan_revise_parser.add_argument("--notes")
+
+    spec_parser = subparsers.add_parser("spec")
+    spec_subparsers = spec_parser.add_subparsers(dest="spec_command", required=True)
+    spec_freeze_parser = spec_subparsers.add_parser("freeze")
+    spec_freeze_parser.add_argument("task_id")
+    spec_freeze_parser.add_argument("--by", dest="reviewer", default="operator")
+    spec_freeze_parser.add_argument("--notes")
+
+    subtasks_parser = subparsers.add_parser("subtasks")
+    subtasks_subparsers = subtasks_parser.add_subparsers(dest="subtasks_command", required=True)
+    subtasks_generate_parser = subtasks_subparsers.add_parser("generate")
+    subtasks_generate_parser.add_argument("task_id")
 
     ingest_parser = subparsers.add_parser("ingest")
     ingest_subparsers = ingest_parser.add_subparsers(dest="ingest_command", required=True)
@@ -129,6 +165,8 @@ def handle_new(task_type: str, slug: str) -> int:
     print(f"task_dir: {task['task_dir']}")
     print(f"branch: {task['branch']}")
     print(f"worktree_path: {task['worktree_path']}")
+    print(f"plan_status: {task['plan_status']}")
+    print(f"spec_status: {task['spec_status']}")
     return 0
 
 
@@ -162,6 +200,89 @@ def handle_close(task_id: str, allow_dirty: bool) -> int:
             print(f"- {gate['code']}: {gate['message']}")
         return 1
     print("gates: none")
+    return 0
+
+
+def handle_plan_approve(task_id: str, reviewer: str, notes: str | None) -> int:
+    repo_root = detect_repo_root(Path.cwd())
+    config = load_config(repo_root)
+    outcome = approve_task_plan(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        reviewer=reviewer,
+        notes=notes,
+    )
+    print(f"plan {outcome.task_id}")
+    print(f"plan_status: {outcome.plan_status}")
+    print(f"task_status: {outcome.task_status}")
+    return 0
+
+
+def handle_plan_request_changes(task_id: str, reviewer: str, notes: str | None) -> int:
+    repo_root = detect_repo_root(Path.cwd())
+    config = load_config(repo_root)
+    outcome = request_plan_changes(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        reviewer=reviewer,
+        notes=notes,
+    )
+    print(f"plan {outcome.task_id}")
+    print(f"plan_status: {outcome.plan_status}")
+    print(f"task_status: {outcome.task_status}")
+    if outcome.gates:
+        print("gates:")
+        for gate in outcome.gates:
+            print(f"- {gate['code']}: {gate['message']}")
+    return 0
+
+
+def handle_plan_revise(task_id: str, author: str, notes: str | None) -> int:
+    repo_root = detect_repo_root(Path.cwd())
+    config = load_config(repo_root)
+    outcome = revise_task_plan(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        author=author,
+        notes=notes,
+    )
+    print(f"plan {outcome.task_id}")
+    print(f"plan_status: {outcome.plan_status}")
+    print(f"task_status: {outcome.task_status}")
+    return 0
+
+
+def handle_spec_freeze(task_id: str, reviewer: str, notes: str | None) -> int:
+    repo_root = detect_repo_root(Path.cwd())
+    config = load_config(repo_root)
+    outcome = freeze_task_spec(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        reviewer=reviewer,
+        notes=notes,
+    )
+    print(f"spec {outcome.task_id}")
+    print(f"spec_status: {outcome.spec_status}")
+    print(f"task_status: {outcome.task_status}")
+    print(f"workflow_phase: {outcome.workflow_phase}")
+    return 0
+
+
+def handle_subtasks_generate(task_id: str) -> int:
+    repo_root = detect_repo_root(Path.cwd())
+    config = load_config(repo_root)
+    outcome = generate_subtasks(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+    )
+    print(f"subtasks {outcome.task_id}")
+    print(f"count: {len(outcome.subtasks)}")
+    print(f"workflow_phase: {outcome.workflow_phase}")
     return 0
 
 
@@ -218,6 +339,7 @@ def handle_daemon(once: bool, poll_interval_seconds: int, max_events: int | None
     print(f"processed: {stats.processed}")
     print(f"failed: {stats.failed}")
     print(f"skipped: {stats.skipped}")
+    print(f"orchestrated: {stats.orchestrated}")
     return 0 if stats.failed == 0 else 1
 
 
@@ -373,6 +495,29 @@ def handle_agent_run(
     config = load_config(repo_root)
     if command and command[0] == "--":
         command = command[1:]
+    if role == "worker":
+        approved, task = enforce_plan_approved(
+            repo_root=repo_root,
+            config=config,
+            task_id=task_id,
+            action="execution",
+        )
+        if not approved:
+            plan_gates = [gate for gate in task.get("gates", []) if gate.get("source") == "plan"]
+            message = plan_gates[0]["message"] if plan_gates else "task plan approval required before execution"
+            print(f"error: {message}", file=sys.stderr)
+            return 1
+        frozen, task = enforce_spec_frozen(
+            repo_root=repo_root,
+            config=config,
+            task_id=task_id,
+            action="execution",
+        )
+        if not frozen:
+            spec_gates = [gate for gate in task.get("gates", []) if gate.get("source") == "spec"]
+            message = spec_gates[0]["message"] if spec_gates else "task spec must be frozen before execution"
+            print(f"error: {message}", file=sys.stderr)
+            return 1
     try:
         outcome = run_tracked_agent(
             repo_root=repo_root,
@@ -458,6 +603,9 @@ def handle_status(
             f"[{task.get('type')}] "
             f"status={task.get('status')} "
             f"stage={task.get('stage')} "
+            f"plan={task.get('plan_status', 'approved')} "
+            f"spec={task.get('spec_status', 'frozen')} "
+            f"phase={task.get('workflow_phase', '-')} "
             f"audit={task.get('audit_attempts', 0)}/{task.get('max_audit_attempts', 10)} "
             f"gates={gate_count}"
         )
@@ -494,6 +642,35 @@ def main() -> int:
         return handle_verify(task_id=args.task_id)
     if args.command == "close":
         return handle_close(task_id=args.task_id, allow_dirty=args.allow_dirty)
+    if args.command == "plan":
+        if args.plan_command == "approve":
+            return handle_plan_approve(
+                task_id=args.task_id,
+                reviewer=args.reviewer,
+                notes=args.notes,
+            )
+        if args.plan_command == "request-changes":
+            return handle_plan_request_changes(
+                task_id=args.task_id,
+                reviewer=args.reviewer,
+                notes=args.notes,
+            )
+        if args.plan_command == "revise":
+            return handle_plan_revise(
+                task_id=args.task_id,
+                author=args.author,
+                notes=args.notes,
+            )
+    if args.command == "spec":
+        if args.spec_command == "freeze":
+            return handle_spec_freeze(
+                task_id=args.task_id,
+                reviewer=args.reviewer,
+                notes=args.notes,
+            )
+    if args.command == "subtasks":
+        if args.subtasks_command == "generate":
+            return handle_subtasks_generate(task_id=args.task_id)
     if args.command == "agents":
         return handle_agents(
             task_id=args.task_id,

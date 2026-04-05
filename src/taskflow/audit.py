@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 
 from .config import TaskflowConfig
+from .planning import collect_plan_gates
 from .state import load_task_record, save_task_record, utc_now
 from .strategy import sync_test_strategy_from_docs
 
@@ -21,6 +22,8 @@ VERIFY_GATE_CODES = {
     "AUDIT_LIMIT_REACHED",
     "TEST_STRATEGY_MISSING",
     "EXTERNAL_LLM_REVIEW_REQUIRED",
+    "PLAN_APPROVAL_REQUIRED",
+    "PLAN_CHANGES_REQUESTED",
 }
 
 TRANSIENT_GATE_SOURCES = {
@@ -28,6 +31,7 @@ TRANSIENT_GATE_SOURCES = {
     "docs",
     "strategy",
     "close",
+    "plan",
 }
 
 
@@ -60,9 +64,11 @@ def run_verify(repo_root: Path, config: TaskflowConfig, task_id: str) -> VerifyO
     gates.extend(_collect_doc_gates(task, task_dir))
     spec_gates = _collect_spec_gates(task, task_dir)
     gates.extend(spec_gates)
+    plan_gates = collect_plan_gates(task, action="verify")
+    gates.extend(plan_gates)
 
     command_results: list[dict] = []
-    if not spec_gates:
+    if not spec_gates and not plan_gates:
         task["stage"] = "audit"
         gates.extend(_collect_test_strategy_gates(task))
         command_results = _run_verify_commands(task, task_dir)
@@ -83,6 +89,8 @@ def run_verify(repo_root: Path, config: TaskflowConfig, task_id: str) -> VerifyO
         task["stage"] = "done"
     elif spec_gates:
         task["stage"] = "spec"
+    elif plan_gates:
+        task["stage"] = "plan_review"
     else:
         task["stage"] = "audit"
 

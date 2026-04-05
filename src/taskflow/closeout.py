@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 
 from .config import TaskflowConfig
+from .planning import collect_plan_gates
 from .state import load_task_record, save_task_record, utc_now
 
 
@@ -19,7 +20,8 @@ class CloseOutcome:
 
 def run_close(repo_root: Path, config: TaskflowConfig, task_id: str, allow_dirty: bool) -> CloseOutcome:
     task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
-    gates = [gate for gate in task.get("gates", []) if gate.get("source") != "close"]
+    gates = [gate for gate in task.get("gates", []) if gate.get("source") not in {"close", "plan"}]
+    gates.extend(collect_plan_gates(task, action="close"))
 
     if task.get("verify_status") != "passed":
         gates.append(_gate("VERIFY_REQUIRED", "task must pass verify before close", source="close"))
@@ -36,7 +38,7 @@ def run_close(repo_root: Path, config: TaskflowConfig, task_id: str, allow_dirty
 
     if gates:
         task["status"] = "blocked"
-        task["stage"] = "audit"
+        task["stage"] = "plan_review" if any(gate.get("source") == "plan" for gate in gates) else "audit"
         save_task_record(task_file=task_file, task=task)
         return CloseOutcome(
             task_id=task["id"],
