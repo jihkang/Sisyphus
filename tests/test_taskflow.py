@@ -773,6 +773,9 @@ class TaskflowAgentTests(unittest.TestCase):
         self.assertIn('"test_strategy":', prompt.prompt)
         self.assertIn("Additional operator instruction: focus on the task docs", prompt.prompt)
         self.assertIn("STATUS: completed", prompt.prompt)
+        self.assertIn("## Sisyphus Operating Principles", prompt.prompt)
+        self.assertIn("Break it: identify the assumption most likely to fail", prompt.prompt)
+        self.assertIn("Change the system, not only the explanation.", prompt.prompt)
         self.assertIn(f"## BRIEF ({self.task['task_dir'].replace('\\', '/')}/BRIEF.md)", prompt.prompt)
 
     def test_codex_wrapper_builds_default_codex_exec_command(self) -> None:

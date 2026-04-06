@@ -264,3 +264,4 @@ uv run python -m unittest discover -s tests -v
 - `sisyphus` is the preferred command surface.
 - `taskflow` remains available as a compatibility alias.
 - The package name is currently `taskflow-kit`.
+- Project philosophy: see `docs/philosophy.md`.

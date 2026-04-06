@@ -5,6 +5,7 @@ from pathlib import Path
 import json
 
 from .config import TaskflowConfig
+from .discipline import build_sisyphus_worker_discipline
 from .state import load_task_record
 from .utils import project_fields
 
@@ -43,6 +44,7 @@ def build_codex_prompt(
 
     body = [
         "\n".join(sections),
+        *_render_discipline_sections(),
         "## Task Metadata",
         json.dumps(task_snapshot, indent=2),
     ]
@@ -60,6 +62,14 @@ def build_codex_prompt(
         workdir=workdir,
         prompt="\n\n".join(body).strip() + "\n",
     )
+
+
+def _render_discipline_sections() -> list[str]:
+    rendered: list[str] = []
+    for title, bullets in build_sisyphus_worker_discipline():
+        rendered.append(f"## {title}")
+        rendered.extend(f"- {bullet}" for bullet in bullets)
+    return rendered
 
 
 def _resolve_workdir(repo_root: Path, task: dict) -> Path:
