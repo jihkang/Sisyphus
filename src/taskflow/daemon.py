@@ -10,9 +10,11 @@ import uuid
 from .config import TaskflowConfig
 from .creation import create_task_workspace
 from .paths import event_log_file, inbox_failed_dir, inbox_pending_dir, inbox_processed_dir
+from .planning import enforce_plan_approved, enforce_spec_frozen
 from .provider_wrapper import run_provider_wrapper
-from .state import load_task_record, save_task_record, utc_now
+from .state import list_task_records, load_task_record, save_task_record, sync_task_support_files, utc_now
 from .utils import project_fields
+from .workflow import run_workflow_cycle
 
 
 CONVERSATION_FIELD_DEFAULTS = {
@@ -26,6 +28,7 @@ CONVERSATION_FIELD_DEFAULTS = {
     "provider": "codex",
     "owned_paths": list,
     "provider_args": list,
+    "source_context": dict,
     "auto_run": True,
 }
 
@@ -35,6 +38,7 @@ class DaemonStats:
     processed: int = 0
     failed: int = 0
     skipped: int = 0
+    orchestrated: int = 0
 
 
 class DaemonError(RuntimeError):
@@ -54,6 +58,7 @@ def queue_conversation_event(
     provider: str = "codex",
     owned_paths: list[str] | None = None,
     provider_args: list[str] | None = None,
+    source_context: dict[str, object] | None = None,
     auto_run: bool = True,
 ) -> tuple[dict, Path]:
     event_id = _new_event_id()
@@ -76,6 +81,7 @@ def queue_conversation_event(
             "provider": provider,
             "owned_paths": owned_paths or [],
             "provider_args": provider_args or [],
+            "source_context": source_context or {},
             "auto_run": auto_run,
         },
         CONVERSATION_FIELD_DEFAULTS,
@@ -121,18 +127,25 @@ def run_daemon(
     stats = DaemonStats()
     while True:
         available = sorted(inbox_pending_dir(repo_root).glob("*.json"))
-        if not available:
-            if once:
-                return stats
-            time.sleep(max(poll_interval_seconds, 1))
-            continue
+        progressed = False
 
         for event_path in available:
             process_inbox_event(repo_root=repo_root, config=config, event_path=event_path, stats=stats)
+            progressed = True
             if max_events is not None and (stats.processed + stats.failed) >= max_events:
                 return stats
-        if once:
+
+        orchestrated = run_workflow_cycle(repo_root=repo_root, config=config)
+        if orchestrated:
+            stats.orchestrated += orchestrated
+            progressed = True
+
+        if once and not progressed:
             return stats
+        if once:
+            continue
+        if not progressed:
+            time.sleep(max(poll_interval_seconds, 1))
 
 
 def process_inbox_event(
@@ -209,14 +222,22 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
     title = str(payload["title"]).strip()
     message = str(payload["message"]).strip()
     task_type = str(payload["task_type"]).strip()
-    slug = str(payload["slug"]).strip() or _slugify(title or message, fallback=f"conversation-task-{event['id'][-4:]}")
+    requested_slug = str(payload["slug"]).strip() or _slugify(title or message, fallback=f"conversation-task-{event['id'][-4:]}")
+    slug, parent_task_id = _resolve_followup_slug(
+        repo_root=repo_root,
+        config=config,
+        task_type=task_type,
+        requested_slug=requested_slug,
+    )
     provider = str(payload["provider"]).strip() or "codex"
     role = str(payload["role"]).strip() or "worker"
     instruction = payload["instruction"]
     agent_id = str(payload["agent_id"]).strip() or "worker-1"
     owned_paths = [str(path) for path in payload["owned_paths"]]
     provider_args = [str(arg) for arg in payload["provider_args"]]
+    source_context = dict(payload["source_context"])
     auto_run = bool(payload["auto_run"])
+    requested_auto_run = auto_run
 
     outcome = create_task_workspace(
         repo_root=repo_root,
@@ -225,39 +246,96 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
         slug=slug,
     )
     task = outcome.task
-    _hydrate_task_from_conversation(task=task, title=title, message=message, event_id=event["id"])
+    _hydrate_task_from_conversation(
+        task=task,
+        title=title,
+        message=message,
+        event_id=event["id"],
+        provider=provider,
+        auto_loop_enabled=requested_auto_run,
+        source_context=source_context,
+        requested_slug=requested_slug,
+        parent_task_id=parent_task_id,
+    )
 
     agent_exit_code = None
+    blocked_reason = None
     if auto_run:
-        wrapper_args = [task["id"], agent_id, "--role", role]
-        if instruction:
-            wrapper_args.extend(["--instruction", str(instruction)])
-        for path in owned_paths:
-            wrapper_args.extend(["--owned-path", path])
-        for arg in provider_args:
-            wrapper_args.extend(["--provider-arg", arg])
-        agent_exit_code = run_provider_wrapper(provider, wrapper_args, repo_root=repo_root)
-        if agent_exit_code != 0:
-            raise DaemonError(f"{provider} worker exited with code {agent_exit_code}")
+        approved, task = enforce_plan_approved(
+            repo_root=repo_root,
+            config=config,
+            task_id=task["id"],
+            action="auto-run",
+        )
+        if approved:
+            frozen, task = enforce_spec_frozen(
+                repo_root=repo_root,
+                config=config,
+                task_id=task["id"],
+                action="auto-run",
+            )
+            if frozen:
+                wrapper_args = [task["id"], agent_id, "--role", role]
+                if instruction:
+                    wrapper_args.extend(["--instruction", str(instruction)])
+                for path in owned_paths:
+                    wrapper_args.extend(["--owned-path", path])
+                for arg in provider_args:
+                    wrapper_args.extend(["--provider-arg", arg])
+                agent_exit_code = run_provider_wrapper(provider, wrapper_args, repo_root=repo_root)
+                if agent_exit_code != 0:
+                    raise DaemonError(f"{provider} worker exited with code {agent_exit_code}")
+            else:
+                auto_run = False
+                blocked_reason = "task spec must be frozen before auto-run"
+        else:
+            auto_run = False
+            blocked_reason = "task plan must be approved before auto-run"
 
     return {
         "task_id": task["id"],
         "task_type": task["type"],
+        "slug": task["slug"],
+        "requested_slug": requested_slug,
+        "followup_of_task_id": parent_task_id,
         "branch": task["branch"],
         "worktree_path": task["worktree_path"],
         "agent_id": agent_id if auto_run else None,
         "agent_exit_code": agent_exit_code,
         "auto_run": auto_run,
+        "plan_status": task.get("plan_status"),
+        "spec_status": task.get("spec_status"),
+        "blocked_reason": blocked_reason,
     }
 
 
-def _hydrate_task_from_conversation(task: dict, *, title: str, message: str, event_id: str) -> None:
+def _hydrate_task_from_conversation(
+    task: dict,
+    *,
+    title: str,
+    message: str,
+    event_id: str,
+    provider: str,
+    auto_loop_enabled: bool,
+    source_context: dict[str, object],
+    requested_slug: str,
+    parent_task_id: str | None,
+) -> None:
     repo_root = Path(task["repo_root"])
     task_dir = repo_root / task["task_dir"]
     title_line = title or _title_from_message(message)
 
     brief_path = task_dir / task["docs"]["brief"]
-    brief_path.write_text(_render_brief(task, title_line, message), encoding="utf-8")
+    brief_path.write_text(
+        _render_brief(
+            task,
+            title_line,
+            message,
+            requested_slug=requested_slug,
+            parent_task_id=parent_task_id,
+        ),
+        encoding="utf-8",
+    )
 
     if task["type"] == "feature":
         plan_path = task_dir / task["docs"]["plan"]
@@ -272,25 +350,99 @@ def _hydrate_task_from_conversation(task: dict, *, title: str, message: str, eve
     task_record.setdefault("meta", {})
     task_record["meta"]["source_event_id"] = event_id
     task_record["meta"]["source_event_type"] = "conversation"
+    task_record["meta"]["default_provider"] = provider
+    task_record["meta"]["auto_loop_enabled"] = auto_loop_enabled
+    task_record["meta"]["requested_slug"] = requested_slug
+    if parent_task_id:
+        task_record["meta"]["followup_of_task_id"] = parent_task_id
+    if source_context:
+        task_record["meta"]["source_context"] = source_context
     save_task_record(task_file=task_file, task=task_record)
+    sync_task_support_files(task_record)
 
 
-def _render_brief(task: dict, title: str, message: str) -> str:
-    return "\n".join(
+def _resolve_followup_slug(
+    *,
+    repo_root: Path,
+    config: TaskflowConfig,
+    task_type: str,
+    requested_slug: str,
+) -> tuple[str, str | None]:
+    matching = [
+        task
+        for task in list_task_records(repo_root=repo_root, task_dir_name=config.task_dir)
+        if str(task.get("type")) == task_type and str(task.get("slug")) == requested_slug
+    ]
+    if not matching:
+        return requested_slug, None
+
+    latest = sorted(
+        matching,
+        key=lambda task: (
+            str(task.get("updated_at", "")),
+            str(task.get("created_at", "")),
+            str(task.get("id", "")),
+        ),
+    )[-1]
+    if str(latest.get("status")) != "closed":
+        return requested_slug, None
+
+    sibling_slugs = {
+        str(task.get("slug"))
+        for task in list_task_records(repo_root=repo_root, task_dir_name=config.task_dir)
+        if str(task.get("type")) == task_type
+    }
+    return _next_followup_slug(requested_slug, sibling_slugs), str(latest.get("id"))
+
+
+def _next_followup_slug(requested_slug: str, sibling_slugs: set[str]) -> str:
+    base = f"{requested_slug}-followup"
+    if base not in sibling_slugs:
+        return base
+
+    index = 2
+    while True:
+        candidate = f"{base}-{index}"
+        if candidate not in sibling_slugs:
+            return candidate
+        index += 1
+
+
+def _render_brief(
+    task: dict,
+    title: str,
+    message: str,
+    *,
+    requested_slug: str,
+    parent_task_id: str | None,
+) -> str:
+    lines = [
+        "# Brief",
+        "",
+        "## Task",
+        "",
+        f"- Task ID: `{task['id']}`",
+        f"- Type: `{task['type']}`",
+        f"- Slug: `{task['slug']}`",
+        f"- Branch: `{task['branch']}`",
+    ]
+    if requested_slug and requested_slug != str(task["slug"]):
+        lines.append(f"- Requested Slug: `{requested_slug}`")
+    if parent_task_id:
+        lines.append(f"- Follow-up Of: `{parent_task_id}`")
+    lines.extend(
         [
-            "# Brief",
-            "",
-            "## Task",
-            "",
-            f"- Task ID: `{task['id']}`",
-            f"- Type: `{task['type']}`",
-            f"- Slug: `{task['slug']}`",
-            f"- Branch: `{task['branch']}`",
             "",
             "## Problem" if task["type"] == "feature" else "## Symptom",
             "",
             f"- {title}",
             f"- Original request: {message}",
+        ]
+    )
+    if parent_task_id:
+        lines.append(f"- This task continues implementation work after `{parent_task_id}` was closed.")
+    lines.extend(
+        [
             "",
             "## Desired Outcome" if task["type"] == "feature" else "## Expected Behavior",
             "",
@@ -310,6 +462,7 @@ def _render_brief(task: dict, title: str, message: str) -> str:
             "",
         ]
     )
+    return "\n".join(lines)
 
 
 def _render_feature_plan(task: dict, title: str, message: str) -> str:

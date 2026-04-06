@@ -35,6 +35,8 @@ def build_codex_prompt(
         "Keep changes aligned with the documented acceptance criteria and test strategy.",
         "If the task docs and code disagree, prefer the task docs and update code accordingly.",
         "Run relevant validation before finishing when feasible.",
+        "Task docs live under the repository-relative paths shown in each section heading.",
+        "Start your final response with exactly one status line: `STATUS: completed`, `STATUS: blocked`, or `STATUS: failed`.",
     ]
     if extra_instruction:
         sections.append(f"Additional operator instruction: {extra_instruction}")
@@ -69,13 +71,15 @@ def _resolve_workdir(repo_root: Path, task: dict) -> Path:
 
 def _load_docs(task: dict, task_dir: Path) -> list[tuple[str, str]]:
     docs: list[tuple[str, str]] = []
+    task_dir_relative = Path(str(task.get("task_dir", "")))
     for key, relative_path in task.get("docs", {}).items():
         if not relative_path:
             continue
         path = task_dir / relative_path
         if not path.exists():
             continue
-        label = f"{key.upper()} ({relative_path})"
+        display_path = (task_dir_relative / relative_path).as_posix() if str(task_dir_relative) != "." else relative_path
+        label = f"{key.upper()} ({display_path})"
         docs.append((label, path.read_text(encoding="utf-8")))
     return docs
 
@@ -89,10 +93,19 @@ def _build_task_snapshot(task: dict) -> dict[str, object]:
             "slug": None,
             "status": None,
             "stage": None,
+            "plan_status": None,
+            "plan_review_round": None,
+            "max_plan_review_rounds": None,
+            "plan_reviewed_at": None,
+            "plan_reviewed_by": None,
+            "workflow_phase": None,
+            "spec_status": None,
+            "spec_frozen_at": None,
             "branch": None,
             "base_branch": None,
             "worktree_path": None,
             "verify_status": None,
+            "subtasks": list,
             "gates": list,
             "test_strategy": dict,
             "docs": dict,

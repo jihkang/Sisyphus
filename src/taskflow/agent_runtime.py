@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -55,6 +56,7 @@ def run_tracked_agent(
     heartbeat_seconds: int = 10,
     run_cwd: Path | None = None,
     stdin_text: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> AgentRunOutcome:
     if not command:
         raise AgentTrackingError("agent run requires a command after `--`")
@@ -75,15 +77,32 @@ def run_tracked_agent(
         status="running",
     )
 
-    process = subprocess.Popen(
-        command,
-        cwd=run_cwd or Path.cwd(),
-        stdin=subprocess.PIPE if stdin_text is not None else None,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=run_cwd or Path.cwd(),
+            env=_build_process_env(env),
+            stdin=subprocess.PIPE if stdin_text is not None else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         bufsize=1,
     )
+    except OSError as exc:
+        update_agent(
+            repo_root=repo_root,
+            config=config,
+            task_id=task_id,
+            agent_id=agent_id,
+            status="failed",
+            provider=provider,
+            command=command,
+            error=str(exc),
+            last_message_summary=str(exc),
+        )
+        raise AgentTrackingError(str(exc)) from exc
 
     tracker = OutputTracker()
     output_thread = threading.Thread(
@@ -192,8 +211,7 @@ def _stream_output(*, process: subprocess.Popen[str], tracker: OutputTracker) ->
     try:
         for line in process.stdout:
             tracker.add_line(line)
-            sys.stdout.write(line)
-            sys.stdout.flush()
+            _write_stdout_line(line)
     finally:
         process.stdout.close()
 
@@ -226,3 +244,24 @@ def _heartbeat_loop(
             )
         except (AgentTrackingError, FileNotFoundError):
             return
+
+
+def _build_process_env(overrides: dict[str, str] | None) -> dict[str, str]:
+    env = dict(os.environ)
+    if overrides:
+        env.update(overrides)
+    return env
+
+
+def _write_stdout_line(line: str) -> None:
+    try:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        if hasattr(sys.stdout, "buffer"):
+            sys.stdout.buffer.write(line.encode(encoding, errors="replace"))
+            sys.stdout.flush()
+            return
+        sys.stdout.write(line.encode(encoding, errors="replace").decode(encoding, errors="replace"))
+        sys.stdout.flush()
