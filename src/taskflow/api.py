@@ -50,6 +50,8 @@ def queue_conversation(
     owned_paths: list[str] | None = None,
     provider_args: list[str] | None = None,
     source_context: dict[str, object] | None = None,
+    adopt_current_changes: bool = False,
+    adopt_paths: list[str] | None = None,
     auto_run: bool = True,
 ) -> QueuedConversation:
     event, event_path = queue_conversation_event(
@@ -65,6 +67,8 @@ def queue_conversation(
         owned_paths=owned_paths,
         provider_args=provider_args,
         source_context=source_context,
+        adopt_current_changes=adopt_current_changes,
+        adopt_paths=adopt_paths,
         auto_run=auto_run,
     )
     return QueuedConversation(event=event, event_path=event_path)
@@ -85,6 +89,8 @@ def request_task(
     owned_paths: list[str] | None = None,
     provider_args: list[str] | None = None,
     source_context: dict[str, object] | None = None,
+    adopt_current_changes: bool = False,
+    adopt_paths: list[str] | None = None,
     auto_run: bool = True,
 ) -> TaskRequestResult:
     effective_config = config or load_config(repo_root)
@@ -101,6 +107,8 @@ def request_task(
         owned_paths=owned_paths,
         provider_args=provider_args,
         source_context=source_context,
+        adopt_current_changes=adopt_current_changes,
+        adopt_paths=adopt_paths,
         auto_run=auto_run,
     )
 

@@ -191,6 +191,7 @@ class TaskflowVerifyTests(unittest.TestCase):
         self.assertEqual(reloaded["status"], "verified")
         self.assertEqual(reloaded["verify_status"], "passed")
         self.assertEqual(reloaded["stage"], "done")
+        self.assertEqual(reloaded["workflow_phase"], "verified")
         self.assertEqual(reloaded["gates"], [])
         self.assertEqual(reloaded["last_verify_results"][0]["status"], "passed")
 
@@ -779,6 +780,7 @@ class TaskflowAgentTests(unittest.TestCase):
         self.assertIn(f"## BRIEF ({self.task['task_dir'].replace('\\', '/')}/BRIEF.md)", prompt.prompt)
 
     def test_codex_wrapper_builds_default_codex_exec_command(self) -> None:
+        (self.repo_root / ".venv" / "Scripts").mkdir(parents=True, exist_ok=True)
         with mock.patch("taskflow.provider_wrapper.Path.cwd", return_value=self.repo_root):
             with mock.patch("taskflow.provider_wrapper._resolve_codex_executable", return_value="codex.cmd"):
                 with mock.patch("taskflow.cli.handle_agent_run", return_value=0) as mocked_run:
@@ -796,6 +798,12 @@ class TaskflowAgentTests(unittest.TestCase):
         self.assertIn("You are the local Codex worker for this task.", kwargs["stdin_text"])
         self.assertEqual(kwargs["env"]["GIT_CONFIG_KEY_0"], "safe.directory")
         self.assertEqual(kwargs["env"]["GIT_CONFIG_VALUE_0"], str(self.repo_root))
+        self.assertEqual(kwargs["env"]["TEMP"], str(self.repo_root / ".tmp"))
+        self.assertEqual(kwargs["env"]["TMP"], str(self.repo_root / ".tmp"))
+        self.assertEqual(kwargs["env"]["TMPDIR"], str(self.repo_root / ".tmp"))
+        self.assertEqual(kwargs["env"]["UV_CACHE_DIR"], str(self.repo_root / ".uv-cache"))
+        self.assertEqual(kwargs["env"]["UV_PYTHON_INSTALL_DIR"], str(self.repo_root / ".uv-python"))
+        self.assertTrue(kwargs["env"]["PATH"].startswith(str(self.repo_root / ".venv" / "Scripts")))
 
     def test_codex_wrapper_with_options_still_builds_default_launch(self) -> None:
         with mock.patch("taskflow.provider_wrapper.Path.cwd", return_value=self.repo_root):
@@ -820,6 +828,7 @@ class TaskflowAgentTests(unittest.TestCase):
         self.assertEqual(kwargs["command"][-1], "-")
         self.assertIn("Additional operator instruction: focus on the first subtask", kwargs["stdin_text"])
         self.assertEqual(kwargs["env"]["GIT_CONFIG_VALUE_0"], str(self.repo_root))
+        self.assertEqual(kwargs["repo_root"], self.repo_root)
 
     def test_codex_wrapper_converts_blocked_last_message_into_failure(self) -> None:
         def fake_handle_agent_run(**kwargs):
@@ -1159,6 +1168,40 @@ class TaskflowDaemonTests(unittest.TestCase):
         self.assertEqual(task["meta"]["source_context"]["channel_id"], "12345")
         self.assertEqual(task["meta"]["source_context"]["thread_id"], "67890")
 
+    def test_process_inbox_event_adopts_requested_current_changes_into_task_worktree(self) -> None:
+        (self.repo_root / "README.md").write_text("# changed in root\n", encoding="utf-8")
+        notes_path = self.repo_root / "notes.txt"
+        notes_path.write_text("root note\n", encoding="utf-8")
+
+        _, event_path = queue_conversation_event(
+            self.repo_root,
+            title="Adopt current changes",
+            message="carry my current edits into the task worktree",
+            adopt_current_changes=True,
+            adopt_paths=["README.md"],
+            auto_run=False,
+        )
+
+        event = process_inbox_event(
+            repo_root=self.repo_root,
+            config=self.config,
+            event_path=event_path,
+        )
+
+        self.assertEqual(event["status"], "processed")
+        processed_files = list(inbox_processed_dir(self.repo_root).glob("*.json"))
+        persisted_event = json.loads(processed_files[0].read_text(encoding="utf-8"))
+        task_id = persisted_event["result"]["task_id"]
+        task, _ = load_task_record(self.repo_root, self.config.task_dir, task_id)
+        adopted = task["meta"]["adopted_changes"]
+        self.assertEqual(adopted["source_branch"], "main")
+        self.assertEqual(adopted["requested_paths"], ["README.md"])
+        self.assertEqual(adopted["paths"], ["README.md"])
+        self.assertEqual((Path(task["worktree_path"]) / "README.md").read_text(encoding="utf-8"), "# changed in root\n")
+        self.assertFalse((Path(task["worktree_path"]) / "notes.txt").exists())
+        log_text = (self.repo_root / task["task_dir"] / "LOG.md").read_text(encoding="utf-8")
+        self.assertIn("Adopted 1 current changes from branch `main`", log_text)
+
     def test_request_task_api_returns_structured_task_result(self) -> None:
         result = request_task(
             repo_root=self.repo_root,
@@ -1370,6 +1413,8 @@ class TaskflowDaemonTests(unittest.TestCase):
                 provider="codex",
                 owned_paths=None,
                 provider_args=None,
+                adopt_current_changes=False,
+                adopt_paths=None,
                 no_run=True,
             )
 
@@ -1434,6 +1479,8 @@ class TaskflowDaemonTests(unittest.TestCase):
                         provider="codex",
                         owned_paths=None,
                         provider_args=None,
+                        adopt_current_changes=False,
+                        adopt_paths=None,
                         no_run=False,
                     )
 
@@ -1469,6 +1516,8 @@ class TaskflowDaemonTests(unittest.TestCase):
                         provider="codex",
                         owned_paths=None,
                         provider_args=None,
+                        adopt_current_changes=False,
+                        adopt_paths=None,
                         no_run=True,
                     )
 
@@ -1486,6 +1535,33 @@ class TaskflowDaemonTests(unittest.TestCase):
         task, _ = load_task_record(self.repo_root, self.config.task_dir, task_id)
         self.assertEqual(task["status"], "open")
         self.assertEqual(task["plan_status"], "pending_review")
+
+    def test_request_command_reports_adopted_changes(self) -> None:
+        (self.repo_root / "README.md").write_text("# changed in root\n", encoding="utf-8")
+        buffer = io.StringIO()
+
+        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+            with redirect_stdout(buffer):
+                exit_code = handle_request(
+                    message="attach my current edit to the task",
+                    title="Adopt local README change",
+                    task_type="feature",
+                    slug=None,
+                    instruction=None,
+                    agent_id="worker-1",
+                    role="worker",
+                    provider="codex",
+                    owned_paths=None,
+                    provider_args=None,
+                    adopt_current_changes=True,
+                    adopt_paths=["README.md"],
+                    no_run=True,
+                )
+
+        self.assertEqual(exit_code, 0)
+        rendered = buffer.getvalue()
+        self.assertIn("adopted_paths: 1", rendered)
+        self.assertIn("adopted_from_branch: main", rendered)
 
     def test_request_command_prints_followup_context_for_closed_duplicate_slug(self) -> None:
         existing = create_task_record(
@@ -1518,6 +1594,8 @@ class TaskflowDaemonTests(unittest.TestCase):
                     provider="codex",
                     owned_paths=None,
                     provider_args=None,
+                    adopt_current_changes=False,
+                    adopt_paths=None,
                     no_run=True,
                 )
 
@@ -1546,6 +1624,8 @@ class TaskflowDaemonTests(unittest.TestCase):
                         provider="codex",
                         owned_paths=None,
                         provider_args=None,
+                        adopt_current_changes=False,
+                        adopt_paths=None,
                         no_run=True,
                         repo_root=self.repo_root,
                     )
@@ -1699,6 +1779,9 @@ class TaskflowDaemonTests(unittest.TestCase):
                 "worker-1",
                 "--provider",
                 "codex",
+                "--adopt-current-changes",
+                "--adopt-path",
+                "README.md",
                 "--no-run",
             ]
         )
@@ -1706,6 +1789,8 @@ class TaskflowDaemonTests(unittest.TestCase):
         self.assertEqual(args.command, "request")
         self.assertEqual(args.message, "add agent dashboard")
         self.assertEqual(args.agent_id, "worker-1")
+        self.assertTrue(args.adopt_current_changes)
+        self.assertEqual(args.adopt_paths, ["README.md"])
         self.assertTrue(args.no_run)
 
     def test_parser_accepts_global_repo_override(self) -> None:
