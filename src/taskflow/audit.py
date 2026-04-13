@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 
+from .bus import build_event_publisher
+from .conformance import collect_conformance_gates
 from .config import TaskflowConfig
+from .events import new_event_envelope
 from .planning import collect_plan_gates
 from .state import load_task_record, save_task_record, utc_now
 from .strategy import sync_test_strategy_from_docs
@@ -32,6 +35,7 @@ TRANSIENT_GATE_SOURCES = {
     "strategy",
     "close",
     "plan",
+    "conformance",
 }
 
 
@@ -66,9 +70,11 @@ def run_verify(repo_root: Path, config: TaskflowConfig, task_id: str) -> VerifyO
     gates.extend(spec_gates)
     plan_gates = collect_plan_gates(task, action="verify")
     gates.extend(plan_gates)
+    conformance_gates = collect_conformance_gates(task, action="verify")
+    gates.extend(conformance_gates)
 
     command_results: list[dict] = []
-    if not spec_gates and not plan_gates:
+    if not spec_gates and not plan_gates and not conformance_gates:
         task["stage"] = "audit"
         gates.extend(_collect_test_strategy_gates(task))
         command_results = _run_verify_commands(task, task_dir)
@@ -91,12 +97,26 @@ def run_verify(repo_root: Path, config: TaskflowConfig, task_id: str) -> VerifyO
         task["stage"] = "spec"
     elif plan_gates:
         task["stage"] = "plan_review"
+    elif conformance_gates:
+        task["stage"] = "audit"
     else:
         task["stage"] = "audit"
 
     verify_file = task_dir / task["docs"]["verify"]
     verify_file.write_text(_render_verify_markdown(task, command_results), encoding="utf-8")
     save_task_record(task_file=task_file, task=task)
+    build_event_publisher(repo_root, config).publish(
+        new_event_envelope(
+            "verify.completed",
+            source={"module": "audit"},
+            data={
+                "task_id": task["id"],
+                "status": task["verify_status"],
+                "stage": task["stage"],
+                "gate_count": len(task["gates"]),
+            },
+        )
+    )
 
     return VerifyOutcome(
         task_id=task["id"],

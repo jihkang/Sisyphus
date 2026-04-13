@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import json
 
+from .conformance import default_task_conformance, ensure_task_conformance_defaults
 from .config import TaskflowConfig
 from .gitops import branch_name, worktree_path
 from .paths import task_dir
@@ -116,6 +117,7 @@ def build_task_record(
         },
         "gates": [],
         "subtasks": [],
+        "conformance": default_task_conformance(),
         "docs": docs,
         "meta": {
             "sequence": None,
@@ -128,7 +130,8 @@ def load_task_record(repo_root: Path, task_dir_name: str, task_id: str) -> tuple
     task_file = task_dir(repo_root, task_dir_name, task_id) / "task.json"
     if not task_file.exists():
         raise FileNotFoundError(f"task not found: {task_id}")
-    return json.loads(task_file.read_text(encoding="utf-8")), task_file
+    task = json.loads(task_file.read_text(encoding="utf-8"))
+    return ensure_task_record_defaults(task), task_file
 
 
 def list_task_records(repo_root: Path, task_dir_name: str) -> list[dict]:
@@ -139,16 +142,66 @@ def list_task_records(repo_root: Path, task_dir_name: str) -> list[dict]:
     tasks: list[dict] = []
     for task_file in sorted(root.glob("*/task.json")):
         try:
-            tasks.append(json.loads(task_file.read_text(encoding="utf-8")))
+            task = json.loads(task_file.read_text(encoding="utf-8"))
+            tasks.append(ensure_task_record_defaults(task))
         except json.JSONDecodeError:
             continue
     return tasks
 
 
 def save_task_record(task_file: Path, task: dict) -> None:
+    ensure_task_record_defaults(task)
     task["updated_at"] = utc_now()
     task_file.write_text(json.dumps(task, indent=2) + "\n", encoding="utf-8")
     sync_task_support_files(task)
+
+
+def ensure_task_record_defaults(task: dict) -> dict:
+    task.setdefault("id", None)
+    task.setdefault("type", None)
+    task.setdefault("slug", None)
+    task.setdefault("status", "open")
+    task.setdefault("stage", "spec")
+    task.setdefault("plan_status", "pending_review")
+    task.setdefault("plan_reviewed_at", None)
+    task.setdefault("plan_reviewed_by", None)
+    task.setdefault("plan_review_notes", None)
+    task.setdefault("plan_review_round", 0)
+    task.setdefault("max_plan_review_rounds", 3)
+    task.setdefault("plan_review_history", [])
+    task.setdefault("workflow_phase", "plan_in_review")
+    task.setdefault("spec_status", "draft")
+    task.setdefault("spec_frozen_at", None)
+    task.setdefault("spec_reviewed_by", None)
+    task.setdefault("spec_review_notes", None)
+    task.setdefault("audit_attempts", 0)
+    task.setdefault("max_audit_attempts", 10)
+    task.setdefault("created_at", utc_now())
+    task.setdefault("updated_at", utc_now())
+    task.setdefault("closed_at", None)
+    task.setdefault("repo_root", "")
+    task.setdefault("task_dir", "")
+    task.setdefault("worktree_path", "")
+    task.setdefault("branch", None)
+    task.setdefault("base_branch", None)
+    task.setdefault("verify_profile", "default")
+    task.setdefault("verify_commands", [])
+    task.setdefault("verify_status", "not_run")
+    task.setdefault("last_verified_at", None)
+    task.setdefault("last_verify_results", [])
+    task.setdefault("test_strategy", {})
+    task.setdefault("gates", [])
+    task.setdefault("subtasks", [])
+    if not isinstance(task.get("conformance"), dict):
+        task["conformance"] = default_task_conformance()
+    task.setdefault("docs", {})
+    if not isinstance(task.get("meta"), dict):
+        task["meta"] = {"sequence": None, "close_override_used": False}
+    else:
+        task["meta"].setdefault("sequence", None)
+        task["meta"].setdefault("close_override_used", False)
+    ensure_task_conformance_defaults(task)
+    return task
 
 
 def sync_task_support_files(task: dict) -> None:

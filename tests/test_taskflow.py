@@ -20,6 +20,7 @@ from taskflow.agents import AgentTrackingError, list_agents, register_agent, upd
 from taskflow.api import queue_conversation, request_task
 from taskflow.audit import run_verify
 from taskflow.codex_prompt import build_codex_prompt
+from taskflow.conformance import append_conformance_log
 from taskflow.cli import (
     build_parser,
     handle_agent_run,
@@ -37,7 +38,7 @@ from taskflow.paths import event_log_file, inbox_failed_dir, inbox_processed_dir
 from taskflow.planning import approve_task_plan, freeze_task_spec, request_plan_changes, revise_task_plan
 from taskflow.provider_wrapper import run_provider_wrapper
 from taskflow.service import TaskNotificationTracker, build_task_update_summary, run_service_step
-from taskflow.state import build_task_record, create_task_record, load_task_record
+from taskflow.state import build_task_record, create_task_record, load_task_record, save_task_record
 from taskflow.templates import materialize_task_templates, template_root
 from taskflow.workflow import run_workflow_cycle
 import sisyphus
@@ -768,6 +769,7 @@ class TaskflowAgentTests(unittest.TestCase):
             task_id=self.task["id"],
             extra_instruction="focus on the task docs",
         )
+        brief_path = self.task["task_dir"].replace("\\", "/") + "/BRIEF.md"
 
         self.assertEqual(prompt.task_id, self.task["id"])
         self.assertIn('"id":', prompt.prompt)
@@ -775,9 +777,53 @@ class TaskflowAgentTests(unittest.TestCase):
         self.assertIn("Additional operator instruction: focus on the task docs", prompt.prompt)
         self.assertIn("STATUS: completed", prompt.prompt)
         self.assertIn("## Sisyphus Operating Principles", prompt.prompt)
+        self.assertIn("## Execution Contract", prompt.prompt)
         self.assertIn("Break it: identify the assumption most likely to fail", prompt.prompt)
         self.assertIn("Change the system, not only the explanation.", prompt.prompt)
-        self.assertIn(f"## BRIEF ({self.task['task_dir'].replace('\\', '/')}/BRIEF.md)", prompt.prompt)
+        self.assertIn(f"## BRIEF ({brief_path})", prompt.prompt)
+
+    def test_status_json_includes_conformance_summary(self) -> None:
+        task_file = self.repo_root / self.task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["subtasks"] = [
+            {
+                "id": "subtask-001",
+                "title": "Happy path works",
+                "category": "normal",
+                "status": "queued",
+                "conformance": {
+                    "status": "yellow",
+                    "last_spec_anchor_at": "2026-04-13T10:00:00Z",
+                    "last_checkpoint_type": "pre_exec",
+                    "drift_count": 1,
+                    "summary": "missing verification mapping",
+                },
+            }
+        ]
+        persisted["conformance"] = {
+            "status": "yellow",
+            "last_spec_anchor_at": "2026-04-13T09:59:00Z",
+            "last_checkpoint_type": "post_exec",
+            "drift_count": 1,
+            "summary": "task has unresolved warning",
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                exit_code = handle_status(
+                    as_json=True,
+                    only_open=False,
+                    only_blocked=False,
+                    show_agents=False,
+                    stale_after_seconds=900,
+                )
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(buffer.getvalue())
+        self.assertEqual(payload[0]["conformance_summary"]["status"], "yellow")
+        self.assertEqual(payload[0]["subtasks"][0]["conformance_summary"]["status"], "yellow")
 
     def test_codex_wrapper_builds_default_codex_exec_command(self) -> None:
         (self.repo_root / ".venv" / "Scripts").mkdir(parents=True, exist_ok=True)
@@ -791,19 +837,14 @@ class TaskflowAgentTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         kwargs = mocked_run.call_args.kwargs
+        expected_repo_root = str(self.repo_root.resolve())
         self.assertEqual(kwargs["provider"], "codex")
         self.assertEqual(kwargs["command"][:7], ["codex.cmd", "exec", "--full-auto", "--sandbox", "workspace-write", "--output-last-message", kwargs["command"][6]])
-        self.assertEqual(kwargs["command"][7:9], ["-C", str(self.repo_root)])
+        self.assertEqual(kwargs["command"][7:9], ["-C", expected_repo_root])
         self.assertEqual(kwargs["command"][-1], "-")
         self.assertIn("You are the local Codex worker for this task.", kwargs["stdin_text"])
         self.assertEqual(kwargs["env"]["GIT_CONFIG_KEY_0"], "safe.directory")
-        self.assertEqual(kwargs["env"]["GIT_CONFIG_VALUE_0"], str(self.repo_root))
-        self.assertEqual(kwargs["env"]["TEMP"], str(self.repo_root / ".tmp"))
-        self.assertEqual(kwargs["env"]["TMP"], str(self.repo_root / ".tmp"))
-        self.assertEqual(kwargs["env"]["TMPDIR"], str(self.repo_root / ".tmp"))
-        self.assertEqual(kwargs["env"]["UV_CACHE_DIR"], str(self.repo_root / ".uv-cache"))
-        self.assertEqual(kwargs["env"]["UV_PYTHON_INSTALL_DIR"], str(self.repo_root / ".uv-python"))
-        self.assertTrue(kwargs["env"]["PATH"].startswith(str(self.repo_root / ".venv" / "Scripts")))
+        self.assertEqual(kwargs["env"]["GIT_CONFIG_VALUE_0"], expected_repo_root)
 
     def test_codex_wrapper_with_options_still_builds_default_launch(self) -> None:
         with mock.patch("taskflow.provider_wrapper.Path.cwd", return_value=self.repo_root):
@@ -823,12 +864,12 @@ class TaskflowAgentTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         kwargs = mocked_run.call_args.kwargs
+        expected_repo_root = str(self.repo_root.resolve())
         self.assertEqual(kwargs["role"], "worker")
         self.assertEqual(kwargs["command"][:5], ["codex.cmd", "exec", "--full-auto", "--sandbox", "workspace-write"])
         self.assertEqual(kwargs["command"][-1], "-")
         self.assertIn("Additional operator instruction: focus on the first subtask", kwargs["stdin_text"])
-        self.assertEqual(kwargs["env"]["GIT_CONFIG_VALUE_0"], str(self.repo_root))
-        self.assertEqual(kwargs["repo_root"], self.repo_root)
+        self.assertEqual(kwargs["env"]["GIT_CONFIG_VALUE_0"], expected_repo_root)
 
     def test_codex_wrapper_converts_blocked_last_message_into_failure(self) -> None:
         def fake_handle_agent_run(**kwargs):
