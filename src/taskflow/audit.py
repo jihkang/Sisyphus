@@ -93,6 +93,7 @@ def run_verify(repo_root: Path, config: TaskflowConfig, task_id: str) -> VerifyO
     task["status"] = "verified" if passed else "blocked"
     if passed:
         task["stage"] = "done"
+        task["workflow_phase"] = "verified"
     elif spec_gates:
         task["stage"] = "spec"
     elif plan_gates:
