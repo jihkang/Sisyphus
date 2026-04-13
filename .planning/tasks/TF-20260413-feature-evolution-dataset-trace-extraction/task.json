@@ -1,0 +1,226 @@
+{
+  "id": "TF-20260413-feature-evolution-dataset-trace-extraction",
+  "type": "feature",
+  "slug": "evolution-dataset-trace-extraction",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-13T12:00:46Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the dataset slice: add read-only extraction for task, conformance, verify, and event-log traces with explicit task-id filtering.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the dataset slice: add read-only extraction for task, conformance, verify, and event-log traces with explicit task-id filtering.",
+      "timestamp": "2026-04-13T12:00:46Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-13T12:00:54Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to dataset extraction only; no harness execution, candidate mutation, reporting, or MCP evolution interface changes.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-13T11:59:05Z",
+  "updated_at": "2026-04-13T12:02:49Z",
+  "closed_at": "2026-04-13T12:02:49Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260413-feature-evolution-dataset-trace-extraction",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260413-feature-evolution-dataset-trace-extraction",
+  "branch": "feat/evolution-dataset-trace-extraction",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-13T12:02:30Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Dataset extraction returns task traces with verify metadata and conformance-derived counts.",
+        "checked": true
+      },
+      {
+        "name": "Dataset extraction returns recent event traces from the configured repository event log.",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Explicit task-id filtering narrows both tasks and associated events while preserving deterministic ordering.",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Unknown task ids are rejected, and dataset extraction does not mutate repository files.",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Dataset extraction returns task traces with verify metadata and conformance-derived counts.",
+        "method": "./.venv/bin/python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "Dataset extraction returns recent event traces from the configured repository event log.",
+        "method": "./.venv/bin/python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "Explicit task-id filtering narrows both tasks and associated events while preserving deterministic ordering.",
+        "method": "./.venv/bin/python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "Unknown task ids are rejected, and dataset extraction does not mutate repository files.",
+        "method": "./.venv/bin/python -m unittest tests.test_evolution -v"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "Dataset extraction returns task traces with verify metadata and conformance-derived counts.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-002",
+      "title": "Dataset extraction returns recent event traces from the configured repository event log.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-003",
+      "title": "Explicit task-id filtering narrows both tasks and associated events while preserving deterministic ordering.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-004",
+      "title": "Unknown task ids are rejected, and dataset extraction does not mutate repository files.",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    }
+  ],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-9dd0e0a38a7b",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": true,
+    "requested_slug": "evolution-dataset-trace-extraction"
+  }
+}

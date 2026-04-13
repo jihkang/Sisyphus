@@ -267,7 +267,7 @@ def mcp_tool_definitions() -> list[dict[str, object]]:
                     "event_id": {"type": ["string", "null"]},
                     "task_id": {"type": ["string", "null"]},
                     "event_status": {"type": ["string", "null"]},
-                    "orchestrated": {"type": "boolean"},
+                    "orchestrated": {"type": "integer"},
                     "error": {"type": ["string", "null"]},
                 },
             },

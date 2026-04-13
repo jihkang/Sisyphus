@@ -1,0 +1,226 @@
+{
+  "id": "TF-20260413-feature-evolution-core-control-plane",
+  "type": "feature",
+  "slug": "evolution-core-control-plane",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-13T11:50:59Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the evolution-core slice: add the new taskflow.evolution package, define stable run/target models, and keep the runner non-mutating.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the evolution-core slice: add the new taskflow.evolution package, define stable run/target models, and keep the runner non-mutating.",
+      "timestamp": "2026-04-13T11:50:59Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-13T11:51:05Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to registry and runner skeleton work only; no dataset, harness, candidate mutation, or MCP evolution surface in this slice.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-13T11:49:31Z",
+  "updated_at": "2026-04-13T11:53:52Z",
+  "closed_at": "2026-04-13T11:53:52Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260413-feature-evolution-core-control-plane",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260413-feature-evolution-core-control-plane",
+  "branch": "feat/evolution-core-control-plane",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-13T11:53:47Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "The default registry exposes the expected phase-1 text/policy targets.",
+        "checked": true
+      },
+      {
+        "name": "The runner can build an evolution run from the default registry without touching repository state.",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "The runner can build a run from an explicit subset of registered targets and preserves deterministic ordering.",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "The runner rejects unknown target ids with an actionable error instead of silently broadening scope.",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "The default registry exposes the expected phase-1 text/policy targets.",
+        "method": "./.venv/bin/python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "The runner can build an evolution run from the default registry without touching repository state.",
+        "method": "./.venv/bin/python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "The runner can build a run from an explicit subset of registered targets and preserves deterministic ordering.",
+        "method": "./.venv/bin/python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "The runner rejects unknown target ids with an actionable error instead of silently broadening scope.",
+        "method": "./.venv/bin/python -m unittest tests.test_evolution -v"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "The default registry exposes the expected phase-1 text/policy targets.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-002",
+      "title": "The runner can build an evolution run from the default registry without touching repository state.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-003",
+      "title": "The runner can build a run from an explicit subset of registered targets and preserves deterministic ordering.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-004",
+      "title": "The runner rejects unknown target ids with an actionable error instead of silently broadening scope.",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    }
+  ],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-b0698529bea6",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": true,
+    "requested_slug": "evolution-core-control-plane"
+  }
+}
