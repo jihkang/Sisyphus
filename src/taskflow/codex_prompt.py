@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 
+from .conformance import build_execution_contract
 from .config import TaskflowConfig
 from .discipline import build_sisyphus_worker_discipline
 from .state import load_task_record
@@ -45,6 +46,8 @@ def build_codex_prompt(
     body = [
         "\n".join(sections),
         *_render_discipline_sections(),
+        "## Execution Contract",
+        build_execution_contract(task),
         "## Task Metadata",
         json.dumps(task_snapshot, indent=2),
     ]

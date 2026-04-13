@@ -7,9 +7,11 @@ import re
 import time
 import uuid
 
-from .config import TaskflowConfig
+from .bus import build_event_publisher
+from .config import TaskflowConfig, load_config
 from .creation import create_task_workspace
 from .gitops import copy_relative_path, current_branch_name, list_dirty_paths, remove_relative_path
+from .events import new_event_envelope
 from .paths import event_log_file, inbox_failed_dir, inbox_pending_dir, inbox_processed_dir
 from .planning import enforce_plan_approved, enforce_spec_frozen
 from .provider_wrapper import run_provider_wrapper
@@ -120,6 +122,13 @@ def queue_conversation_event(
             "message": "conversation event queued",
         },
     )
+    build_event_publisher(repo_root, load_config(repo_root)).publish(
+        new_event_envelope(
+            "conversation.queued",
+            source={"module": "daemon"},
+            data={"event_id": event_id, "task_type": task_type, "slug": payload["slug"]},
+        )
+    )
     return event, event_path
 
 
@@ -162,6 +171,7 @@ def process_inbox_event(
     event_path: Path,
     stats: DaemonStats | None = None,
 ) -> dict:
+    publisher = build_event_publisher(repo_root, config)
     raw_content = event_path.read_text(encoding="utf-8")
     event = json.loads(raw_content)
     event["status"] = "processing"
@@ -200,6 +210,13 @@ def process_inbox_event(
                 "result": result,
             },
         )
+        publisher.publish(
+            new_event_envelope(
+                "conversation.processed",
+                source={"module": "daemon"},
+                data={"event_id": event.get("id"), "task_id": result.get("task_id"), "status": "processed"},
+            )
+        )
     except Exception as exc:
         event["status"] = "failed"
         event["updated_at"] = utc_now()
@@ -217,6 +234,13 @@ def process_inbox_event(
                 "message": str(exc),
             },
         )
+        publisher.publish(
+            new_event_envelope(
+                "conversation.failed",
+                source={"module": "daemon"},
+                data={"event_id": event.get("id"), "status": "failed", "error": str(exc)},
+            )
+        )
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(event, indent=2) + "\n", encoding="utf-8")
@@ -225,6 +249,7 @@ def process_inbox_event(
 
 
 def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: dict) -> dict:
+    publisher = build_event_publisher(repo_root, config)
     payload = project_fields(event.get("payload", {}), CONVERSATION_FIELD_DEFAULTS)
     title = str(payload["title"]).strip()
     message = str(payload["message"]).strip()
@@ -274,6 +299,19 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
             requested_paths=requested_adopt_paths,
         )
         task, _ = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task["id"])
+    publisher.publish(
+        new_event_envelope(
+            "task.created",
+            source={"module": "daemon"},
+            data={
+                "task_id": task["id"],
+                "task_type": task["type"],
+                "slug": task["slug"],
+                "branch": task["branch"],
+                "worktree_path": task["worktree_path"],
+            },
+        )
+    )
 
     agent_exit_code = None
     blocked_reason = None
@@ -308,6 +346,15 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
         else:
             auto_run = False
             blocked_reason = "task plan must be approved before auto-run"
+
+    if blocked_reason:
+        publisher.publish(
+            new_event_envelope(
+                "task.blocked",
+                source={"module": "daemon"},
+                data={"task_id": task["id"], "reason": blocked_reason},
+            )
+        )
 
     return {
         "task_id": task["id"],

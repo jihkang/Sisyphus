@@ -3,8 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 
 from .audit import run_verify
+from .bus import build_event_publisher
 from .closeout import run_close
+from .conformance import (
+    CONFORMANCE_RED,
+    append_conformance_log_markdown,
+    build_execution_contract,
+    run_post_execution_conformance_check,
+    run_pre_execution_conformance_check,
+    summarize_task_conformance,
+)
 from .config import TaskflowConfig
+from .events import new_event_envelope
 from .planning import (
     PLAN_APPROVED,
     current_plan_status,
@@ -84,13 +94,47 @@ def _advance_task(repo_root: Path, config: TaskflowConfig, task_id: str) -> bool
     return False
 
 def _run_subtask(repo_root: Path, config: TaskflowConfig, task: dict, subtask_id: str) -> bool:
+    publisher = build_event_publisher(repo_root, config)
     subtask = next(item for item in task.get("subtasks", []) if str(item.get("id")) == subtask_id)
+    pre_status, pre_summary = run_pre_execution_conformance_check(
+        task,
+        subtask_id=subtask_id,
+        source="workflow.pre_exec",
+    )
+    task_file = repo_root / str(task["task_dir"]) / "task.json"
+    save_task_record(task_file=task_file, task=task)
+    append_conformance_log_markdown(task, task_file.parent)
+    publisher.publish(
+        new_event_envelope(
+            f"conformance.pre_exec.{pre_status}",
+            source={"module": "workflow", "checkpoint": "pre_exec"},
+            data={"task_id": task["id"], "subtask_id": subtask_id, "summary": pre_summary},
+        )
+    )
+    if pre_status == CONFORMANCE_RED:
+        _update_subtask_status(
+            repo_root=repo_root,
+            config=config,
+            task_id=str(task["id"]),
+            subtask_id=subtask_id,
+            status="failed",
+        )
+        _update_workflow_phase(repo_root=repo_root, config=config, task_id=str(task["id"]), phase="needs_user_input")
+        return True
+
     _update_subtask_status(
         repo_root=repo_root,
         config=config,
         task_id=str(task["id"]),
         subtask_id=subtask_id,
         status="in_progress",
+    )
+    publisher.publish(
+        new_event_envelope(
+            "subtask.started",
+            source={"module": "workflow"},
+            data={"task_id": task["id"], "subtask_id": subtask_id, "title": subtask.get("title")},
+        )
     )
     exit_code = _run_phase_agent(
         repo_root=repo_root,
@@ -99,9 +143,19 @@ def _run_subtask(repo_root: Path, config: TaskflowConfig, task: dict, subtask_id
         role=WORKER_ROLE,
         instruction=(
             f"Work only on subtask `{subtask.get('title')}` in category `{subtask.get('category')}`. "
-            "Keep other planned work untouched unless required by tests."
+            "Keep other planned work untouched unless required by tests.\n\n"
+            f"{build_execution_contract(task, subtask)}"
         ),
     )
+    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=str(task["id"]))
+    post_status, post_summary = run_post_execution_conformance_check(
+        task,
+        subtask_id=subtask_id,
+        exit_code=exit_code,
+        source="workflow.post_exec",
+    )
+    save_task_record(task_file=task_file, task=task)
+    append_conformance_log_markdown(task, task_file.parent)
     _update_subtask_status(
         repo_root=repo_root,
         config=config,
@@ -109,7 +163,27 @@ def _run_subtask(repo_root: Path, config: TaskflowConfig, task: dict, subtask_id
         subtask_id=subtask_id,
         status="completed" if exit_code == 0 else "failed",
     )
-    if exit_code != 0:
+    publisher.publish(
+        new_event_envelope(
+            f"conformance.post_exec.{post_status}",
+            source={"module": "workflow", "checkpoint": "post_exec"},
+            data={"task_id": task["id"], "subtask_id": subtask_id, "summary": post_summary},
+        )
+    )
+    publisher.publish(
+        new_event_envelope(
+            "subtask.completed" if exit_code == 0 else "subtask.failed",
+            source={"module": "workflow"},
+            data={
+                "task_id": task["id"],
+                "subtask_id": subtask_id,
+                "title": subtask.get("title"),
+                "exit_code": exit_code,
+                "conformance_status": post_status,
+            },
+        )
+    )
+    if exit_code != 0 or post_status == CONFORMANCE_RED:
         _update_workflow_phase(repo_root=repo_root, config=config, task_id=str(task["id"]), phase="needs_user_input")
     return True
 
@@ -135,6 +209,18 @@ def _update_workflow_phase(repo_root: Path, config: TaskflowConfig, task_id: str
     if phase == "needs_user_input":
         task["status"] = "blocked"
     save_task_record(task_file=task_file, task=task)
+    build_event_publisher(repo_root, config).publish(
+        new_event_envelope(
+            "task.updated",
+            source={"module": "workflow", "action": "update_phase"},
+            data={
+                "task_id": task_id,
+                "workflow_phase": phase,
+                "status": task.get("status"),
+                "conformance_status": summarize_task_conformance(task).get("status"),
+            },
+        )
+    )
 
 
 def _update_subtask_status(

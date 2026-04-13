@@ -30,7 +30,12 @@ from .planning import (
     request_plan_changes,
     revise_task_plan,
 )
-from .service import run_service
+from .service import (
+    extract_conformance_summary,
+    format_conformance_summary,
+    run_service,
+    summarize_subtask_conformance,
+)
 from .state import list_task_records, load_task_record
 
 
@@ -176,6 +181,29 @@ def _resolve_repo_root(repo_root: str | Path | None) -> Path:
     if repo_root is None:
         return detect_repo_root(Path.cwd())
     return detect_repo_root(Path(repo_root).resolve())
+
+
+def _project_task_for_status_output(task: dict) -> dict:
+    projected = dict(task)
+    task_conformance = extract_conformance_summary(task)
+    if task_conformance:
+        projected["conformance_summary"] = task_conformance
+
+    subtasks = task.get("subtasks")
+    if isinstance(subtasks, list):
+        projected["subtasks"] = [
+            _project_subtask_for_status_output(subtask) if isinstance(subtask, dict) else subtask
+            for subtask in subtasks
+        ]
+    return projected
+
+
+def _project_subtask_for_status_output(subtask: dict) -> dict:
+    projected = dict(subtask)
+    subtask_conformance = extract_conformance_summary(subtask)
+    if subtask_conformance:
+        projected["conformance_summary"] = subtask_conformance
+    return projected
 
 
 def handle_new(task_type: str, slug: str, repo_root: str | Path | None = None) -> int:
@@ -748,6 +776,7 @@ def handle_status(
             agents_by_task.setdefault(agent["parent_task_id"], []).append(agent)
 
     if as_json:
+        tasks = [_project_task_for_status_output(task) for task in tasks]
         if show_agents:
             tasks = [
                 {
@@ -765,6 +794,8 @@ def handle_status(
 
     for task in tasks:
         gate_count = len(task.get("gates", []))
+        task_conformance = format_conformance_summary(extract_conformance_summary(task))
+        subtask_conformance = summarize_subtask_conformance(task)
         print(
             f"{task.get('id')} "
             f"[{task.get('type')}] "
@@ -775,7 +806,23 @@ def handle_status(
             f"phase={task.get('workflow_phase', '-')} "
             f"audit={task.get('audit_attempts', 0)}/{task.get('max_audit_attempts', 10)} "
             f"gates={gate_count}"
+            f"{f' conformance={task_conformance}' if task_conformance else ''}"
         )
+        if subtask_conformance:
+            print(f"  subtask_conformance={subtask_conformance}")
+            subtasks = task.get("subtasks")
+            if isinstance(subtasks, list):
+                for subtask in subtasks:
+                    if not isinstance(subtask, dict):
+                        continue
+                    subtask_conformance_summary = format_conformance_summary(extract_conformance_summary(subtask))
+                    if not subtask_conformance_summary:
+                        continue
+                    print(
+                        f"  - {subtask.get('id')} "
+                        f"status={subtask.get('status')} "
+                        f"conformance={subtask_conformance_summary}"
+                    )
         if show_agents:
             task_agents = agents_by_task.get(task["id"], [])
             active_agents = [

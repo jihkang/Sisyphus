@@ -218,6 +218,28 @@ Useful API entrypoints:
 - `sisyphus.queue_conversation(...)`
 - `sisyphus.request_task(...)`
 
+## MCP Clients
+
+Sisyphus can be exposed to coding agents over MCP through:
+
+```bash
+sisyphus-mcp
+```
+
+The MCP entrypoint is backed by the official MCP Python SDK over stdio.
+
+Quick start from the Sisyphus repo root:
+
+```bash
+./init-mcp.sh
+./init-mcp.sh --repo /absolute/path/to/your/repository
+```
+
+That script registers Sisyphus in Codex and writes a Claude Code project `.mcp.json` for the managed repository.
+
+Client setup examples for Codex and Claude are documented in [docs/mcp-clients.md](docs/mcp-clients.md).
+Repo-level agent guidance for preferring Sisyphus MCP tools and resources lives in [AGENTS.md](AGENTS.md).
+
 ## Configuration
 
 Repository-level configuration lives in `.taskflow.toml`.

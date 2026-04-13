@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 
+from .bus import build_event_publisher
 from .config import TaskflowConfig
+from .events import new_event_envelope
 from .planning import collect_plan_gates
 from .state import load_task_record, save_task_record, utc_now
 
@@ -40,6 +42,13 @@ def run_close(repo_root: Path, config: TaskflowConfig, task_id: str, allow_dirty
         task["status"] = "blocked"
         task["stage"] = "plan_review" if any(gate.get("source") == "plan" for gate in gates) else "audit"
         save_task_record(task_file=task_file, task=task)
+        build_event_publisher(repo_root, config).publish(
+            new_event_envelope(
+                "close.completed",
+                source={"module": "closeout"},
+                data={"task_id": task["id"], "closed": False, "status": task["status"], "gate_count": len(gates)},
+            )
+        )
         return CloseOutcome(
             task_id=task["id"],
             status=task["status"],
@@ -52,6 +61,13 @@ def run_close(repo_root: Path, config: TaskflowConfig, task_id: str, allow_dirty
     task["stage"] = "done"
     task["closed_at"] = utc_now()
     save_task_record(task_file=task_file, task=task)
+    build_event_publisher(repo_root, config).publish(
+        new_event_envelope(
+            "close.completed",
+            source={"module": "closeout"},
+            data={"task_id": task["id"], "closed": True, "status": task["status"], "gate_count": 0},
+        )
+    )
     return CloseOutcome(
         task_id=task["id"],
         status=task["status"],
