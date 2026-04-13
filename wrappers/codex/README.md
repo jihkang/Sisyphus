@@ -2,6 +2,38 @@
 
 로컬 `codex exec`를 tracked worker로 실행하는 thin wrapper다.
 
+## Sisyphus MCP 연결
+
+가장 간단한 방법은 repo root에서 init 스크립트를 실행하는 것이다.
+
+```bash
+./init-mcp.sh
+./init-mcp.sh --repo /absolute/path/to/your/repository
+```
+
+Codex는 stdio MCP 서버를 직접 붙일 수 있다. init 스크립트는 내부적으로 같은 등록을 수행한다.
+
+현재 repo를 대상으로 바로 추가:
+
+```bash
+codex mcp add sisyphus -- /absolute/path/to/Sisyphus/.venv/bin/python -m taskflow.mcp_server
+```
+
+특정 repo를 명시해서 추가:
+
+```bash
+codex mcp add sisyphus --env SISYPHUS_REPO_ROOT=/absolute/path/to/your/repository --env SISYPHUS_MCP_DEBUG_LOG=/tmp/sisyphus-mcp-debug.log -- /absolute/path/to/Sisyphus/.venv/bin/python -m taskflow.mcp_server
+```
+
+설정 확인:
+
+```bash
+codex mcp list
+codex mcp get sisyphus
+```
+
+직접 설정 파일로 넣고 싶으면 [`mcp-config.toml.example`](./mcp-config.toml.example) 형식을 `~/.codex/config.toml`에 맞게 복사해서 사용하면 된다.
+
 기본 실행:
 
 ```bash
