@@ -9,6 +9,7 @@ import uuid
 
 from .config import TaskflowConfig
 from .creation import create_task_workspace
+from .gitops import copy_relative_path, current_branch_name, list_dirty_paths, remove_relative_path
 from .paths import event_log_file, inbox_failed_dir, inbox_pending_dir, inbox_processed_dir
 from .planning import enforce_plan_approved, enforce_spec_frozen
 from .provider_wrapper import run_provider_wrapper
@@ -29,6 +30,8 @@ CONVERSATION_FIELD_DEFAULTS = {
     "owned_paths": list,
     "provider_args": list,
     "source_context": dict,
+    "adopt_current_changes": False,
+    "adopt_paths": list,
     "auto_run": True,
 }
 
@@ -59,6 +62,8 @@ def queue_conversation_event(
     owned_paths: list[str] | None = None,
     provider_args: list[str] | None = None,
     source_context: dict[str, object] | None = None,
+    adopt_current_changes: bool = False,
+    adopt_paths: list[str] | None = None,
     auto_run: bool = True,
 ) -> tuple[dict, Path]:
     event_id = _new_event_id()
@@ -82,6 +87,8 @@ def queue_conversation_event(
             "owned_paths": owned_paths or [],
             "provider_args": provider_args or [],
             "source_context": source_context or {},
+            "adopt_current_changes": adopt_current_changes,
+            "adopt_paths": adopt_paths or [],
             "auto_run": auto_run,
         },
         CONVERSATION_FIELD_DEFAULTS,
@@ -236,6 +243,8 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
     owned_paths = [str(path) for path in payload["owned_paths"]]
     provider_args = [str(arg) for arg in payload["provider_args"]]
     source_context = dict(payload["source_context"])
+    adopt_current_changes = bool(payload["adopt_current_changes"])
+    requested_adopt_paths = [str(path) for path in payload["adopt_paths"]]
     auto_run = bool(payload["auto_run"])
     requested_auto_run = auto_run
 
@@ -257,6 +266,14 @@ def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: 
         requested_slug=requested_slug,
         parent_task_id=parent_task_id,
     )
+    if adopt_current_changes:
+        _apply_direct_change_adoption(
+            repo_root=repo_root,
+            config=config,
+            task_id=task["id"],
+            requested_paths=requested_adopt_paths,
+        )
+        task, _ = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task["id"])
 
     agent_exit_code = None
     blocked_reason = None
@@ -361,6 +378,54 @@ def _hydrate_task_from_conversation(
     sync_task_support_files(task_record)
 
 
+def _apply_direct_change_adoption(
+    *,
+    repo_root: Path,
+    config: TaskflowConfig,
+    task_id: str,
+    requested_paths: list[str],
+) -> None:
+    task, task_file = load_task_record(repo_root, task_dir_name=config.task_dir, task_id=task_id)
+    source_branch = current_branch_name(repo_root)
+    changed_paths, deleted_paths = list_dirty_paths(repo_root)
+    changed_paths = [path for path in changed_paths if not _is_internal_taskflow_path(path)]
+    deleted_paths = [path for path in deleted_paths if not _is_internal_taskflow_path(path)]
+    selected_changed = _select_adopt_paths(changed_paths, requested_paths)
+    selected_deleted = _select_adopt_paths(deleted_paths, requested_paths)
+
+    adopted_paths: list[str] = []
+    worktree_root = Path(task["worktree_path"])
+    for relative_path in selected_changed:
+        source_path = repo_root / relative_path
+        if not source_path.exists():
+            continue
+        copy_relative_path(repo_root, worktree_root, relative_path)
+        if relative_path not in adopted_paths:
+            adopted_paths.append(relative_path)
+
+    for relative_path in selected_deleted:
+        remove_relative_path(worktree_root, relative_path)
+        if relative_path not in adopted_paths:
+            adopted_paths.append(relative_path)
+
+    task.setdefault("meta", {})
+    task["meta"]["adopted_changes"] = {
+        "source_branch": source_branch,
+        "source_repo_root": str(repo_root),
+        "paths": adopted_paths,
+        "requested_paths": requested_paths,
+        "deleted_paths": selected_deleted,
+        "applied_at": utc_now(),
+    }
+    save_task_record(task_file=task_file, task=task)
+    _append_task_log_note(
+        repo_root=repo_root,
+        task=task,
+        note=_render_adoption_log_note(source_branch=source_branch, adopted_paths=adopted_paths, deleted_paths=selected_deleted),
+    )
+    sync_task_support_files(task)
+
+
 def _resolve_followup_slug(
     *,
     repo_root: Path,
@@ -406,6 +471,56 @@ def _next_followup_slug(requested_slug: str, sibling_slugs: set[str]) -> str:
         if candidate not in sibling_slugs:
             return candidate
         index += 1
+
+
+def _select_adopt_paths(paths: list[str], requested_paths: list[str]) -> list[str]:
+    if not requested_paths:
+        return list(paths)
+    selected: list[str] = []
+    for path in paths:
+        normalized = path.replace("\\", "/")
+        for requested in requested_paths:
+            prefix = requested.replace("\\", "/").rstrip("/")
+            if normalized == prefix or normalized.startswith(f"{prefix}/"):
+                selected.append(path)
+                break
+    return selected
+
+
+def _append_task_log_note(*, repo_root: Path, task: dict, note: str) -> None:
+    task_dir = repo_root / task["task_dir"]
+    log_relative = task.get("docs", {}).get("log")
+    if not log_relative:
+        return
+    log_path = task_dir / str(log_relative)
+    if not log_path.exists():
+        return
+    lines = log_path.read_text(encoding="utf-8").splitlines()
+    try:
+        index = lines.index("## Notes")
+    except ValueError:
+        log_path.write_text(log_path.read_text(encoding="utf-8").rstrip() + f"\n\n## Notes\n\n- {note}\n", encoding="utf-8")
+        return
+
+    insertion_index = index + 1
+    while insertion_index < len(lines) and not lines[insertion_index].startswith("## "):
+        insertion_index += 1
+    lines[insertion_index:insertion_index] = ["", f"- {note}"]
+    log_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
+def _render_adoption_log_note(*, source_branch: str | None, adopted_paths: list[str], deleted_paths: list[str]) -> str:
+    branch_label = source_branch or "detached"
+    path_count = len(adopted_paths)
+    deleted_count = len(deleted_paths)
+    if deleted_count:
+        return f"Adopted {path_count} current changes from branch `{branch_label}` into the task worktree, including {deleted_count} deletions."
+    return f"Adopted {path_count} current changes from branch `{branch_label}` into the task worktree."
+
+
+def _is_internal_taskflow_path(relative_path: str) -> bool:
+    normalized = relative_path.replace("\\", "/")
+    return normalized == ".planning" or normalized.startswith(".planning/")
 
 
 def _render_brief(

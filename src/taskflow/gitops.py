@@ -55,6 +55,50 @@ def remove_task_branch_and_worktree(repo_root: Path, branch: str, target_path: P
         )
 
 
+def current_branch_name(repo_root: Path) -> str | None:
+    completed = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return None
+    branch = completed.stdout.strip()
+    return branch or None
+
+
+def list_dirty_paths(repo_root: Path) -> tuple[list[str], list[str]]:
+    changed = _git_name_only(repo_root, ["diff", "--name-only", "HEAD", "--"])
+    staged = _git_name_only(repo_root, ["diff", "--cached", "--name-only", "--"])
+    untracked = _git_name_only(repo_root, ["ls-files", "--others", "--exclude-standard"])
+    deleted = _git_name_only(repo_root, ["diff", "--name-only", "--diff-filter=D", "HEAD", "--"])
+    staged_deleted = _git_name_only(repo_root, ["diff", "--cached", "--name-only", "--diff-filter=D", "--"])
+
+    changed_paths = sorted({*changed, *staged, *untracked})
+    deleted_paths = sorted({*deleted, *staged_deleted})
+    return changed_paths, deleted_paths
+
+
+def copy_relative_path(source_root: Path, target_root: Path, relative_path: str) -> None:
+    source_path = source_root / relative_path
+    target_path = target_root / relative_path
+    if source_path.is_dir():
+        return
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_bytes(source_path.read_bytes())
+
+
+def remove_relative_path(target_root: Path, relative_path: str) -> None:
+    target_path = target_root / relative_path
+    if not target_path.exists():
+        return
+    if target_path.is_dir():
+        return
+    target_path.unlink()
+
+
 def local_branch_exists(repo_root: Path, branch: str) -> bool:
     result = subprocess.run(
         ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
@@ -105,3 +149,16 @@ def _run_git(repo_root: Path, args: list[str], error_prefix: str) -> subprocess.
     if not message:
         message = "git command failed"
     raise GitOperationError(f"{error_prefix}: {message}")
+
+
+def _git_name_only(repo_root: Path, args: list[str]) -> list[str]:
+    completed = subprocess.run(
+        ["git", *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return []
+    return [line.strip() for line in completed.stdout.splitlines() if line.strip()]

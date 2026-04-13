@@ -167,6 +167,8 @@ def _add_conversation_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--provider", default="codex")
     parser.add_argument("--owned-path", action="append", dest="owned_paths")
     parser.add_argument("--provider-arg", action="append", dest="provider_args")
+    parser.add_argument("--adopt-current-changes", action="store_true")
+    parser.add_argument("--adopt-path", action="append", dest="adopt_paths")
     parser.add_argument("--no-run", action="store_true")
 
 
@@ -341,6 +343,8 @@ def handle_ingest_conversation(
     provider: str,
     owned_paths: list[str] | None,
     provider_args: list[str] | None,
+    adopt_current_changes: bool,
+    adopt_paths: list[str] | None,
     no_run: bool,
     repo_root: str | Path | None = None,
 ) -> int:
@@ -358,6 +362,8 @@ def handle_ingest_conversation(
             provider=provider,
             owned_paths=owned_paths,
             provider_args=provider_args,
+            adopt_current_changes=adopt_current_changes,
+            adopt_paths=adopt_paths,
             auto_run=not no_run,
         )
     except RuntimeError as exc:
@@ -382,6 +388,8 @@ def handle_request(
     provider: str,
     owned_paths: list[str] | None,
     provider_args: list[str] | None,
+    adopt_current_changes: bool,
+    adopt_paths: list[str] | None,
     no_run: bool,
     repo_root: str | Path | None = None,
 ) -> int:
@@ -398,6 +406,8 @@ def handle_request(
         provider=provider,
         owned_paths=owned_paths,
         provider_args=provider_args,
+        adopt_current_changes=adopt_current_changes,
+        adopt_paths=adopt_paths,
         auto_run=not no_run,
     )
     if not result.ok:
@@ -422,6 +432,11 @@ def handle_request(
     print(f"plan_status: {task.get('plan_status')}")
     print(f"spec_status: {task.get('spec_status')}")
     print(f"workflow_phase: {task.get('workflow_phase')}")
+    adopted = task.get("meta", {}).get("adopted_changes")
+    if isinstance(adopted, dict) and adopted.get("paths"):
+        print(f"adopted_paths: {len(adopted['paths'])}")
+        if adopted.get("source_branch"):
+            print(f"adopted_from_branch: {adopted['source_branch']}")
     print(f"orchestrated: {result.orchestrated}")
     return 0
 
@@ -802,6 +817,8 @@ def main() -> int:
             provider=args.provider,
             owned_paths=args.owned_paths,
             provider_args=args.provider_args,
+            adopt_current_changes=args.adopt_current_changes,
+            adopt_paths=args.adopt_paths,
             no_run=args.no_run,
             repo_root=args.repo_root,
         )
@@ -911,6 +928,8 @@ def main() -> int:
                 provider=args.provider,
                 owned_paths=args.owned_paths,
                 provider_args=args.provider_args,
+                adopt_current_changes=args.adopt_current_changes,
+                adopt_paths=args.adopt_paths,
                 no_run=args.no_run,
                 repo_root=args.repo_root,
             )
