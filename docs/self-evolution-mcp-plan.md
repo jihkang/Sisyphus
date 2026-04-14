@@ -41,6 +41,35 @@ These are the key files already added or updated:
 - [src/taskflow/mcp_core.py](../src/taskflow/mcp_core.py)
 - [src/taskflow/mcp_server.py](../src/taskflow/mcp_server.py)
 
+## Implemented Foundation
+
+The repository now includes the first read-only evolution foundation:
+
+- `targets.py` and `runner.py` for target selection and run planning
+- `dataset.py` for trace extraction from repository-local task and event state
+- `harness.py` for baseline/candidate evaluation planning
+- `constraints.py` and `fitness.py` for hard guards and weighted scoring
+- `report.py` for stable review/report projection
+
+The remaining major gaps are still candidate mutation, executed harness runs, MCP evolution tools/resources, and approval-driven branch materialization.
+
+### Implemented Evaluation Loop
+
+```mermaid
+flowchart TD
+    A[Registered evolution targets] --> B[Plan evolution run]
+    B --> C[Extract dataset from task records, conformance, verify logs, and events]
+    C --> D[Plan baseline and candidate harness evaluations]
+    D --> E[Collect or compare metrics]
+    E --> F[Hard guards]
+    E --> G[Fitness scoring]
+    F --> H[Stable report model]
+    G --> H
+    H --> I[Future MCP evolution surface and approval flow]
+```
+
+This is intentionally separate from the live task workflow. The evolution subsystem currently models and evaluates candidate runs from repository-local traces without mutating live task state.
+
 ## Constraint
 
 The previous session could not use Sisyphus over MCP because Codex did not complete the external MCP stdio handshake in that environment.

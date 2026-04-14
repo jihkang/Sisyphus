@@ -1,6 +1,6 @@
 # Sisyphus Architecture
 
-This document describes the current architecture of Sisyphus on the `main` branch as of 2026-04-13.
+This document describes the current architecture of Sisyphus as of 2026-04-14.
 
 Sisyphus is a Python task orchestration system that runs inside a target Git repository and manages repository-local task state, task documents, worktrees, agent execution, verification, and closeout.
 
@@ -101,6 +101,81 @@ The intended responsibilities are:
 - `mcp_core.py`: repo-aware tool/resource resolution and response shaping.
 - `bus.py` and related modules: publication surface for visualization, monitoring, and other apps.
 - taskflow core modules: workflow, conformance, verification, and persistence policy.
+
+## Evolution Control Plane
+
+The repository now also contains a separate read-only evolution control plane in [`src/taskflow/evolution/`](../src/taskflow/evolution/). This subsystem is intentionally adjacent to the live orchestration workflow rather than embedded inside it.
+
+The current implemented slices are:
+
+- target registry and run planning in `targets.py` and `runner.py`
+- dataset extraction from task records, conformance state, verify metadata, and event logs in `dataset.py`
+- baseline/candidate harness planning in `harness.py`
+- hard-guard evaluation and weighted scoring in `constraints.py` and `fitness.py`
+- stable reporting projection in `report.py`
+
+The following pieces are still future work:
+
+- candidate mutation generation in `mutators.py`
+- executed harness runs against isolated copies
+- MCP evolution tools/resources
+- approval and branch materialization flow
+
+### Evolution System Diagram
+
+```mermaid
+flowchart LR
+    subgraph Runtime["Runtime orchestration plane"]
+        Clients[CLI / API / MCP clients]
+        MCP[MCP gateway and core]
+        Workflow[Workflow / planning / verify / closeout]
+        RepoState[Task records / task docs / conformance / event bus]
+
+        Clients --> MCP
+        Clients --> Workflow
+        MCP --> Workflow
+        Workflow --> RepoState
+        MCP --> RepoState
+    end
+
+    subgraph Evolution["Evolution control plane"]
+        Targets[Target registry]
+        Run[Run planner]
+        Dataset[Dataset builder]
+        Harness[Harness planner]
+        Guards[Constraints]
+        Fitness[Fitness scorer]
+        Report[Report model]
+
+        Targets --> Run
+        Run --> Dataset
+        Dataset --> Harness
+        Harness --> Guards
+        Harness --> Fitness
+        Guards --> Report
+        Fitness --> Report
+    end
+
+    RepoState --> Dataset
+    MCP -. future evolution MCP surface .-> Report
+```
+
+### Evolution Evaluation Loop
+
+```mermaid
+flowchart TD
+    A[Select evolution targets] --> B[Plan evolution run]
+    B --> C[Build dataset from task records, verify traces, conformance, and events]
+    C --> D[Plan baseline and candidate harness evaluations]
+    D --> E[Populate comparable metrics]
+    E --> F[Evaluate hard guards]
+    E --> G[Compute weighted fitness]
+    F --> H[Build reviewable report]
+    G --> H
+    H --> I[Future MCP projection and approval flow]
+```
+
+Today this loop is implemented as a planning and evaluation model layer through the report stage. It does not yet execute candidate mutations or materialize approved results on a branch.
 
 ## Class Diagram
 
