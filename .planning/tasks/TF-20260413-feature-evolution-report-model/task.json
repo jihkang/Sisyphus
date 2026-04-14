@@ -1,0 +1,121 @@
+{
+  "id": "TF-20260413-feature-evolution-report-model",
+  "type": "feature",
+  "slug": "evolution-report-model",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-14T03:40:27Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the report-model slice: add a stable read-only report structure that summarizes an evolution run, dataset scope, harness plan, guard outcomes, and comparison placeholders for planned or future executed evaluations, without adding MCP resources or branch materialization logic.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the report-model slice: add a stable read-only report structure that summarizes an evolution run, dataset scope, harness plan, guard outcomes, and comparison placeholders for planned or future executed evaluations, without adding MCP resources or branch materialization logic.",
+      "timestamp": "2026-04-14T03:40:27Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-14T03:40:29Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to report modeling only. The slice should summarize run, dataset, harness plan, guard outcomes, and comparison placeholders in a stable structure for both planned and future executed evaluations, without storage, MCP projection, or approval/branch flows.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-13T12:09:49Z",
+  "updated_at": "2026-04-14T03:50:32Z",
+  "closed_at": "2026-04-14T03:50:32Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260413-feature-evolution-report-model",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260413-feature-evolution-report-model",
+  "branch": "feat/evolution-report-model",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-14T03:50:10Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "A planned evolution run can be summarized into a stable report structure with dataset scope and explicit placeholders.",
+        "checked": true
+      },
+      {
+        "name": "A scored candidate with accepted hard guards is surfaced as ready for review with attached comparison summaries.",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Plan-only inputs keep report status in `planned` while still exposing the stable nested structure.",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Mismatched run/dataset/harness inputs are rejected without mutating repository files.",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Planned run report structure is stable",
+        "method": "./.venv/bin/python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "Reviewable candidate report is projected correctly",
+        "method": "./.venv/bin/python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "Invalid report inputs are rejected without repo mutation",
+        "method": "./.venv/bin/python -m unittest tests.test_evolution -v"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-cea051e1f387",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": true,
+    "requested_slug": "evolution-report-model"
+  }
+}

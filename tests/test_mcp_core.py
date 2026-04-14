@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 import sys
 
@@ -50,6 +51,7 @@ class McpCoreTests(unittest.TestCase):
         request_tool = next(tool for tool in self.core.list_tools() if tool["name"] == "sisyphus.request_task")
         self.assertEqual(request_tool["inputSchema"]["required"], ["message"])
         self.assertFalse(request_tool["inputSchema"]["additionalProperties"])
+        self.assertEqual(request_tool["outputSchema"]["properties"]["orchestrated"]["type"], "integer")
         self.assertIn("task", next(tool for tool in self.core.list_tools() if tool["name"] == "sisyphus.get_task")["outputSchema"]["properties"])
 
     def test_reads_task_resources(self) -> None:
@@ -146,3 +148,24 @@ class McpCoreTests(unittest.TestCase):
 
         self.assertEqual(payload["task_id"], task["id"])
         self.assertTrue(payload["subtasks"])
+
+    def test_request_task_tool_returns_integer_orchestrated_count(self) -> None:
+        fake_result = mock.Mock(
+            ok=True,
+            event_id="evt-123",
+            task_id="TF-123",
+            event_status="processed",
+            orchestrated=0,
+            error=None,
+        )
+
+        with mock.patch("taskflow.mcp_core.request_task", return_value=fake_result):
+            payload = self.core.call_tool("sisyphus.request_task", {"message": "create a task"})
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["event_id"], "evt-123")
+        self.assertEqual(payload["task_id"], "TF-123")
+        self.assertEqual(payload["event_status"], "processed")
+        self.assertEqual(payload["orchestrated"], 0)
+        self.assertIsInstance(payload["orchestrated"], int)
+        self.assertIsNone(payload["error"])
