@@ -2,34 +2,36 @@
 
 ## Implementation Plan
 
-1. Inspect the current code path related to: Implement evolution reporting model.
-2. Implement the requested behavior for: Implement the evolution report slice from docs/self-evolution-mcp-plan.md. Add a read-only reporting model that can summarize a planned or future executed evolution run, dataset scope, harness plan, guard outcomes, and comparison placeholders in a stable human-readable/report-ready structure. Keep the scope to report modeling only..
-3. Update tests and task docs to match the final behavior.
+1. Reuse the existing `EvolutionRun`, `EvolutionDataset`, and `EvolutionHarnessPlan` models as the stable input contract for reporting.
+2. Add `src/taskflow/evolution/report.py` with a report model that summarizes run scope, dataset scope, evaluation summaries, guard outcomes, fitness output, and stable comparison placeholders.
+3. Keep the report read-only and suitable for both plan-only and future executed runs, without adding MCP resources or branch materialization logic in this slice.
+4. Extend `tests/test_evolution.py` with report coverage for planned, reviewable, and invalid-input paths.
 
 ## Risks
 
-- The conversation request may omit edge conditions that still matter in the current codebase.
-- The change may affect adjacent flows if the requested behavior touches shared state.
+- The report needs to remain stable for both empty planned metrics and future executed metrics, so placeholder behavior must be explicit.
+- Report summaries must stay aligned with guard and fitness results without reintroducing execution or storage concerns in this slice.
 
 ## Test Strategy
 
 ### Normal Cases
 
-- [ ] Requested conversation workflow succeeds
+- [x] A planned evolution run can be summarized into a stable report structure with dataset scope and explicit placeholders.
+- [x] A scored candidate with accepted hard guards is surfaced as ready for review with attached comparison summaries.
 
 ### Edge Cases
 
-- [ ] Minimal valid input still behaves predictably
+- [x] Plan-only inputs keep report status in `planned` while still exposing the stable nested structure.
 
 ### Exception Cases
 
-- [ ] Unexpected failure surfaces an actionable error
+- [x] Mismatched run/dataset/harness inputs are rejected without mutating repository files.
 
 ## Verification Mapping
 
-- `Requested conversation workflow succeeds` -> `taskflow verify`
-- `Minimal valid input still behaves predictably` -> `targeted regression test`
-- `Unexpected failure surfaces an actionable error` -> `manual review`
+- `Planned run report structure is stable` -> `./.venv/bin/python -m unittest tests.test_evolution -v`
+- `Reviewable candidate report is projected correctly` -> `./.venv/bin/python -m unittest tests.test_evolution -v`
+- `Invalid report inputs are rejected without repo mutation` -> `./.venv/bin/python -m unittest tests.test_evolution -v`
 
 ## External LLM Review
 
