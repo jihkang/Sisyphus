@@ -24,7 +24,7 @@ from .state import load_task_record
 class SisyphusMcpCoreService:
     """Core MCP-facing service that resolves tools and resources for a repo.
 
-    The MCP gateway should depend on this service, not on taskflow internals
+    The MCP gateway should depend on this service, not on Sisyphus internals
     directly. That keeps protocol/transport concerns separate from business
     logic and persistence access.
     """

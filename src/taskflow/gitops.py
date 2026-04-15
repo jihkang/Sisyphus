@@ -5,7 +5,7 @@ import subprocess
 
 
 class GitOperationError(RuntimeError):
-    """Raised when taskflow git workspace provisioning fails."""
+    """Raised when Sisyphus git workspace provisioning fails."""
 
 
 def repo_name(repo_root: Path) -> str:

@@ -13,16 +13,18 @@
 
 Codex는 stdio MCP 서버를 직접 붙일 수 있다. init 스크립트는 내부적으로 같은 등록을 수행한다.
 
+현재 canonical direct Python launcher는 `sisyphus.mcp_server`다. 레거시 `taskflow.mcp_server`도 호환 경로로는 계속 동작한다.
+
 현재 repo를 대상으로 바로 추가:
 
 ```bash
-codex mcp add sisyphus -- /absolute/path/to/Sisyphus/.venv/bin/python -m taskflow.mcp_server
+codex mcp add sisyphus -- /absolute/path/to/Sisyphus/.venv/bin/python -m sisyphus.mcp_server
 ```
 
 특정 repo를 명시해서 추가:
 
 ```bash
-codex mcp add sisyphus --env SISYPHUS_REPO_ROOT=/absolute/path/to/your/repository --env SISYPHUS_MCP_DEBUG_LOG=/tmp/sisyphus-mcp-debug.log -- /absolute/path/to/Sisyphus/.venv/bin/python -m taskflow.mcp_server
+codex mcp add sisyphus --env SISYPHUS_REPO_ROOT=/absolute/path/to/your/repository --env SISYPHUS_MCP_DEBUG_LOG=/tmp/sisyphus-mcp-debug.log -- /absolute/path/to/Sisyphus/.venv/bin/python -m sisyphus.mcp_server
 ```
 
 설정 확인:
@@ -66,4 +68,4 @@ wrapper는 다음을 자동으로 처리한다.
 4. agent 상태와 heartbeat를 기록한다.
 5. stdout 일부를 `last_message_summary`에 반영한다.
 
-`taskflow daemon`도 내부적으로 같은 wrapper 경로를 사용한다.
+`sisyphus daemon`도 내부적으로 같은 wrapper 경로를 사용한다.

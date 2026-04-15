@@ -242,7 +242,9 @@ Repo-level agent guidance for preferring Sisyphus MCP tools and resources lives 
 
 ## Configuration
 
-Repository-level configuration lives in `.taskflow.toml`.
+Repository-level configuration prefers `.sisyphus.toml`.
+
+Legacy repositories can continue using `.taskflow.toml` as a fallback compatibility filename.
 
 Default values:
 
@@ -285,5 +287,7 @@ uv run python -m unittest discover -s tests -v
 
 - `sisyphus` is the preferred command surface.
 - `taskflow` remains available as a compatibility alias.
+- The direct MCP launcher is `python -m sisyphus.mcp_server`.
+- `python -m taskflow.mcp_server` remains available as a compatibility path.
 - The package name is currently `taskflow-kit`.
 - Project philosophy: see `docs/philosophy.md`.

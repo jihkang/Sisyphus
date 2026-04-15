@@ -40,7 +40,7 @@ from .state import list_task_records, load_task_record
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="taskflow")
+    parser = argparse.ArgumentParser(prog="sisyphus")
     parser.add_argument("--repo", dest="repo_root", help="Target repository root to manage.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 

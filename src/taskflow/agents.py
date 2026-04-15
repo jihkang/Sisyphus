@@ -5,7 +5,7 @@ from functools import wraps
 from pathlib import Path
 import json
 
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 from .paths import agent_dir
 from .state import load_task_record, utc_now
 from .utils import find_unknown_fields
@@ -26,7 +26,7 @@ def guard_agent_updates(*allowed_fields: str):
 
     def decorator(func):
         @wraps(func)
-        def wrapper(repo_root: Path, config: TaskflowConfig, task_id: str, agent_id: str, **changes):
+        def wrapper(repo_root: Path, config: SisyphusConfig, task_id: str, agent_id: str, **changes):
             unknown_fields = find_unknown_fields(changes, allowed)
             if unknown_fields:
                 names = ", ".join(unknown_fields)
@@ -42,7 +42,7 @@ def guard_agent_updates(*allowed_fields: str):
 
 def register_agent(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     agent_id: str,
     role: str,
@@ -95,7 +95,7 @@ def register_agent(
 )
 def update_agent(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     agent_id: str,
     **changes: object,
@@ -120,7 +120,7 @@ def update_agent(
 
 def load_agent_record(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     agent_id: str,
     stale_after_seconds: int | None = DEFAULT_STALE_AFTER_SECONDS,
@@ -135,7 +135,7 @@ def load_agent_record(
 
 def list_agents(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     *,
     task_id: str | None = None,
     stale_after_seconds: int | None = DEFAULT_STALE_AFTER_SECONDS,
@@ -169,7 +169,7 @@ def list_agents(
     )
 
 
-def _ensure_task_exists(repo_root: Path, config: TaskflowConfig, task_id: str) -> None:
+def _ensure_task_exists(repo_root: Path, config: SisyphusConfig, task_id: str) -> None:
     load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
 
 

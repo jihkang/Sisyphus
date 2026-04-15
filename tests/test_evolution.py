@@ -13,7 +13,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from taskflow.evolution import (
+from sisyphus.evolution import (
     EVOLUTION_EVALUATION_STATUS_PLANNED,
     EVOLUTION_ISOLATION_MODE_TASK_WORKTREE_COPY,
     EVOLUTION_PHASE_1,
@@ -28,10 +28,10 @@ from taskflow.evolution import (
     plan_evolution_harness,
     plan_evolution_run,
 )
-from taskflow.config import load_config
-from taskflow.conformance import append_conformance_log
-from taskflow.state import create_task_record, save_task_record
-from taskflow.templates import materialize_task_templates
+from sisyphus.config import load_config
+from sisyphus.conformance import append_conformance_log
+from sisyphus.state import create_task_record, save_task_record
+from sisyphus.templates import materialize_task_templates
 
 
 class EvolutionCoreTests(unittest.TestCase):

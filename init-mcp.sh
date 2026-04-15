@@ -96,7 +96,7 @@ register_codex() {
       --env "SISYPHUS_REPO_ROOT=$REPO_ROOT" \
       --env "SISYPHUS_MCP_DEBUG_LOG=$MCP_DEBUG_LOG" \
       -- \
-      "$python_bin" -m taskflow.mcp_server
+      "$python_bin" -m sisyphus.mcp_server
     return 0
   fi
 
@@ -105,7 +105,7 @@ register_codex() {
     --env "SISYPHUS_REPO_ROOT=$REPO_ROOT" \
     --env "SISYPHUS_MCP_DEBUG_LOG=$MCP_DEBUG_LOG" \
     -- \
-    "$python_bin" -m taskflow.mcp_server
+    "$python_bin" -m sisyphus.mcp_server
 }
 
 print_claude_project_config() {
@@ -123,7 +123,7 @@ debug_log = sys.argv[5]
 
 server_config = {
     "command": command,
-    "args": ["-m", "taskflow.mcp_server"],
+    "args": ["-m", "sisyphus.mcp_server"],
     "env": {
         "SISYPHUS_REPO_ROOT": repo_root,
         "SISYPHUS_MCP_DEBUG_LOG": debug_log,

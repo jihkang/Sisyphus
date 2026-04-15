@@ -6,7 +6,7 @@ import subprocess
 
 from .bus import build_event_publisher
 from .conformance import collect_conformance_gates
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 from .events import new_event_envelope
 from .planning import collect_plan_gates
 from .state import load_task_record, save_task_record, utc_now
@@ -51,7 +51,7 @@ class VerifyOutcome:
     verify_file: Path
 
 
-def run_verify(repo_root: Path, config: TaskflowConfig, task_id: str) -> VerifyOutcome:
+def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyOutcome:
     task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
     task_dir = task_file.parent
     task = sync_test_strategy_from_docs(task=task, task_dir=task_dir)

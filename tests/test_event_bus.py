@@ -12,10 +12,10 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from taskflow.bus import NoopEventPublisher, build_event_publisher
-from taskflow.bus_jsonl import JsonlEventPublisher, read_jsonl_events, resolve_event_bus_path
-from taskflow.config import load_config
-from taskflow.events import EventEnvelope, new_event_envelope, normalize_event_envelope
+from sisyphus.bus import NoopEventPublisher, build_event_publisher
+from sisyphus.bus_jsonl import JsonlEventPublisher, read_jsonl_events, resolve_event_bus_path
+from sisyphus.config import load_config
+from sisyphus.events import EventEnvelope, new_event_envelope, normalize_event_envelope
 
 
 class EventBusTests(unittest.TestCase):
@@ -47,6 +47,25 @@ class EventBusTests(unittest.TestCase):
 
             self.assertEqual(config.event_bus.provider, "jsonl")
             self.assertEqual(config.event_bus.jsonl_path, ".planning/custom-events.jsonl")
+
+    def test_load_config_prefers_sisyphus_toml_over_legacy_taskflow_toml(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / ".taskflow.toml").write_text('base_branch = "legacy"\n', encoding="utf-8")
+            (repo_root / ".sisyphus.toml").write_text('base_branch = "canonical"\n', encoding="utf-8")
+
+            config = load_config(repo_root)
+
+            self.assertEqual(config.base_branch, "canonical")
+
+    def test_load_config_uses_legacy_taskflow_toml_as_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / ".taskflow.toml").write_text('base_branch = "legacy"\n', encoding="utf-8")
+
+            config = load_config(repo_root)
+
+            self.assertEqual(config.base_branch, "legacy")
 
     def test_event_envelope_round_trips_from_mapping(self) -> None:
         envelope = normalize_event_envelope(
