@@ -38,7 +38,7 @@ from taskflow.paths import event_log_file, inbox_failed_dir, inbox_processed_dir
 from taskflow.planning import approve_task_plan, freeze_task_spec, request_plan_changes, revise_task_plan
 from taskflow.provider_wrapper import run_provider_wrapper
 from taskflow.service import TaskNotificationTracker, build_task_update_summary, run_service_step
-from taskflow.state import build_task_record, create_task_record, load_task_record, save_task_record
+from taskflow.state import build_task_record, create_task_record, edit_task_record, load_task_record, save_task_record
 from taskflow.templates import materialize_task_templates, template_root
 from taskflow.workflow import run_workflow_cycle
 import sisyphus
@@ -256,6 +256,50 @@ class TaskflowVerifyTests(unittest.TestCase):
         self.assertEqual(outcome.stage, "plan_review")
         gate_codes = {gate["code"] for gate in outcome.gates}
         self.assertIn("PLAN_APPROVAL_REQUIRED", gate_codes)
+
+    def test_shared_utc_now_helper_is_reused_across_modules(self) -> None:
+        import taskflow.conformance as conformance_module
+        import taskflow.events as events_module
+        import taskflow.state as state_module
+        from taskflow.evolution import constraints, dataset, fitness, harness, report, runner
+        from taskflow.utils import utc_now as shared_utc_now
+
+        self.assertIs(state_module.utc_now, shared_utc_now)
+        self.assertIs(events_module.utc_now, shared_utc_now)
+        self.assertIs(conformance_module.utc_now, shared_utc_now)
+        self.assertIs(dataset.utc_now, shared_utc_now)
+        self.assertIs(harness.utc_now, shared_utc_now)
+        self.assertIs(runner.utc_now, shared_utc_now)
+        self.assertIs(fitness.utc_now, shared_utc_now)
+        self.assertIs(constraints.utc_now, shared_utc_now)
+        self.assertIs(report.utc_now, shared_utc_now)
+
+    def test_edit_task_record_rolls_back_on_exception_and_syncs_worktree_files(self) -> None:
+        task = self._new_feature_task("locked-task-record")
+        task_dir = self.repo_root / task["task_dir"]
+        task_file = task_dir / "task.json"
+        worktree_root = Path(task["worktree_path"])
+        worktree_root.mkdir(parents=True, exist_ok=True)
+
+        with edit_task_record(task_file) as persisted:
+            persisted["status"] = "blocked"
+
+        mirrored_task_dir = worktree_root / task["task_dir"]
+        self.assertTrue((mirrored_task_dir / "task.json").exists())
+        self.assertTrue((mirrored_task_dir / "BRIEF.md").exists())
+        self.assertTrue((mirrored_task_dir / "PLAN.md").exists())
+        mirrored = json.loads((mirrored_task_dir / "task.json").read_text(encoding="utf-8"))
+        self.assertEqual(mirrored["status"], "blocked")
+
+        content_before_failure = task_file.read_text(encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "boom"):
+            with edit_task_record(task_file) as persisted:
+                persisted["status"] = "closed"
+                raise RuntimeError("boom")
+
+        self.assertEqual(task_file.read_text(encoding="utf-8"), content_before_failure)
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded["status"], "blocked")
 
     def test_close_requires_verified_task(self) -> None:
         task = self._new_feature_task("close-check")

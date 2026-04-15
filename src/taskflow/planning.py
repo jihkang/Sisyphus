@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import TaskflowConfig
-from .state import load_task_record, save_task_record, utc_now
+from .state import edit_task_record, task_record_path
 from .strategy import sync_test_strategy_from_docs
+from .utils import utc_now
 
 
 PLAN_PENDING_REVIEW = "pending_review"
@@ -87,17 +88,17 @@ def approve_task_plan(
     reviewer: str,
     notes: str | None,
 ) -> PlanReviewOutcome:
-    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
-    _ensure_plan_fields(task)
-    task["plan_status"] = PLAN_APPROVED
-    task["plan_reviewed_at"] = utc_now()
-    task["plan_reviewed_by"] = reviewer.strip() or "operator"
-    task["plan_review_notes"] = notes
-    task["workflow_phase"] = "spec_drafting"
-    task["gates"] = [gate for gate in task.get("gates", []) if gate.get("source") != "plan"]
-    _append_review_history(task, action="approve", actor=task["plan_reviewed_by"], notes=notes)
-    _restore_task_status_after_plan_gate(task)
-    save_task_record(task_file=task_file, task=task)
+    task_file = task_record_path(repo_root, config.task_dir, task_id)
+    with edit_task_record(task_file) as task:
+        _ensure_plan_fields(task)
+        task["plan_status"] = PLAN_APPROVED
+        task["plan_reviewed_at"] = utc_now()
+        task["plan_reviewed_by"] = reviewer.strip() or "operator"
+        task["plan_review_notes"] = notes
+        task["workflow_phase"] = "spec_drafting"
+        task["gates"] = [gate for gate in task.get("gates", []) if gate.get("source") != "plan"]
+        _append_review_history(task, action="approve", actor=task["plan_reviewed_by"], notes=notes)
+        _restore_task_status_after_plan_gate(task)
     return PlanReviewOutcome(
         task_id=task["id"],
         plan_status=task["plan_status"],
@@ -114,22 +115,22 @@ def request_plan_changes(
     reviewer: str,
     notes: str | None,
 ) -> PlanReviewOutcome:
-    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
-    _ensure_plan_fields(task)
-    task["plan_status"] = PLAN_CHANGES_REQUESTED
-    task["plan_review_round"] = int(task.get("plan_review_round", 0)) + 1
-    task["plan_reviewed_at"] = utc_now()
-    task["plan_reviewed_by"] = reviewer.strip() or "operator"
-    task["plan_review_notes"] = notes
-    task["workflow_phase"] = "needs_user_input" if int(task["plan_review_round"]) >= int(task.get("max_plan_review_rounds", 3)) else "plan_revision"
-    task["gates"] = _dedupe_gates(
-        [gate for gate in task.get("gates", []) if gate.get("source") != "plan"] +
-        collect_plan_gates(task, action="execution")
-    )
-    _append_review_history(task, action="request_changes", actor=task["plan_reviewed_by"], notes=notes)
-    task["status"] = "blocked"
-    task["stage"] = "plan_review"
-    save_task_record(task_file=task_file, task=task)
+    task_file = task_record_path(repo_root, config.task_dir, task_id)
+    with edit_task_record(task_file) as task:
+        _ensure_plan_fields(task)
+        task["plan_status"] = PLAN_CHANGES_REQUESTED
+        task["plan_review_round"] = int(task.get("plan_review_round", 0)) + 1
+        task["plan_reviewed_at"] = utc_now()
+        task["plan_reviewed_by"] = reviewer.strip() or "operator"
+        task["plan_review_notes"] = notes
+        task["workflow_phase"] = "needs_user_input" if int(task["plan_review_round"]) >= int(task.get("max_plan_review_rounds", 3)) else "plan_revision"
+        task["gates"] = _dedupe_gates(
+            [gate for gate in task.get("gates", []) if gate.get("source") != "plan"] +
+            collect_plan_gates(task, action="execution")
+        )
+        _append_review_history(task, action="request_changes", actor=task["plan_reviewed_by"], notes=notes)
+        task["status"] = "blocked"
+        task["stage"] = "plan_review"
     return PlanReviewOutcome(
         task_id=task["id"],
         plan_status=task["plan_status"],
@@ -146,18 +147,18 @@ def revise_task_plan(
     author: str,
     notes: str | None,
 ) -> PlanReviewOutcome:
-    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
-    _ensure_plan_fields(task)
-    task["plan_status"] = PLAN_PENDING_REVIEW
-    task["plan_reviewed_at"] = utc_now()
-    task["plan_reviewed_by"] = author.strip() or "operator"
-    task["plan_review_notes"] = notes
-    task["workflow_phase"] = "plan_in_review"
-    task["gates"] = [gate for gate in task.get("gates", []) if gate.get("source") != "plan"]
-    _append_review_history(task, action="revise", actor=task["plan_reviewed_by"], notes=notes)
-    _restore_task_status_after_plan_gate(task)
-    task["stage"] = "plan_review"
-    save_task_record(task_file=task_file, task=task)
+    task_file = task_record_path(repo_root, config.task_dir, task_id)
+    with edit_task_record(task_file) as task:
+        _ensure_plan_fields(task)
+        task["plan_status"] = PLAN_PENDING_REVIEW
+        task["plan_reviewed_at"] = utc_now()
+        task["plan_reviewed_by"] = author.strip() or "operator"
+        task["plan_review_notes"] = notes
+        task["workflow_phase"] = "plan_in_review"
+        task["gates"] = [gate for gate in task.get("gates", []) if gate.get("source") != "plan"]
+        _append_review_history(task, action="revise", actor=task["plan_reviewed_by"], notes=notes)
+        _restore_task_status_after_plan_gate(task)
+        task["stage"] = "plan_review"
     return PlanReviewOutcome(
         task_id=task["id"],
         plan_status=task["plan_status"],
@@ -173,20 +174,19 @@ def enforce_plan_approved(
     *,
     action: str,
 ) -> tuple[bool, dict]:
-    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
-    _ensure_plan_fields(task)
-    plan_gates = collect_plan_gates(task, action=action)
-    task["gates"] = _dedupe_gates(
-        [gate for gate in task.get("gates", []) if gate.get("source") != "plan"] + plan_gates
-    )
-    if plan_gates:
-        task["status"] = "blocked"
-        task["stage"] = "plan_review"
-        save_task_record(task_file=task_file, task=task)
-        return False, task
-    _restore_task_status_after_plan_gate(task)
-    save_task_record(task_file=task_file, task=task)
-    return True, task
+    task_file = task_record_path(repo_root, config.task_dir, task_id)
+    with edit_task_record(task_file) as task:
+        _ensure_plan_fields(task)
+        plan_gates = collect_plan_gates(task, action=action)
+        task["gates"] = _dedupe_gates(
+            [gate for gate in task.get("gates", []) if gate.get("source") != "plan"] + plan_gates
+        )
+        if plan_gates:
+            task["status"] = "blocked"
+            task["stage"] = "plan_review"
+            return False, task
+        _restore_task_status_after_plan_gate(task)
+        return True, task
 
 
 def freeze_task_spec(
@@ -197,31 +197,30 @@ def freeze_task_spec(
     reviewer: str,
     notes: str | None,
 ) -> SpecFreezeOutcome:
-    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
-    _ensure_plan_fields(task)
-    _ensure_spec_fields(task)
-    task["plan_status"] = current_plan_status(task)
-    task["gates"] = [gate for gate in task.get("gates", []) if gate.get("source") != "spec"]
-    plan_gates = collect_plan_gates(task, action="spec freeze")
-    if plan_gates:
-        task["gates"] = _dedupe_gates([gate for gate in task.get("gates", []) if gate.get("source") != "plan"] + plan_gates)
-        task["status"] = "blocked"
-        task["stage"] = "plan_review"
-        task["workflow_phase"] = "needs_user_input"
-        save_task_record(task_file=task_file, task=task)
-        return SpecFreezeOutcome(
-            task_id=task["id"],
-            spec_status=task["spec_status"],
-            task_status=task["status"],
-            workflow_phase=task["workflow_phase"],
-        )
-    task["spec_status"] = SPEC_FROZEN
-    task["spec_frozen_at"] = utc_now()
-    task["spec_reviewed_by"] = reviewer.strip() or "operator"
-    task["spec_review_notes"] = notes
-    task["workflow_phase"] = "subtask_planning"
-    _restore_task_status_after_plan_gate(task)
-    save_task_record(task_file=task_file, task=task)
+    task_file = task_record_path(repo_root, config.task_dir, task_id)
+    with edit_task_record(task_file) as task:
+        _ensure_plan_fields(task)
+        _ensure_spec_fields(task)
+        task["plan_status"] = current_plan_status(task)
+        task["gates"] = [gate for gate in task.get("gates", []) if gate.get("source") != "spec"]
+        plan_gates = collect_plan_gates(task, action="spec freeze")
+        if plan_gates:
+            task["gates"] = _dedupe_gates([gate for gate in task.get("gates", []) if gate.get("source") != "plan"] + plan_gates)
+            task["status"] = "blocked"
+            task["stage"] = "plan_review"
+            task["workflow_phase"] = "needs_user_input"
+            return SpecFreezeOutcome(
+                task_id=task["id"],
+                spec_status=task["spec_status"],
+                task_status=task["status"],
+                workflow_phase=task["workflow_phase"],
+            )
+        task["spec_status"] = SPEC_FROZEN
+        task["spec_frozen_at"] = utc_now()
+        task["spec_reviewed_by"] = reviewer.strip() or "operator"
+        task["spec_review_notes"] = notes
+        task["workflow_phase"] = "subtask_planning"
+        _restore_task_status_after_plan_gate(task)
     return SpecFreezeOutcome(
         task_id=task["id"],
         spec_status=task["spec_status"],
@@ -237,20 +236,19 @@ def enforce_spec_frozen(
     *,
     action: str,
 ) -> tuple[bool, dict]:
-    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
-    _ensure_spec_fields(task)
-    spec_gates = collect_spec_execution_gates(task, action=action)
-    task["gates"] = _dedupe_gates(
-        [gate for gate in task.get("gates", []) if gate.get("source") != "spec"] + spec_gates
-    )
-    if spec_gates:
-        task["status"] = "blocked"
-        task["stage"] = "spec"
-        task["workflow_phase"] = "spec_in_review"
-        save_task_record(task_file=task_file, task=task)
-        return False, task
-    save_task_record(task_file=task_file, task=task)
-    return True, task
+    task_file = task_record_path(repo_root, config.task_dir, task_id)
+    with edit_task_record(task_file) as task:
+        _ensure_spec_fields(task)
+        spec_gates = collect_spec_execution_gates(task, action=action)
+        task["gates"] = _dedupe_gates(
+            [gate for gate in task.get("gates", []) if gate.get("source") != "spec"] + spec_gates
+        )
+        if spec_gates:
+            task["status"] = "blocked"
+            task["stage"] = "spec"
+            task["workflow_phase"] = "spec_in_review"
+            return False, task
+        return True, task
 
 
 def generate_subtasks(
@@ -258,13 +256,13 @@ def generate_subtasks(
     config: TaskflowConfig,
     task_id: str,
 ) -> SubtaskGenerationOutcome:
-    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
-    _ensure_spec_fields(task)
-    task_dir = task_file.parent
-    task = sync_test_strategy_from_docs(task=task, task_dir=task_dir)
-    task["subtasks"] = _build_subtasks(task)
-    task["workflow_phase"] = "execution"
-    save_task_record(task_file=task_file, task=task)
+    task_file = task_record_path(repo_root, config.task_dir, task_id)
+    with edit_task_record(task_file) as task:
+        _ensure_spec_fields(task)
+        task_dir = task_file.parent
+        task = sync_test_strategy_from_docs(task=task, task_dir=task_dir)
+        task["subtasks"] = _build_subtasks(task)
+        task["workflow_phase"] = "execution"
     return SubtaskGenerationOutcome(
         task_id=task["id"],
         workflow_phase=task["workflow_phase"],

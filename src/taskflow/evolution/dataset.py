@@ -2,17 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 from ..bus_jsonl import read_jsonl_events, resolve_event_bus_path
 from ..config import load_config
 from ..conformance import summarize_task_conformance
 from ..state import list_task_records
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+from ..utils import utc_now
 
 
 @dataclass(frozen=True, slots=True)

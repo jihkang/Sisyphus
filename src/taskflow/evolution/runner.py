@@ -2,18 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 import uuid
 
 from .targets import EvolutionTarget, resolve_evolution_targets
+from ..utils import utc_now
 
 
 EVOLUTION_RUN_STATUS_PLANNED = "planned"
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def new_evolution_run_id() -> str:

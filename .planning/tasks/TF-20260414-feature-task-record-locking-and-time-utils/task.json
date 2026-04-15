@@ -1,0 +1,164 @@
+{
+  "id": "TF-20260414-feature-task-record-locking-and-time-utils",
+  "type": "feature",
+  "slug": "task-record-locking-and-time-utils",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-14T13:36:41Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Plan scope is now concrete and narrowly constrained to persistence safety plus shared timestamp consolidation. Test strategy and verification mapping are explicitly documented.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised PLAN/BRIEF/VERIFY to reflect the actual scope: shared utc_now helper consolidation, repository-local locked task.json updates, lifecycle call-site refactors, and concrete regression commands.",
+      "timestamp": "2026-04-14T13:36:41Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Plan scope is now concrete and narrowly constrained to persistence safety plus shared timestamp consolidation. Test strategy and verification mapping are explicitly documented.",
+      "timestamp": "2026-04-14T13:36:41Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-14T13:36:41Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze this task to the documented persistence/timestamp scope before implementation.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-14T10:49:44Z",
+  "updated_at": "2026-04-14T15:34:21Z",
+  "closed_at": "2026-04-14T15:34:21Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260414-feature-task-record-locking-and-time-utils",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260414-feature-task-record-locking-and-time-utils",
+  "branch": "feat/task-record-locking-and-time-utils",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260414-feature-task-record-locking-and-time-utils && env PYTHONPYCACHEPREFIX=/tmp/pycache /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest tests.test_taskflow -v",
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260414-feature-task-record-locking-and-time-utils && env PYTHONPYCACHEPREFIX=/tmp/pycache /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest tests.test_evolution -v"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-14T15:34:12Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260414-feature-task-record-locking-and-time-utils && env PYTHONPYCACHEPREFIX=/tmp/pycache /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest tests.test_taskflow -v",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260414-feature-task-record-locking-and-time-utils && env PYTHONPYCACHEPREFIX=/tmp/pycache /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest tests.test_taskflow -v",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-14T15:34:09Z",
+      "finished_at": "2026-04-14T15:34:12Z",
+      "duration_ms": null,
+      "output_excerpt": "workflow_phase: execution"
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260414-feature-task-record-locking-and-time-utils && env PYTHONPYCACHEPREFIX=/tmp/pycache /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest tests.test_evolution -v",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260414-feature-task-record-locking-and-time-utils && env PYTHONPYCACHEPREFIX=/tmp/pycache /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest tests.test_evolution -v",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-14T15:34:12Z",
+      "finished_at": "2026-04-14T15:34:12Z",
+      "duration_ms": null,
+      "output_excerpt": "OK"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Lifecycle transitions that mutate `task.json` persist through the locked update path without dropping fields or conformance metadata.",
+        "checked": false
+      },
+      {
+        "name": "Shared `utc_now()` still returns UTC timestamps with a trailing `Z` for state, event, conformance, and evolution records.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Support-file sync still updates the worktree copy of `task.json` and task docs after a locked save.",
+        "checked": false
+      },
+      {
+        "name": "Sequential updates preserve task defaults and nested `conformance` structures when existing records are partially populated.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "If a locked mutation callback raises, the original `task.json` remains readable and no partial write is left behind.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Lifecycle transitions that mutate task.json persist through the locked update path without dropping fields or conformance metadata.",
+        "method": "python -m unittest tests.test_taskflow -v"
+      },
+      {
+        "target": "Shared utc_now() still returns UTC timestamps with a trailing Z for state, event, conformance, and evolution records.",
+        "method": "python -m unittest tests.test_taskflow tests.test_evolution -v"
+      },
+      {
+        "target": "Support-file sync still updates the worktree copy of task.json and task docs after a locked save.",
+        "method": "python -m unittest tests.test_taskflow -v"
+      },
+      {
+        "target": "Sequential updates preserve task defaults and nested conformance structures when existing records are partially populated.",
+        "method": "python -m unittest tests.test_taskflow -v"
+      },
+      {
+        "target": "If a locked mutation callback raises, the original task.json remains readable and no partial write is left behind.",
+        "method": "python -m unittest tests.test_taskflow -v"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-53a1fb4ea95a",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "task-record-locking-and-time-utils"
+  }
+}

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
 from .constraints import EvolutionConstraintResult
 from .dataset import EvolutionDataset
 from .fitness import EvolutionFitnessResult
 from .harness import EvolutionHarnessPlan, EvolutionPlannedMetrics
 from .runner import EvolutionRun
+from ..utils import utc_now
 
 
 EVOLUTION_REPORT_STATUS_PLANNED = "planned"
@@ -16,10 +16,6 @@ EVOLUTION_REPORT_STATUS_REJECTED = "rejected"
 
 EVOLUTION_REPORT_PLACEHOLDER_STATUS_AVAILABLE = "available"
 EVOLUTION_REPORT_PLACEHOLDER_STATUS_PENDING = "pending"
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 @dataclass(frozen=True, slots=True)
