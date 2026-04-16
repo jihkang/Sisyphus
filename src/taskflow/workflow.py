@@ -13,7 +13,7 @@ from .conformance import (
     run_pre_execution_conformance_check,
     summarize_task_conformance,
 )
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 from .events import new_event_envelope
 from .planning import (
     PLAN_APPROVED,
@@ -31,7 +31,7 @@ WORKER_ROLE = "worker"
 REVIEWER_ROLE = "reviewer"
 
 
-def run_workflow_cycle(repo_root: Path, config: TaskflowConfig) -> int:
+def run_workflow_cycle(repo_root: Path, config: SisyphusConfig) -> int:
     progressed = 0
     tasks = list_task_records(repo_root=repo_root, task_dir_name=config.task_dir)
     tasks = sorted(tasks, key=lambda task: (task.get("updated_at", ""), task.get("id", "")))
@@ -41,7 +41,7 @@ def run_workflow_cycle(repo_root: Path, config: TaskflowConfig) -> int:
     return progressed
 
 
-def _advance_task(repo_root: Path, config: TaskflowConfig, task_id: str) -> bool:
+def _advance_task(repo_root: Path, config: SisyphusConfig, task_id: str) -> bool:
     task, _ = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
     phase = str(task.get("workflow_phase") or "")
     if not bool(task.get("meta", {}).get("auto_loop_enabled", True)):
@@ -93,7 +93,7 @@ def _advance_task(repo_root: Path, config: TaskflowConfig, task_id: str) -> bool
 
     return False
 
-def _run_subtask(repo_root: Path, config: TaskflowConfig, task: dict, subtask_id: str) -> bool:
+def _run_subtask(repo_root: Path, config: SisyphusConfig, task: dict, subtask_id: str) -> bool:
     publisher = build_event_publisher(repo_root, config)
     task_file = task_record_path(repo_root, config.task_dir, str(task["id"]))
     with edit_task_record(task_file) as task:
@@ -202,7 +202,7 @@ def _run_phase_agent(*, repo_root: Path, task: dict, agent_id: str, role: str, i
         repo_root=repo_root,
     )
 
-def _update_workflow_phase(repo_root: Path, config: TaskflowConfig, task_id: str, *, phase: str) -> None:
+def _update_workflow_phase(repo_root: Path, config: SisyphusConfig, task_id: str, *, phase: str) -> None:
     task_file = task_record_path(repo_root, config.task_dir, task_id)
     with edit_task_record(task_file) as task:
         task["workflow_phase"] = phase
@@ -224,7 +224,7 @@ def _update_workflow_phase(repo_root: Path, config: TaskflowConfig, task_id: str
 
 def _update_subtask_status(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     subtask_id: str,
     *,

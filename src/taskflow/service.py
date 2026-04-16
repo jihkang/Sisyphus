@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import time
 
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 from .daemon import DaemonStats, run_daemon
 from .state import list_task_records
 
@@ -78,7 +78,7 @@ class TaskNotificationTracker:
 
 def run_service_step(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     *,
     tracker: TaskNotificationTracker | None = None,
     max_events: int | None = None,
@@ -102,7 +102,7 @@ def run_service_step(
 
 def run_service(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     *,
     poll_interval_seconds: int,
     tracker: TaskNotificationTracker | None = None,

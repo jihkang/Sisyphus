@@ -13,15 +13,15 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from taskflow.audit import run_verify
-from taskflow.closeout import run_close
-from taskflow.config import load_config
+from sisyphus.audit import run_verify
+from sisyphus.closeout import run_close
+from sisyphus.config import load_config
 
 
 FIXTURES_ROOT = PROJECT_ROOT / "tests" / "fixtures"
 
 
-class TaskflowGoldenTests(unittest.TestCase):
+class SisyphusGoldenTests(unittest.TestCase):
     maxDiff = None
 
     def _run_verify_fixture(self, fixture_name: str) -> tuple[dict, str, int]:

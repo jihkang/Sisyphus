@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 from .state import edit_task_record, task_record_path
 from .strategy import sync_test_strategy_from_docs
 from .utils import utc_now
@@ -82,7 +82,7 @@ def collect_spec_execution_gates(task: dict, *, action: str) -> list[dict]:
 
 def approve_task_plan(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     *,
     reviewer: str,
@@ -109,7 +109,7 @@ def approve_task_plan(
 
 def request_plan_changes(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     *,
     reviewer: str,
@@ -141,7 +141,7 @@ def request_plan_changes(
 
 def revise_task_plan(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     *,
     author: str,
@@ -169,7 +169,7 @@ def revise_task_plan(
 
 def enforce_plan_approved(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     *,
     action: str,
@@ -191,7 +191,7 @@ def enforce_plan_approved(
 
 def freeze_task_spec(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     *,
     reviewer: str,
@@ -231,7 +231,7 @@ def freeze_task_spec(
 
 def enforce_spec_frozen(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     *,
     action: str,
@@ -253,7 +253,7 @@ def enforce_spec_frozen(
 
 def generate_subtasks(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
 ) -> SubtaskGenerationOutcome:
     task_file = task_record_path(repo_root, config.task_dir, task_id)

@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 
 from .bus import build_event_publisher
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 from .events import new_event_envelope
 from .planning import collect_plan_gates
 from .state import edit_task_record, task_record_path
@@ -21,7 +21,7 @@ class CloseOutcome:
     gates: list[dict]
 
 
-def run_close(repo_root: Path, config: TaskflowConfig, task_id: str, allow_dirty: bool) -> CloseOutcome:
+def run_close(repo_root: Path, config: SisyphusConfig, task_id: str, allow_dirty: bool) -> CloseOutcome:
     task_file = task_record_path(repo_root, config.task_dir, task_id)
     with edit_task_record(task_file) as task:
         gates = [gate for gate in task.get("gates", []) if gate.get("source") not in {"close", "plan"}]
@@ -80,7 +80,10 @@ def is_dirty_worktree(path: Path) -> bool:
             capture_output=True,
             text=True,
         )
-        return bool(result.stdout.strip())
+        return any(
+            line.strip() and not line.strip().endswith("task.json.lock")
+            for line in result.stdout.splitlines()
+        )
     except (subprocess.CalledProcessError, FileNotFoundError, NotADirectoryError, OSError):
         return False
 

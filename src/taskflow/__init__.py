@@ -1,4 +1,4 @@
-"""taskflow-kit package."""
+"""Legacy taskflow compatibility package for Sisyphus."""
 
 from .api import (
     QueuedConversation,

@@ -5,7 +5,7 @@ from pathlib import Path
 import json
 
 from .conformance import build_execution_contract
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 from .discipline import build_sisyphus_worker_discipline
 from .state import load_task_record
 from .utils import project_fields
@@ -20,7 +20,7 @@ class CodexPrompt:
 
 def build_codex_prompt(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     *,
     extra_instruction: str | None = None,

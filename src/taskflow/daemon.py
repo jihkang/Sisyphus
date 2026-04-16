@@ -8,7 +8,7 @@ import time
 import uuid
 
 from .bus import build_event_publisher
-from .config import TaskflowConfig, load_config
+from .config import SisyphusConfig, load_config
 from .creation import create_task_workspace
 from .gitops import copy_relative_path, current_branch_name, list_dirty_paths, remove_relative_path
 from .events import new_event_envelope
@@ -134,7 +134,7 @@ def queue_conversation_event(
 
 def run_daemon(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     *,
     once: bool,
     poll_interval_seconds: int,
@@ -167,7 +167,7 @@ def run_daemon(
 def process_inbox_event(
     *,
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     event_path: Path,
     stats: DaemonStats | None = None,
 ) -> dict:
@@ -248,7 +248,7 @@ def process_inbox_event(
     return event
 
 
-def _process_conversation_event(repo_root: Path, config: TaskflowConfig, event: dict) -> dict:
+def _process_conversation_event(repo_root: Path, config: SisyphusConfig, event: dict) -> dict:
     publisher = build_event_publisher(repo_root, config)
     payload = project_fields(event.get("payload", {}), CONVERSATION_FIELD_DEFAULTS)
     title = str(payload["title"]).strip()
@@ -427,15 +427,15 @@ def _hydrate_task_from_conversation(
 def _apply_direct_change_adoption(
     *,
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     requested_paths: list[str],
 ) -> None:
     task, _ = load_task_record(repo_root, task_dir_name=config.task_dir, task_id=task_id)
     source_branch = current_branch_name(repo_root)
     changed_paths, deleted_paths = list_dirty_paths(repo_root)
-    changed_paths = [path for path in changed_paths if not _is_internal_taskflow_path(path)]
-    deleted_paths = [path for path in deleted_paths if not _is_internal_taskflow_path(path)]
+    changed_paths = [path for path in changed_paths if not _is_internal_sisyphus_path(path)]
+    deleted_paths = [path for path in deleted_paths if not _is_internal_sisyphus_path(path)]
     selected_changed = _select_adopt_paths(changed_paths, requested_paths)
     selected_deleted = _select_adopt_paths(deleted_paths, requested_paths)
 
@@ -475,7 +475,7 @@ def _apply_direct_change_adoption(
 def _resolve_followup_slug(
     *,
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_type: str,
     requested_slug: str,
 ) -> tuple[str, str | None]:
@@ -564,9 +564,13 @@ def _render_adoption_log_note(*, source_branch: str | None, adopted_paths: list[
     return f"Adopted {path_count} current changes from branch `{branch_label}` into the task worktree."
 
 
-def _is_internal_taskflow_path(relative_path: str) -> bool:
+def _is_internal_sisyphus_path(relative_path: str) -> bool:
     normalized = relative_path.replace("\\", "/")
     return normalized == ".planning" or normalized.startswith(".planning/")
+
+
+def _is_internal_taskflow_path(relative_path: str) -> bool:
+    return _is_internal_sisyphus_path(relative_path)
 
 
 def _render_brief(
@@ -659,7 +663,7 @@ def _render_feature_plan(task: dict, title: str, message: str) -> str:
             "",
             "## Verification Mapping",
             "",
-            "- `Requested conversation workflow succeeds` -> `taskflow verify`",
+            "- `Requested conversation workflow succeeds` -> `sisyphus verify`",
             "- `Minimal valid input still behaves predictably` -> `targeted regression test`",
             "- `Unexpected failure surfaces an actionable error` -> `manual review`",
             "",
@@ -740,7 +744,7 @@ def _render_issue_fix_plan(task: dict, title: str, message: str) -> str:
             "",
             "## Verification Mapping",
             "",
-            "- `Regression scenario now passes` -> `taskflow verify`",
+            "- `Regression scenario now passes` -> `sisyphus verify`",
             "- `Neighboring behavior remains stable` -> `targeted regression test`",
             "- `Invalid or missing input still fails safely` -> `manual review`",
             "",

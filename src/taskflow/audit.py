@@ -6,7 +6,7 @@ import subprocess
 
 from .bus import build_event_publisher
 from .conformance import collect_conformance_gates
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 from .events import new_event_envelope
 from .planning import collect_plan_gates
 from .state import edit_task_record, task_record_path
@@ -52,7 +52,7 @@ class VerifyOutcome:
     verify_file: Path
 
 
-def run_verify(repo_root: Path, config: TaskflowConfig, task_id: str) -> VerifyOutcome:
+def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyOutcome:
     task_file = task_record_path(repo_root, config.task_dir, task_id)
     task_dir = task_file.parent
     with edit_task_record(task_file) as task:

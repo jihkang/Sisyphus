@@ -11,11 +11,11 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from taskflow.mcp_adapter import call_mcp_tool, list_mcp_resources, list_mcp_tools, read_mcp_resource
-from taskflow.planning import approve_task_plan, freeze_task_spec
-from taskflow.state import create_task_record
-from taskflow.templates import materialize_task_templates
-from taskflow.config import load_config
+from sisyphus.mcp_adapter import call_mcp_tool, list_mcp_resources, list_mcp_tools, read_mcp_resource
+from sisyphus.planning import approve_task_plan, freeze_task_spec
+from sisyphus.state import create_task_record
+from sisyphus.templates import materialize_task_templates
+from sisyphus.config import load_config
 
 
 class McpAdapterTests(unittest.TestCase):

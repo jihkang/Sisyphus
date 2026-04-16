@@ -10,7 +10,7 @@ import tempfile
 from typing import TextIO
 
 from .conformance import default_task_conformance, ensure_task_conformance_defaults
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 from .gitops import branch_name, worktree_path
 from .paths import task_dir
 from .utils import utc_now
@@ -29,7 +29,7 @@ def task_id_for(task_type: str, slug: str, now: datetime | None = None) -> str:
 
 def create_task_record(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_type: str,
     slug: str,
 ) -> dict:
@@ -48,7 +48,7 @@ def create_task_record(
 
 def build_task_record(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_type: str,
     slug: str,
 ) -> dict:

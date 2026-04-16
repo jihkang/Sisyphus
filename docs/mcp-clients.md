@@ -34,16 +34,20 @@ That script does two things:
 
 Codex supports MCP server registration from the CLI.
 
+The preferred direct Python launcher path is `sisyphus.mcp_server`.
+
+The legacy module path `taskflow.mcp_server` remains available as a compatibility alias.
+
 Add Sisyphus for the current repository:
 
 ```bash
-codex mcp add sisyphus -- /absolute/path/to/Sisyphus/.venv/bin/python -m taskflow.mcp_server
+codex mcp add sisyphus -- /absolute/path/to/Sisyphus/.venv/bin/python -m sisyphus.mcp_server
 ```
 
 Add Sisyphus for a specific repository:
 
 ```bash
-codex mcp add sisyphus --env SISYPHUS_REPO_ROOT=/absolute/path/to/your/repository --env SISYPHUS_MCP_DEBUG_LOG=/tmp/sisyphus-mcp-debug.log -- /absolute/path/to/Sisyphus/.venv/bin/python -m taskflow.mcp_server
+codex mcp add sisyphus --env SISYPHUS_REPO_ROOT=/absolute/path/to/your/repository --env SISYPHUS_MCP_DEBUG_LOG=/tmp/sisyphus-mcp-debug.log -- /absolute/path/to/Sisyphus/.venv/bin/python -m sisyphus.mcp_server
 ```
 
 Inspect the registration:
@@ -59,6 +63,8 @@ If you prefer file-based configuration, use [wrappers/codex/mcp-config.toml.exam
 
 Claude Code supports project-scoped MCP configuration through `.mcp.json`.
 
+As with the Codex examples above, the JSON points at `sisyphus.mcp_server` as the canonical launcher path.
+
 Create `.mcp.json` in the target repository root:
 
 ```bash
@@ -67,7 +73,7 @@ cat > .mcp.json <<'EOF'
   "mcpServers": {
     "sisyphus": {
       "command": "/absolute/path/to/Sisyphus/.venv/bin/python",
-      "args": ["-m", "taskflow.mcp_server"],
+      "args": ["-m", "sisyphus.mcp_server"],
       "env": {
         "SISYPHUS_REPO_ROOT": "/absolute/path/to/your/repository",
         "SISYPHUS_MCP_DEBUG_LOG": "/tmp/sisyphus-mcp-debug.log"

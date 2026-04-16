@@ -10,13 +10,13 @@ from unittest import mock
 
 import mcp.types as types
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from taskflow.mcp_server import build_server, resolve_mcp_repo_root
+import sisyphus.mcp_server as legacy_sisyphus_mcp_server
+from sisyphus.mcp_server import build_server, resolve_mcp_repo_root
 
 
 class StubCoreService:
@@ -108,6 +108,21 @@ class McpServerTests(unittest.TestCase):
 
     def test_resolve_repo_root_uses_environment_override(self) -> None:
         with mock.patch.dict(os.environ, {"SISYPHUS_REPO_ROOT": str(self.repo_root)}, clear=False):
+            resolved = resolve_mcp_repo_root()
+
+        self.assertEqual(resolved, self.repo_root.resolve())
+
+    def test_sisyphus_mcp_server_module_reexports_canonical_entrypoints(self) -> None:
+        self.assertIs(legacy_sisyphus_mcp_server.build_server, build_server)
+        self.assertIs(legacy_sisyphus_mcp_server.resolve_mcp_repo_root, resolve_mcp_repo_root)
+
+    def test_resolve_repo_root_detects_repo_from_sisyphus_config(self) -> None:
+        nested = self.repo_root / "nested" / "child"
+        nested.mkdir(parents=True, exist_ok=True)
+        (self.repo_root / ".taskflow.toml").unlink()
+        (self.repo_root / ".sisyphus.toml").write_text("", encoding="utf-8")
+
+        with mock.patch.dict(os.environ, {"SISYPHUS_REPO_ROOT": str(nested)}, clear=False):
             resolved = resolve_mcp_repo_root()
 
         self.assertEqual(resolved, self.repo_root.resolve())

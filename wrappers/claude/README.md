@@ -13,6 +13,8 @@ Tracked wrapper for manual Claude-oriented commands.
 
 이 스크립트는 관리 대상 repo에 Claude Code용 `.mcp.json`을 써 준다.
 
+현재 canonical direct Python launcher는 `sisyphus.mcp_server`다. 레거시 `taskflow.mcp_server`도 호환 경로로는 계속 동작한다.
+
 수동으로 할 경우에는 target repo root에 `.mcp.json`을 두는 방식이 가장 안정적이다.
 
 ```json
@@ -20,7 +22,7 @@ Tracked wrapper for manual Claude-oriented commands.
   "mcpServers": {
     "sisyphus": {
       "command": "/absolute/path/to/Sisyphus/.venv/bin/python",
-      "args": ["-m", "taskflow.mcp_server"],
+      "args": ["-m", "sisyphus.mcp_server"],
       "env": {
         "SISYPHUS_REPO_ROOT": "/absolute/path/to/your/repository",
         "SISYPHUS_MCP_DEBUG_LOG": "/tmp/sisyphus-mcp-debug.log"
@@ -36,7 +38,7 @@ Tracked wrapper for manual Claude-oriented commands.
 claude mcp add-json sisyphus '{
   "type": "stdio",
   "command": "/absolute/path/to/Sisyphus/.venv/bin/python",
-  "args": ["-m", "taskflow.mcp_server"],
+  "args": ["-m", "sisyphus.mcp_server"],
   "env": {
     "SISYPHUS_REPO_ROOT": "/absolute/path/to/your/repository",
     "SISYPHUS_MCP_DEBUG_LOG": "/tmp/sisyphus-mcp-debug.log"

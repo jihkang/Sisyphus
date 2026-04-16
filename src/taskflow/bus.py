@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 from .events import EventEnvelope, normalize_event_envelope
 
 
@@ -17,7 +17,7 @@ class NoopEventPublisher:
         normalize_event_envelope(event)
 
 
-def build_event_publisher(repo_root: Path, config: TaskflowConfig) -> EventPublisher:
+def build_event_publisher(repo_root: Path, config: SisyphusConfig) -> EventPublisher:
     provider = config.event_bus.provider
     if provider in {"", "noop", "none", "disabled"}:
         return NoopEventPublisher()

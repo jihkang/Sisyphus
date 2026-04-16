@@ -16,12 +16,14 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from taskflow.agents import AgentTrackingError, list_agents, register_agent, update_agent
-from taskflow.api import queue_conversation, request_task
-from taskflow.audit import run_verify
-from taskflow.codex_prompt import build_codex_prompt
-from taskflow.conformance import append_conformance_log
-from taskflow.cli import (
+import sisyphus
+import sisyphus.cli as sisyphus_cli
+from sisyphus.agents import AgentTrackingError, list_agents, register_agent, update_agent
+from sisyphus.api import queue_conversation, request_task
+from sisyphus.audit import run_verify
+from sisyphus.codex_prompt import build_codex_prompt
+from sisyphus.conformance import append_conformance_log
+from sisyphus.cli import (
     build_parser,
     handle_agent_run,
     handle_ingest_conversation,
@@ -29,22 +31,23 @@ from taskflow.cli import (
     handle_status,
     handle_subtasks_generate,
 )
-from taskflow.closeout import run_close
-from taskflow.config import load_config
-from taskflow.creation import TaskCreationError, create_task_workspace
-from taskflow.daemon import process_inbox_event, queue_conversation_event, run_daemon
-from taskflow.discord_bot import build_discord_source_context, queue_discord_conversation
-from taskflow.paths import event_log_file, inbox_failed_dir, inbox_processed_dir
-from taskflow.planning import approve_task_plan, freeze_task_spec, request_plan_changes, revise_task_plan
-from taskflow.provider_wrapper import run_provider_wrapper
-from taskflow.service import TaskNotificationTracker, build_task_update_summary, run_service_step
-from taskflow.state import build_task_record, create_task_record, edit_task_record, load_task_record, save_task_record
-from taskflow.templates import materialize_task_templates, template_root
-from taskflow.workflow import run_workflow_cycle
-import sisyphus
+from sisyphus.closeout import run_close
+from sisyphus.config import SisyphusConfig, TaskflowConfig, load_config
+from sisyphus.creation import TaskCreationError, create_task_workspace
+from sisyphus.daemon import _is_internal_sisyphus_path, _render_feature_plan, _render_issue_fix_plan, process_inbox_event, queue_conversation_event, run_daemon
+from sisyphus.discovery import detect_repo_root
+from sisyphus.discord_bot import build_discord_source_context, queue_discord_conversation
+from sisyphus.paths import event_log_file, inbox_failed_dir, inbox_processed_dir
+from sisyphus.planning import approve_task_plan, freeze_task_spec, request_plan_changes, revise_task_plan
+from sisyphus.provider_wrapper import run_provider_wrapper
+from sisyphus.service import TaskNotificationTracker, build_task_update_summary, run_service_step
+from sisyphus.state import build_task_record, create_task_record, edit_task_record, load_task_record, save_task_record
+from sisyphus.templates import materialize_task_templates, template_root
+from sisyphus.workflow import run_workflow_cycle
+import taskflow.cli as taskflow_cli
 
 
-class TaskflowVerifyTests(unittest.TestCase):
+class SisyphusVerifyTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.repo_root = Path(self.tempdir.name)
@@ -336,7 +339,7 @@ class TaskflowVerifyTests(unittest.TestCase):
         self.assertEqual(reloaded["gates"], [])
         self.assertTrue(reloaded["meta"]["close_override_used"])
 
-class TaskflowNewTests(unittest.TestCase):
+class SisyphusNewTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.repo_root = Path(self.tempdir.name) / "repo"
@@ -502,7 +505,7 @@ class TaskflowNewTests(unittest.TestCase):
         )
 
 
-class TaskflowAgentTests(unittest.TestCase):
+class SisyphusAgentTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.repo_root = Path(self.tempdir.name)
@@ -1026,7 +1029,7 @@ class TaskflowAgentTests(unittest.TestCase):
         self.assertEqual(mocked_popen.call_args.kwargs["env"]["FOO"], "bar")
 
 
-class TaskflowDaemonTests(unittest.TestCase):
+class SisyphusDaemonTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.repo_root = Path(self.tempdir.name) / "repo"
@@ -1115,7 +1118,7 @@ class TaskflowDaemonTests(unittest.TestCase):
                         "",
                         "## Verification Mapping",
                         "",
-                        "- `Requested conversation workflow succeeds` -> `taskflow verify`",
+                        "- `Requested conversation workflow succeeds` -> `sisyphus verify`",
                         "- `Minimal valid input still behaves predictably` -> `targeted regression test`",
                         "- `Unexpected failure surfaces an actionable error` -> `manual review`",
                         "",
@@ -1851,6 +1854,16 @@ class TaskflowDaemonTests(unittest.TestCase):
         self.assertEqual(args.agent_command, "run")
         self.assertEqual(extras, ["--", "python", "-c", "print('ok')"])
 
+    def test_parser_uses_sisyphus_as_program_name(self) -> None:
+        parser = build_parser()
+
+        self.assertEqual(parser.prog, "sisyphus")
+        self.assertIn("usage: sisyphus", parser.format_usage())
+
+    def test_sisyphus_cli_module_reexports_parser_and_main(self) -> None:
+        self.assertIs(sisyphus_cli.build_parser, taskflow_cli.build_parser)
+        self.assertIs(sisyphus_cli.main, taskflow_cli.main)
+
     def test_request_parser_accepts_conversation_arguments(self) -> None:
         parser = build_parser()
 
@@ -1926,7 +1939,48 @@ class TaskflowDaemonTests(unittest.TestCase):
         self.assertIs(sisyphus.request_task, request_task)
         self.assertIs(sisyphus.queue_conversation, queue_conversation)
 
-    def test_template_resources_are_packaged_under_taskflow(self) -> None:
+    def test_config_uses_sisyphus_name_with_taskflow_alias_preserved(self) -> None:
+        self.assertIs(TaskflowConfig, SisyphusConfig)
+        self.assertIsInstance(self.config, SisyphusConfig)
+
+    def test_internal_sisyphus_path_helper_preserves_legacy_behavior(self) -> None:
+        self.assertTrue(_is_internal_sisyphus_path(".planning"))
+        self.assertTrue(_is_internal_sisyphus_path(".planning/tasks/demo"))
+        self.assertFalse(_is_internal_sisyphus_path("README.md"))
+
+    def test_detect_repo_root_prefers_sisyphus_config_file(self) -> None:
+        nested = self.repo_root / "nested" / "child"
+        nested.mkdir(parents=True, exist_ok=True)
+        (self.repo_root / ".sisyphus.toml").write_text('base_branch = "canonical"\n', encoding="utf-8")
+
+        with mock.patch("taskflow.discovery.subprocess.run", side_effect=subprocess.CalledProcessError(1, ["git"])):
+            resolved = detect_repo_root(nested)
+
+        self.assertEqual(resolved, self.repo_root.resolve())
+
+    def test_detect_repo_root_falls_back_to_taskflow_config_file(self) -> None:
+        nested = self.repo_root / "legacy" / "child"
+        nested.mkdir(parents=True, exist_ok=True)
+        (self.repo_root / ".sisyphus.toml").unlink(missing_ok=True)
+
+        with mock.patch("taskflow.discovery.subprocess.run", side_effect=subprocess.CalledProcessError(1, ["git"])):
+            resolved = detect_repo_root(nested)
+
+        self.assertEqual(resolved, self.repo_root.resolve())
+
+    def test_render_feature_plan_uses_sisyphus_verify_in_verification_mapping(self) -> None:
+        rendered = _render_feature_plan({}, "Add dashboard", "Add an agent dashboard")
+
+        self.assertIn("`Requested conversation workflow succeeds` -> `sisyphus verify`", rendered)
+        self.assertNotIn("`Requested conversation workflow succeeds` -> `taskflow verify`", rendered)
+
+    def test_render_issue_fix_plan_uses_sisyphus_verify_in_verification_mapping(self) -> None:
+        rendered = _render_issue_fix_plan({}, "Fix dashboard", "Fix the broken dashboard")
+
+        self.assertIn("`Regression scenario now passes` -> `sisyphus verify`", rendered)
+        self.assertNotIn("`Regression scenario now passes` -> `taskflow verify`", rendered)
+
+    def test_template_resources_are_packaged_under_legacy_taskflow_package(self) -> None:
         root = template_root()
 
         self.assertTrue(root.joinpath("feature", "BRIEF.md").is_file())

@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 import tomllib
 
+PREFERRED_CONFIG_FILENAME = ".sisyphus.toml"
+LEGACY_CONFIG_FILENAME = ".taskflow.toml"
+CONFIG_FILENAMES = (PREFERRED_CONFIG_FILENAME, LEGACY_CONFIG_FILENAME)
+
 
 @dataclass(slots=True)
 class EventBusConfig:
@@ -12,7 +16,7 @@ class EventBusConfig:
 
 
 @dataclass(slots=True)
-class TaskflowConfig:
+class SisyphusConfig:
     base_branch: str
     worktree_root: str
     task_dir: str
@@ -23,10 +27,13 @@ class TaskflowConfig:
     event_bus: EventBusConfig
 
 
-def load_config(repo_root: Path) -> TaskflowConfig:
-    config_path = repo_root / ".taskflow.toml"
-    if not config_path.exists():
-        return TaskflowConfig(
+TaskflowConfig = SisyphusConfig
+
+
+def load_config(repo_root: Path) -> SisyphusConfig:
+    config_path = resolve_config_path(repo_root)
+    if config_path is None:
+        return SisyphusConfig(
             base_branch="main",
             worktree_root="../_worktrees",
             task_dir=".planning/tasks",
@@ -41,7 +48,7 @@ def load_config(repo_root: Path) -> TaskflowConfig:
     commands = raw.get("commands", {})
     verify = raw.get("verify", {})
     event_bus = _load_event_bus_config(raw.get("event_bus", {}))
-    return TaskflowConfig(
+    return SisyphusConfig(
         base_branch=raw.get("base_branch", "main"),
         worktree_root=raw.get("worktree_root", "../_worktrees"),
         task_dir=raw.get("task_dir", ".planning/tasks"),
@@ -51,6 +58,14 @@ def load_config(repo_root: Path) -> TaskflowConfig:
         verify={key: list(value) for key, value in dict(verify).items()},
         event_bus=event_bus,
     )
+
+
+def resolve_config_path(repo_root: Path) -> Path | None:
+    for filename in CONFIG_FILENAMES:
+        candidate = repo_root / filename
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def _load_event_bus_config(raw: object) -> EventBusConfig:
@@ -63,3 +78,15 @@ def _load_event_bus_config(raw: object) -> EventBusConfig:
         provider=provider,
         jsonl_path=str(jsonl_path),
     )
+
+
+__all__ = [
+    "CONFIG_FILENAMES",
+    "LEGACY_CONFIG_FILENAME",
+    "PREFERRED_CONFIG_FILENAME",
+    "EventBusConfig",
+    "SisyphusConfig",
+    "TaskflowConfig",
+    "load_config",
+    "resolve_config_path",
+]

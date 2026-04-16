@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 from .events import EventEnvelope, normalize_event_envelope
 from .paths import event_log_file
 
@@ -21,7 +21,7 @@ class JsonlEventPublisher:
             handle.write("\n")
 
 
-def resolve_event_bus_path(repo_root: Path, config: TaskflowConfig) -> Path:
+def resolve_event_bus_path(repo_root: Path, config: SisyphusConfig) -> Path:
     configured = config.event_bus.jsonl_path.strip()
     if not configured:
         return event_log_file(repo_root)

@@ -8,7 +8,7 @@ import sys
 import threading
 
 from .agents import AgentTrackingError, register_agent, update_agent
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 
 
 @dataclass(slots=True)
@@ -43,7 +43,7 @@ class OutputTracker:
 
 def run_tracked_agent(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     agent_id: str,
     role: str,
@@ -220,7 +220,7 @@ def _heartbeat_loop(
     *,
     stop_event: threading.Event,
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     task_id: str,
     agent_id: str,
     provider: str,

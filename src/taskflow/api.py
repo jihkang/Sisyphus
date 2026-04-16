@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import TaskflowConfig, load_config
+from .config import SisyphusConfig, load_config
 from .daemon import process_inbox_event, queue_conversation_event
 from .paths import inbox_failed_dir, inbox_processed_dir
 from .state import list_task_records, load_task_record
@@ -77,7 +77,7 @@ def queue_conversation(
 def request_task(
     repo_root: Path,
     *,
-    config: TaskflowConfig | None = None,
+    config: SisyphusConfig | None = None,
     message: str,
     title: str | None = None,
     task_type: str = "feature",
@@ -141,7 +141,7 @@ def request_task(
     )
 
 
-def run_until_stable(repo_root: Path, *, config: TaskflowConfig | None = None) -> int:
+def run_until_stable(repo_root: Path, *, config: SisyphusConfig | None = None) -> int:
     effective_config = config or load_config(repo_root)
     orchestrated = 0
     while True:
@@ -151,13 +151,13 @@ def run_until_stable(repo_root: Path, *, config: TaskflowConfig | None = None) -
         orchestrated += progressed
 
 
-def get_task(repo_root: Path, task_id: str, *, config: TaskflowConfig | None = None) -> dict:
+def get_task(repo_root: Path, task_id: str, *, config: SisyphusConfig | None = None) -> dict:
     effective_config = config or load_config(repo_root)
     task, _ = load_task_record(repo_root=repo_root, task_dir_name=effective_config.task_dir, task_id=task_id)
     return task
 
 
-def list_tasks(repo_root: Path, *, config: TaskflowConfig | None = None) -> list[dict]:
+def list_tasks(repo_root: Path, *, config: SisyphusConfig | None = None) -> list[dict]:
     effective_config = config or load_config(repo_root)
     return list_task_records(repo_root=repo_root, task_dir_name=effective_config.task_dir)
 

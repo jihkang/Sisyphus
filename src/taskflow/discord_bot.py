@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 from .api import queue_conversation
-from .config import TaskflowConfig
+from .config import SisyphusConfig
 from .service import TaskNotification, TaskNotificationTracker, run_service_step
 
 
@@ -73,7 +73,7 @@ def queue_discord_conversation(
 
 def run_discord_bot(
     repo_root: Path,
-    config: TaskflowConfig,
+    config: SisyphusConfig,
     *,
     token: str | None,
     poll_interval_seconds: int,
@@ -115,7 +115,7 @@ def _build_discord_client_class(discord):
             self,
             *,
             repo_root: Path,
-            config: TaskflowConfig,
+            config: SisyphusConfig,
             poll_interval_seconds: int,
             allowed_channel_ids: list[int],
             **kwargs,

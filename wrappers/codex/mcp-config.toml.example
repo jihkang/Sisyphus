@@ -1,6 +1,6 @@
 [mcp_servers.sisyphus]
 command = "/absolute/path/to/Sisyphus/.venv/bin/python"
-args = ["-m", "taskflow.mcp_server"]
+args = ["-m", "sisyphus.mcp_server"]
 
 [mcp_servers.sisyphus.env]
 SISYPHUS_REPO_ROOT = "/absolute/path/to/your/repository"
