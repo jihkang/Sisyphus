@@ -1,25 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 import json
-import os
-import tempfile
-from typing import TextIO
 
 from .conformance import default_task_conformance, ensure_task_conformance_defaults
 from .config import SisyphusConfig
 from .gitops import branch_name, worktree_path
 from .paths import task_dir
-from .utils import utc_now
 
 
-if os.name == "nt":
-    import msvcrt
-else:
-    import fcntl
+def utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def task_id_for(task_type: str, slug: str, now: datetime | None = None) -> str:
@@ -134,12 +126,8 @@ def build_task_record(
     }
 
 
-def task_record_path(repo_root: Path, task_dir_name: str, task_id: str) -> Path:
-    return task_dir(repo_root, task_dir_name, task_id) / "task.json"
-
-
 def load_task_record(repo_root: Path, task_dir_name: str, task_id: str) -> tuple[dict, Path]:
-    task_file = task_record_path(repo_root, task_dir_name, task_id)
+    task_file = task_dir(repo_root, task_dir_name, task_id) / "task.json"
     if not task_file.exists():
         raise FileNotFoundError(f"task not found: {task_id}")
     task = json.loads(task_file.read_text(encoding="utf-8"))
@@ -162,19 +150,10 @@ def list_task_records(repo_root: Path, task_dir_name: str) -> list[dict]:
 
 
 def save_task_record(task_file: Path, task: dict) -> None:
-    with _task_file_lock(task_file):
-        _save_task_record_locked(task_file=task_file, task=task)
-
-
-@contextmanager
-def edit_task_record(task_file: Path) -> Iterator[dict]:
-    if not task_file.exists():
-        raise FileNotFoundError(f"task not found: {task_file}")
-    with _task_file_lock(task_file):
-        task = json.loads(task_file.read_text(encoding="utf-8"))
-        ensure_task_record_defaults(task)
-        yield task
-        _save_task_record_locked(task_file=task_file, task=task)
+    ensure_task_record_defaults(task)
+    task["updated_at"] = utc_now()
+    task_file.write_text(json.dumps(task, indent=2) + "\n", encoding="utf-8")
+    sync_task_support_files(task)
 
 
 def ensure_task_record_defaults(task: dict) -> dict:
@@ -246,72 +225,3 @@ def sync_task_support_files(task: dict) -> None:
         target_path = target_task_dir / relative_path
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
-
-
-def _save_task_record_locked(task_file: Path, task: dict) -> None:
-    ensure_task_record_defaults(task)
-    task["updated_at"] = utc_now()
-    _write_task_record_atomically(task_file, json.dumps(task, indent=2) + "\n")
-    sync_task_support_files(task)
-
-
-def _write_task_record_atomically(task_file: Path, payload: str) -> None:
-    task_file.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=task_file.parent,
-            prefix=f".{task_file.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as handle:
-            handle.write(payload)
-            handle.flush()
-            os.fsync(handle.fileno())
-            temporary_path = Path(handle.name)
-        os.replace(temporary_path, task_file)
-    finally:
-        if temporary_path is not None and temporary_path.exists():
-            temporary_path.unlink(missing_ok=True)
-
-
-@contextmanager
-def _task_file_lock(task_file: Path) -> Iterator[None]:
-    lock_path = task_file.parent / f"{task_file.name}.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as lock_handle:
-        _prime_lock_file(lock_handle)
-        _acquire_lock(lock_handle)
-        try:
-            yield
-        finally:
-            _release_lock(lock_handle)
-
-
-def _prime_lock_file(lock_handle: TextIO) -> None:
-    lock_handle.seek(0)
-    if lock_handle.read(1):
-        lock_handle.seek(0)
-        return
-    lock_handle.seek(0)
-    lock_handle.write("0")
-    lock_handle.flush()
-    lock_handle.seek(0)
-
-
-def _acquire_lock(lock_handle: TextIO) -> None:
-    lock_handle.seek(0)
-    if os.name == "nt":
-        msvcrt.locking(lock_handle.fileno(), msvcrt.LK_LOCK, 1)
-        return
-    fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
-
-
-def _release_lock(lock_handle: TextIO) -> None:
-    lock_handle.seek(0)
-    if os.name == "nt":
-        msvcrt.locking(lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
-        return
-    fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)

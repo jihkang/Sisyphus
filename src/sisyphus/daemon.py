@@ -15,8 +15,8 @@ from .events import new_event_envelope
 from .paths import event_log_file, inbox_failed_dir, inbox_pending_dir, inbox_processed_dir
 from .planning import enforce_plan_approved, enforce_spec_frozen
 from .provider_wrapper import run_provider_wrapper
-from .state import edit_task_record, list_task_records, load_task_record, task_record_path
-from .utils import project_fields, utc_now
+from .state import list_task_records, load_task_record, save_task_record, sync_task_support_files, utc_now
+from .utils import project_fields
 from .workflow import run_workflow_cycle
 
 
@@ -410,18 +410,19 @@ def _hydrate_task_from_conversation(
         fix_plan_path = task_dir / task["docs"]["fix_plan"]
         fix_plan_path.write_text(_render_issue_fix_plan(task, title_line, message), encoding="utf-8")
 
-    task_file = task_record_path(repo_root, str(Path(task["task_dir"]).parent), task["id"])
-    with edit_task_record(task_file) as task_record:
-        task_record.setdefault("meta", {})
-        task_record["meta"]["source_event_id"] = event_id
-        task_record["meta"]["source_event_type"] = "conversation"
-        task_record["meta"]["default_provider"] = provider
-        task_record["meta"]["auto_loop_enabled"] = auto_loop_enabled
-        task_record["meta"]["requested_slug"] = requested_slug
-        if parent_task_id:
-            task_record["meta"]["followup_of_task_id"] = parent_task_id
-        if source_context:
-            task_record["meta"]["source_context"] = source_context
+    task_record, task_file = load_task_record(repo_root, task_dir_name=str(Path(task["task_dir"]).parent), task_id=task["id"])
+    task_record.setdefault("meta", {})
+    task_record["meta"]["source_event_id"] = event_id
+    task_record["meta"]["source_event_type"] = "conversation"
+    task_record["meta"]["default_provider"] = provider
+    task_record["meta"]["auto_loop_enabled"] = auto_loop_enabled
+    task_record["meta"]["requested_slug"] = requested_slug
+    if parent_task_id:
+        task_record["meta"]["followup_of_task_id"] = parent_task_id
+    if source_context:
+        task_record["meta"]["source_context"] = source_context
+    save_task_record(task_file=task_file, task=task_record)
+    sync_task_support_files(task_record)
 
 
 def _apply_direct_change_adoption(
@@ -431,7 +432,7 @@ def _apply_direct_change_adoption(
     task_id: str,
     requested_paths: list[str],
 ) -> None:
-    task, _ = load_task_record(repo_root, task_dir_name=config.task_dir, task_id=task_id)
+    task, task_file = load_task_record(repo_root, task_dir_name=config.task_dir, task_id=task_id)
     source_branch = current_branch_name(repo_root)
     changed_paths, deleted_paths = list_dirty_paths(repo_root)
     changed_paths = [path for path in changed_paths if not _is_internal_sisyphus_path(path)]
@@ -454,22 +455,22 @@ def _apply_direct_change_adoption(
         if relative_path not in adopted_paths:
             adopted_paths.append(relative_path)
 
-    task_file = task_record_path(repo_root, config.task_dir, task_id)
-    with edit_task_record(task_file) as task:
-        task.setdefault("meta", {})
-        task["meta"]["adopted_changes"] = {
-            "source_branch": source_branch,
-            "source_repo_root": str(repo_root),
-            "paths": adopted_paths,
-            "requested_paths": requested_paths,
-            "deleted_paths": selected_deleted,
-            "applied_at": utc_now(),
-        }
+    task.setdefault("meta", {})
+    task["meta"]["adopted_changes"] = {
+        "source_branch": source_branch,
+        "source_repo_root": str(repo_root),
+        "paths": adopted_paths,
+        "requested_paths": requested_paths,
+        "deleted_paths": selected_deleted,
+        "applied_at": utc_now(),
+    }
+    save_task_record(task_file=task_file, task=task)
     _append_task_log_note(
         repo_root=repo_root,
         task=task,
         note=_render_adoption_log_note(source_branch=source_branch, adopted_paths=adopted_paths, deleted_paths=selected_deleted),
     )
+    sync_task_support_files(task)
 
 
 def _resolve_followup_slug(
@@ -567,10 +568,6 @@ def _render_adoption_log_note(*, source_branch: str | None, adopted_paths: list[
 def _is_internal_sisyphus_path(relative_path: str) -> bool:
     normalized = relative_path.replace("\\", "/")
     return normalized == ".planning" or normalized.startswith(".planning/")
-
-
-def _is_internal_taskflow_path(relative_path: str) -> bool:
-    return _is_internal_sisyphus_path(relative_path)
 
 
 def _render_brief(

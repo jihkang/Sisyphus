@@ -12,35 +12,35 @@ At a high level, the system is organized as a layered orchestration stack:
 +------------------------------------------------------------------+
 | Layer 1. Interfaces                                               |
 | CLI commands, Python API, Discord bot, MCP clients                |
-| src/taskflow/cli.py, api.py, discord_bot.py                       |
+| src/sisyphus/cli.py, api.py, discord_bot.py                       |
 +------------------------------------------------------------------+
 | Layer 2. Intake and Service Loop                                  |
 | Conversation queue, inbox processing, daemon/service loop         |
-| src/taskflow/daemon.py, service.py                                |
+| src/sisyphus/daemon.py, service.py                                |
 +------------------------------------------------------------------+
 | Layer 3. Workflow and Policy                                      |
 | Workflow transitions, plan/spec gates, subtask generation         |
-| src/taskflow/workflow.py, planning.py                             |
+| src/sisyphus/workflow.py, planning.py                             |
 +------------------------------------------------------------------+
 | Layer 4. Execution Adapters                                       |
 | Provider wrappers, prompt assembly, tracked agent runtime         |
-| src/taskflow/provider_wrapper.py, codex_prompt.py, agent_runtime.py |
+| src/sisyphus/provider_wrapper.py, codex_prompt.py, agent_runtime.py |
 +------------------------------------------------------------------+
 | Layer 5. Persistence and Workspace                                |
 | Task JSON, agent JSON, task docs, templates, git worktrees        |
-| src/taskflow/state.py, agents.py, templates.py, gitops.py         |
+| src/sisyphus/state.py, agents.py, templates.py, gitops.py         |
 +------------------------------------------------------------------+
 | Layer 6. Verification and Closeout                                |
 | Strategy extraction, audits, verify commands, close gates         |
-| src/taskflow/strategy.py, audit.py, closeout.py                   |
+| src/sisyphus/strategy.py, audit.py, closeout.py                   |
 +------------------------------------------------------------------+
 | Layer 7. Core Integration Services                                |
 | Event bus, MCP core service, shared adapter logic                 |
-| src/taskflow/bus.py, bus_jsonl.py, events.py, mcp_core.py         |
+| src/sisyphus/bus.py, bus_jsonl.py, events.py, mcp_core.py         |
 +------------------------------------------------------------------+
 | Layer 8. MCP Gateway                                              |
 | Official MCP SDK stdio gateway, tool/resource binding             |
-| src/taskflow/mcp_server.py                                        |
+| src/sisyphus/mcp_server.py                                        |
 +------------------------------------------------------------------+
 ```
 
@@ -83,7 +83,7 @@ flowchart LR
     A[Codex / Claude / Other Client]
     B[MCP Gateway\nmcp_server.py]
     C[MCP Core Service\nmcp_core.py]
-    D[Taskflow Core\nworkflow / planning / audit / closeout]
+    D[Sisyphus Core\nworkflow / planning / audit / closeout]
     E[State + Docs + Agents]
     F[Event Bus]
 
@@ -100,11 +100,11 @@ The intended responsibilities are:
 - `mcp_server.py`: official MCP Python SDK server, stdio transport, tool/resource binding.
 - `mcp_core.py`: repo-aware tool/resource resolution and response shaping.
 - `bus.py` and related modules: publication surface for visualization, monitoring, and other apps.
-- taskflow core modules: workflow, conformance, verification, and persistence policy.
+- sisyphus core modules: workflow, conformance, verification, and persistence policy.
 
 ## Evolution Control Plane
 
-The repository now also contains a separate read-only evolution control plane in [`src/taskflow/evolution/`](../src/taskflow/evolution/). This subsystem is intentionally adjacent to the live orchestration workflow rather than embedded inside it.
+The repository now also contains a separate read-only evolution control plane in [`src/sisyphus/evolution/`](../src/sisyphus/evolution/). This subsystem is intentionally adjacent to the live orchestration workflow rather than embedded inside it.
 
 The current implemented slices are:
 

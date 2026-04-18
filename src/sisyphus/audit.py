@@ -9,9 +9,8 @@ from .conformance import collect_conformance_gates
 from .config import SisyphusConfig
 from .events import new_event_envelope
 from .planning import collect_plan_gates
-from .state import edit_task_record, task_record_path
+from .state import load_task_record, save_task_record, utc_now
 from .strategy import sync_test_strategy_from_docs
-from .utils import utc_now
 
 
 VERIFY_GATE_CODES = {
@@ -53,60 +52,60 @@ class VerifyOutcome:
 
 
 def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyOutcome:
-    task_file = task_record_path(repo_root, config.task_dir, task_id)
+    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
     task_dir = task_file.parent
-    with edit_task_record(task_file) as task:
-        task = sync_test_strategy_from_docs(task=task, task_dir=task_dir)
+    task = sync_test_strategy_from_docs(task=task, task_dir=task_dir)
 
-        task["audit_attempts"] = int(task.get("audit_attempts", 0)) + 1
-        task["updated_at"] = utc_now()
+    task["audit_attempts"] = int(task.get("audit_attempts", 0)) + 1
+    task["updated_at"] = utc_now()
+    task["stage"] = "audit"
+
+    gates = [
+        gate
+        for gate in task.get("gates", [])
+        if gate.get("code") not in VERIFY_GATE_CODES and gate.get("source") not in TRANSIENT_GATE_SOURCES
+    ]
+    gates.extend(_collect_doc_gates(task, task_dir))
+    spec_gates = _collect_spec_gates(task, task_dir)
+    gates.extend(spec_gates)
+    plan_gates = collect_plan_gates(task, action="verify")
+    gates.extend(plan_gates)
+    conformance_gates = collect_conformance_gates(task, action="verify")
+    gates.extend(conformance_gates)
+
+    command_results: list[dict] = []
+    if not spec_gates and not plan_gates and not conformance_gates:
+        task["stage"] = "audit"
+        gates.extend(_collect_test_strategy_gates(task))
+        command_results = _run_verify_commands(task, task_dir)
+    task["last_verify_results"] = command_results
+    task["last_verified_at"] = utc_now()
+
+    if any(result["status"] == "failed" for result in command_results):
+        gates.append(_gate("VERIFY_FAILED", "one or more verify commands failed", source="verify"))
+
+    if task["audit_attempts"] >= int(task.get("max_audit_attempts", 10)):
+        gates.append(_gate("AUDIT_LIMIT_REACHED", "maximum audit attempts reached", source="verify"))
+
+    task["gates"] = _dedupe_gates(gates)
+    passed = len(task["gates"]) == 0
+    task["verify_status"] = "passed" if passed else "failed"
+    task["status"] = "verified" if passed else "blocked"
+    if passed:
+        task["stage"] = "done"
+        task["workflow_phase"] = "verified"
+    elif spec_gates:
+        task["stage"] = "spec"
+    elif plan_gates:
+        task["stage"] = "plan_review"
+    elif conformance_gates:
+        task["stage"] = "audit"
+    else:
         task["stage"] = "audit"
 
-        gates = [
-            gate
-            for gate in task.get("gates", [])
-            if gate.get("code") not in VERIFY_GATE_CODES and gate.get("source") not in TRANSIENT_GATE_SOURCES
-        ]
-        gates.extend(_collect_doc_gates(task, task_dir))
-        spec_gates = _collect_spec_gates(task, task_dir)
-        gates.extend(spec_gates)
-        plan_gates = collect_plan_gates(task, action="verify")
-        gates.extend(plan_gates)
-        conformance_gates = collect_conformance_gates(task, action="verify")
-        gates.extend(conformance_gates)
-
-        command_results: list[dict] = []
-        if not spec_gates and not plan_gates and not conformance_gates:
-            task["stage"] = "audit"
-            gates.extend(_collect_test_strategy_gates(task))
-            command_results = _run_verify_commands(task, task_dir)
-        task["last_verify_results"] = command_results
-        task["last_verified_at"] = utc_now()
-
-        if any(result["status"] == "failed" for result in command_results):
-            gates.append(_gate("VERIFY_FAILED", "one or more verify commands failed", source="verify"))
-
-        if task["audit_attempts"] >= int(task.get("max_audit_attempts", 10)):
-            gates.append(_gate("AUDIT_LIMIT_REACHED", "maximum audit attempts reached", source="verify"))
-
-        task["gates"] = _dedupe_gates(gates)
-        passed = len(task["gates"]) == 0
-        task["verify_status"] = "passed" if passed else "failed"
-        task["status"] = "verified" if passed else "blocked"
-        if passed:
-            task["stage"] = "done"
-            task["workflow_phase"] = "verified"
-        elif spec_gates:
-            task["stage"] = "spec"
-        elif plan_gates:
-            task["stage"] = "plan_review"
-        elif conformance_gates:
-            task["stage"] = "audit"
-        else:
-            task["stage"] = "audit"
-
-        verify_file = task_dir / task["docs"]["verify"]
-        verify_file.write_text(_render_verify_markdown(task, command_results), encoding="utf-8")
+    verify_file = task_dir / task["docs"]["verify"]
+    verify_file.write_text(_render_verify_markdown(task, command_results), encoding="utf-8")
+    save_task_record(task_file=task_file, task=task)
     build_event_publisher(repo_root, config).publish(
         new_event_envelope(
             "verify.completed",

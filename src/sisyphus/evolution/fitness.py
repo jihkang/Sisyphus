@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from ..conformance import CONFORMANCE_GREEN, CONFORMANCE_RED, CONFORMANCE_YELLOW, normalize_conformance_status
-from ..utils import utc_now
 from .constraints import EVOLUTION_CONSTRAINT_STATUS_REJECTED, EvolutionConstraintResult
 from .harness import EvolutionHarnessPlan, EvolutionPlannedMetrics
 
@@ -15,6 +15,10 @@ EVOLUTION_FITNESS_STATUS_SCORED = "scored"
 
 EVOLUTION_METRIC_STATUS_PENDING = "pending"
 EVOLUTION_METRIC_STATUS_SCORED = "scored"
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 @dataclass(frozen=True, slots=True)

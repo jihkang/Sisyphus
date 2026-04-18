@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from .harness import EvolutionHarnessPlan
-from ..utils import utc_now
 
 
 EVOLUTION_CONSTRAINT_STATUS_ACCEPTED = "accepted"
@@ -13,6 +13,10 @@ EVOLUTION_CONSTRAINT_STATUS_REJECTED = "rejected"
 EVOLUTION_GUARD_STATUS_PASSED = "passed"
 EVOLUTION_GUARD_STATUS_PENDING = "pending"
 EVOLUTION_GUARD_STATUS_FAILED = "failed"
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 @dataclass(frozen=True, slots=True)

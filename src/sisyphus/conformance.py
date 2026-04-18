@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 import uuid
-
-from .utils import utc_now
 
 
 CONFORMANCE_GREEN = "green"
@@ -23,6 +22,10 @@ CONFORMANCE_CHECKPOINT_PRE_VERIFY = "pre_verify"
 
 CONFORMANCE_WARNING_UNRESOLVED = "CONFORMANCE_WARNING_UNRESOLVED"
 CONFORMANCE_BLOCKED = "CONFORMANCE_BLOCKED"
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def normalize_conformance_status(value: str | None) -> str:
