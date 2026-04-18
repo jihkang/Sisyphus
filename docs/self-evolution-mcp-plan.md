@@ -34,12 +34,12 @@ These are the key files already added or updated:
 
 - [docs/architecture.md](./architecture.md)
 - [docs/mcp-clients.md](./mcp-clients.md)
-- [src/taskflow/conformance.py](../src/taskflow/conformance.py)
-- [src/taskflow/bus.py](../src/taskflow/bus.py)
-- [src/taskflow/bus_jsonl.py](../src/taskflow/bus_jsonl.py)
-- [src/taskflow/events.py](../src/taskflow/events.py)
-- [src/taskflow/mcp_core.py](../src/taskflow/mcp_core.py)
-- [src/taskflow/mcp_server.py](../src/taskflow/mcp_server.py)
+- [src/sisyphus/conformance.py](../src/sisyphus/conformance.py)
+- [src/sisyphus/bus.py](../src/sisyphus/bus.py)
+- [src/sisyphus/bus_jsonl.py](../src/sisyphus/bus_jsonl.py)
+- [src/sisyphus/events.py](../src/sisyphus/events.py)
+- [src/sisyphus/mcp_core.py](../src/sisyphus/mcp_core.py)
+- [src/sisyphus/mcp_server.py](../src/sisyphus/mcp_server.py)
 
 ## Implemented Foundation
 
@@ -131,7 +131,7 @@ Only evolve text/policy assets first:
 Create a new evolution package:
 
 ```text
-src/taskflow/evolution/
+src/sisyphus/evolution/
   targets.py
   dataset.py
   mutators.py
@@ -266,7 +266,7 @@ Use Sisyphus tools instead of editing task status directly:
 
 #### Workstream A. Evolution architecture
 
-- add `src/taskflow/evolution/`
+- add `src/sisyphus/evolution/`
 - define run model and target registry
 - document evaluation flow
 

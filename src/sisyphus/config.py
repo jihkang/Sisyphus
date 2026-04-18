@@ -27,9 +27,6 @@ class SisyphusConfig:
     event_bus: EventBusConfig
 
 
-TaskflowConfig = SisyphusConfig
-
-
 def load_config(repo_root: Path) -> SisyphusConfig:
     config_path = resolve_config_path(repo_root)
     if config_path is None:
@@ -86,7 +83,6 @@ __all__ = [
     "PREFERRED_CONFIG_FILENAME",
     "EventBusConfig",
     "SisyphusConfig",
-    "TaskflowConfig",
     "load_config",
     "resolve_config_path",
 ]

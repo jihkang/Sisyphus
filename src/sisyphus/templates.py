@@ -7,7 +7,7 @@ from .state import sync_task_support_files
 
 
 def template_root():
-    return files("taskflow").joinpath("templates_data")
+    return files("sisyphus").joinpath("templates_data")
 
 
 def materialize_task_templates(task: dict) -> None:

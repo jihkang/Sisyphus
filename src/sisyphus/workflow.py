@@ -23,7 +23,7 @@ from .planning import (
     generate_subtasks,
 )
 from .provider_wrapper import run_provider_wrapper
-from .state import edit_task_record, list_task_records, load_task_record, task_record_path
+from .state import list_task_records, load_task_record, save_task_record
 
 
 PLANNER_ROLE = "planner"
@@ -95,14 +95,14 @@ def _advance_task(repo_root: Path, config: SisyphusConfig, task_id: str) -> bool
 
 def _run_subtask(repo_root: Path, config: SisyphusConfig, task: dict, subtask_id: str) -> bool:
     publisher = build_event_publisher(repo_root, config)
-    task_file = task_record_path(repo_root, config.task_dir, str(task["id"]))
-    with edit_task_record(task_file) as task:
-        subtask = next(item for item in task.get("subtasks", []) if str(item.get("id")) == subtask_id)
-        pre_status, pre_summary = run_pre_execution_conformance_check(
-            task,
-            subtask_id=subtask_id,
-            source="workflow.pre_exec",
-        )
+    subtask = next(item for item in task.get("subtasks", []) if str(item.get("id")) == subtask_id)
+    pre_status, pre_summary = run_pre_execution_conformance_check(
+        task,
+        subtask_id=subtask_id,
+        source="workflow.pre_exec",
+    )
+    task_file = repo_root / str(task["task_dir"]) / "task.json"
+    save_task_record(task_file=task_file, task=task)
     append_conformance_log_markdown(task, task_file.parent)
     publisher.publish(
         new_event_envelope(
@@ -147,13 +147,14 @@ def _run_subtask(repo_root: Path, config: SisyphusConfig, task: dict, subtask_id
             f"{build_execution_contract(task, subtask)}"
         ),
     )
-    with edit_task_record(task_file) as task:
-        post_status, post_summary = run_post_execution_conformance_check(
-            task,
-            subtask_id=subtask_id,
-            exit_code=exit_code,
-            source="workflow.post_exec",
-        )
+    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=str(task["id"]))
+    post_status, post_summary = run_post_execution_conformance_check(
+        task,
+        subtask_id=subtask_id,
+        exit_code=exit_code,
+        source="workflow.post_exec",
+    )
+    save_task_record(task_file=task_file, task=task)
     append_conformance_log_markdown(task, task_file.parent)
     _update_subtask_status(
         repo_root=repo_root,
@@ -203,11 +204,11 @@ def _run_phase_agent(*, repo_root: Path, task: dict, agent_id: str, role: str, i
     )
 
 def _update_workflow_phase(repo_root: Path, config: SisyphusConfig, task_id: str, *, phase: str) -> None:
-    task_file = task_record_path(repo_root, config.task_dir, task_id)
-    with edit_task_record(task_file) as task:
-        task["workflow_phase"] = phase
-        if phase == "needs_user_input":
-            task["status"] = "blocked"
+    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+    task["workflow_phase"] = phase
+    if phase == "needs_user_input":
+        task["status"] = "blocked"
+    save_task_record(task_file=task_file, task=task)
     build_event_publisher(repo_root, config).publish(
         new_event_envelope(
             "task.updated",
@@ -230,12 +231,12 @@ def _update_subtask_status(
     *,
     status: str,
 ) -> None:
-    task_file = task_record_path(repo_root, config.task_dir, task_id)
-    with edit_task_record(task_file) as task:
-        subtasks = list(task.get("subtasks", []))
-        for subtask in subtasks:
-            if str(subtask.get("id")) != subtask_id:
-                continue
-            subtask["status"] = status
-            break
-        task["subtasks"] = subtasks
+    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+    subtasks = list(task.get("subtasks", []))
+    for subtask in subtasks:
+        if str(subtask.get("id")) != subtask_id:
+            continue
+        subtask["status"] = status
+        break
+    task["subtasks"] = subtasks
+    save_task_record(task_file=task_file, task=task)

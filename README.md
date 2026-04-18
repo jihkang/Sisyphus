@@ -286,8 +286,6 @@ uv run python -m unittest discover -s tests -v
 ## Notes
 
 - `sisyphus` is the preferred command surface.
-- `taskflow` remains available as a compatibility alias.
 - The direct MCP launcher is `python -m sisyphus.mcp_server`.
-- `python -m taskflow.mcp_server` remains available as a compatibility path.
 - The package name is currently `taskflow-kit`.
 - Project philosophy: see `docs/philosophy.md`.

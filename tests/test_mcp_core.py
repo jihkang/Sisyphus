@@ -159,7 +159,7 @@ class McpCoreTests(unittest.TestCase):
             error=None,
         )
 
-        with mock.patch("taskflow.mcp_core.request_task", return_value=fake_result):
+        with mock.patch("sisyphus.mcp_core.request_task", return_value=fake_result):
             payload = self.core.call_tool("sisyphus.request_task", {"message": "create a task"})
 
         self.assertTrue(payload["ok"])

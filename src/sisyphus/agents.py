@@ -7,8 +7,8 @@ import json
 
 from .config import SisyphusConfig
 from .paths import agent_dir
-from .state import load_task_record
-from .utils import find_unknown_fields, utc_now
+from .state import load_task_record, utc_now
+from .utils import find_unknown_fields
 
 
 DEFAULT_STALE_AFTER_SECONDS = 900

@@ -8,8 +8,7 @@ from .bus import build_event_publisher
 from .config import SisyphusConfig
 from .events import new_event_envelope
 from .planning import collect_plan_gates
-from .state import edit_task_record, task_record_path
-from .utils import utc_now
+from .state import load_task_record, save_task_record, utc_now
 
 
 @dataclass(slots=True)
@@ -22,52 +21,59 @@ class CloseOutcome:
 
 
 def run_close(repo_root: Path, config: SisyphusConfig, task_id: str, allow_dirty: bool) -> CloseOutcome:
-    task_file = task_record_path(repo_root, config.task_dir, task_id)
-    with edit_task_record(task_file) as task:
-        gates = [gate for gate in task.get("gates", []) if gate.get("source") not in {"close", "plan"}]
-        gates.extend(collect_plan_gates(task, action="close"))
+    task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+    gates = [gate for gate in task.get("gates", []) if gate.get("source") not in {"close", "plan"}]
+    gates.extend(collect_plan_gates(task, action="close"))
 
-        if task.get("verify_status") != "passed":
-            gates.append(_gate("VERIFY_REQUIRED", "task must pass verify before close", source="close"))
+    if task.get("verify_status") != "passed":
+        gates.append(_gate("VERIFY_REQUIRED", "task must pass verify before close", source="close"))
 
-        dirty = is_dirty_worktree(_resolve_dirty_check_path(repo_root=repo_root, task=task))
-        if dirty and not allow_dirty:
-            gates.append(_gate("DIRTY_WORKTREE", "working tree is dirty", source="close"))
+    dirty = is_dirty_worktree(_resolve_dirty_check_path(repo_root=repo_root, task=task))
+    if dirty and not allow_dirty:
+        gates.append(_gate("DIRTY_WORKTREE", "working tree is dirty", source="close"))
 
-        if dirty and allow_dirty:
-            task.setdefault("meta", {})["close_override_used"] = True
+    if dirty and allow_dirty:
+        task.setdefault("meta", {})["close_override_used"] = True
 
-        gates = _dedupe_gates(gates)
-        task["gates"] = gates
+    gates = _dedupe_gates(gates)
+    task["gates"] = gates
 
-        if gates:
-            task["status"] = "blocked"
-            task["stage"] = "plan_review" if any(gate.get("source") == "plan" for gate in gates) else "audit"
-            closed = False
-        else:
-            task["status"] = "closed"
-            task["stage"] = "done"
-            task["closed_at"] = utc_now()
-            closed = True
+    if gates:
+        task["status"] = "blocked"
+        task["stage"] = "plan_review" if any(gate.get("source") == "plan" for gate in gates) else "audit"
+        save_task_record(task_file=task_file, task=task)
+        build_event_publisher(repo_root, config).publish(
+            new_event_envelope(
+                "close.completed",
+                source={"module": "closeout"},
+                data={"task_id": task["id"], "closed": False, "status": task["status"], "gate_count": len(gates)},
+            )
+        )
+        return CloseOutcome(
+            task_id=task["id"],
+            status=task["status"],
+            closed=False,
+            allow_dirty=allow_dirty,
+            gates=gates,
+        )
 
+    task["status"] = "closed"
+    task["stage"] = "done"
+    task["closed_at"] = utc_now()
+    save_task_record(task_file=task_file, task=task)
     build_event_publisher(repo_root, config).publish(
         new_event_envelope(
             "close.completed",
             source={"module": "closeout"},
-            data={
-                "task_id": task["id"],
-                "closed": closed,
-                "status": task["status"],
-                "gate_count": 0 if closed else len(gates),
-            },
+            data={"task_id": task["id"], "closed": True, "status": task["status"], "gate_count": 0},
         )
     )
     return CloseOutcome(
         task_id=task["id"],
         status=task["status"],
-        closed=closed,
+        closed=True,
         allow_dirty=allow_dirty,
-        gates=[] if closed else gates,
+        gates=[],
     )
 
 
@@ -80,10 +86,7 @@ def is_dirty_worktree(path: Path) -> bool:
             capture_output=True,
             text=True,
         )
-        return any(
-            line.strip() and not line.strip().endswith("task.json.lock")
-            for line in result.stdout.splitlines()
-        )
+        return bool(result.stdout.strip())
     except (subprocess.CalledProcessError, FileNotFoundError, NotADirectoryError, OSError):
         return False
 

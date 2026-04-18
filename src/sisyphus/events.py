@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from collections.abc import Mapping
 import json
 import uuid
 
-from .utils import utc_now
-
 
 SCHEMA_VERSION = "taskflow.event.v1"
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def new_event_id() -> str:

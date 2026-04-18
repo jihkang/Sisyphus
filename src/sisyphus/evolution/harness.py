@@ -2,14 +2,18 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from .dataset import EvolutionDataset
 from .runner import EvolutionRun
-from ..utils import utc_now
 
 
 EVOLUTION_EVALUATION_STATUS_PLANNED = "planned"
 EVOLUTION_ISOLATION_MODE_TASK_WORKTREE_COPY = "task_worktree_copy"
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 @dataclass(frozen=True, slots=True)

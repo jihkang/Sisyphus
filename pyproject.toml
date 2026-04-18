@@ -16,7 +16,6 @@ dependencies = [
 discord = ["discord.py>=2.4,<3"]
 
 [project.scripts]
-taskflow = "taskflow.cli:main"
 sisyphus = "sisyphus.cli:main"
 sisyphus-mcp = "sisyphus.mcp_server:main"
 
@@ -27,4 +26,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-taskflow = ["py.typed", "templates_data/*/*.md"]
+sisyphus = ["py.typed", "templates_data/*/*.md"]
