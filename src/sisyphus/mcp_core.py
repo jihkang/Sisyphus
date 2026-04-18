@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 from urllib.parse import urlparse
 
 from .agents import list_agents
-from .api import get_task, list_tasks, request_task
+from .api import get_task, list_tasks, record_merged_pull_request, request_task
 from .audit import run_verify
 from .bus_jsonl import read_jsonl_events, resolve_event_bus_path
 from .closeout import run_close
@@ -73,6 +74,38 @@ class SisyphusMcpCoreService:
         if tool_name == "sisyphus.get_task":
             task_id = str(args["task_id"])
             return {"task": get_task(repo_root=self.repo_root, task_id=task_id, config=config)}
+
+        if tool_name == "sisyphus.record_merged_pr":
+            result = record_merged_pull_request(
+                repo_root=self.repo_root,
+                config=config,
+                task_id=_optional_str(args.get("task_id")),
+                branch=_optional_str(args.get("branch")),
+                repo_full_name=_optional_str(args.get("repo_full_name")),
+                pr_number=int(args["pr_number"]),
+                title=str(args["title"]),
+                url=_optional_str(args.get("url")),
+                base_branch=_optional_str(args.get("base_branch")),
+                head_branch=_optional_str(args.get("head_branch")),
+                head_sha=_optional_str(args.get("head_sha")),
+                merge_commit_sha=_optional_str(args.get("merge_commit_sha")),
+                merged_at=_optional_str(args.get("merged_at")),
+                merged_by=_optional_str(args.get("merged_by")),
+                merge_method=_optional_str(args.get("merge_method")),
+                additions=int(args["additions"]) if args.get("additions") is not None else None,
+                deletions=int(args["deletions"]) if args.get("deletions") is not None else None,
+                changed_files=_dict_list(args.get("changed_files")),
+            )
+            return {
+                "ok": result.ok,
+                "event_id": result.event_id,
+                "event_status": result.event_status,
+                "task_id": result.task_id,
+                "pr_number": result.pr_number,
+                "receipt_path": str(result.receipt_path) if result.receipt_path else None,
+                "changeset_path": str(result.changeset_path) if result.changeset_path else None,
+                "error": result.error,
+            }
 
         if tool_name == "sisyphus.plan_approve":
             outcome = approve_task_plan(
@@ -215,6 +248,16 @@ class SisyphusMcpCoreService:
             return {"conformance": summarize_task_conformance(task)}
         if resource_name == "timeline":
             return _task_timeline_resource(task)
+        if resource_name == "promotion":
+            doc_path = task_dir / str(task["docs"].get("promotion"))
+            if not doc_path.exists():
+                raise FileNotFoundError(f"task document not found: {doc_path}")
+            return json.loads(doc_path.read_text(encoding="utf-8"))
+        if resource_name == "changeset":
+            doc_path = task_dir / str(task["docs"].get("changeset"))
+            if not doc_path.exists():
+                raise FileNotFoundError(f"task document not found: {doc_path}")
+            return doc_path.read_text(encoding="utf-8")
         if resource_name == "agents":
             return {
                 "agents": list_agents(
@@ -292,6 +335,46 @@ def mcp_tool_definitions() -> list[dict[str, object]]:
                 "additionalProperties": False,
             },
             "outputSchema": {"type": "object", "properties": {"task": {"type": "object"}}},
+        },
+        {
+            "name": "sisyphus.record_merged_pr",
+            "description": "Record a merged pull request as a promotion receipt and project a changeset summary.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "branch": {"type": "string"},
+                    "repo_full_name": {"type": "string"},
+                    "pr_number": {"type": "integer", "minimum": 1},
+                    "title": {"type": "string"},
+                    "url": {"type": "string"},
+                    "base_branch": {"type": "string"},
+                    "head_branch": {"type": "string"},
+                    "head_sha": {"type": "string"},
+                    "merge_commit_sha": {"type": "string"},
+                    "merged_at": {"type": "string"},
+                    "merged_by": {"type": "string"},
+                    "merge_method": {"type": "string"},
+                    "additions": {"type": "integer"},
+                    "deletions": {"type": "integer"},
+                    "changed_files": {"type": "array", "items": {"type": "object"}},
+                },
+                "required": ["pr_number", "title"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "ok": {"type": "boolean"},
+                    "event_id": {"type": ["string", "null"]},
+                    "event_status": {"type": "string"},
+                    "task_id": {"type": ["string", "null"]},
+                    "pr_number": {"type": ["integer", "null"]},
+                    "receipt_path": {"type": ["string", "null"]},
+                    "changeset_path": {"type": ["string", "null"]},
+                    "error": {"type": ["string", "null"]},
+                },
+            },
         },
         {
             "name": "sisyphus.plan_approve",
@@ -432,6 +515,8 @@ def mcp_resource_definitions() -> list[dict[str, object]]:
         {"uri": "task://<task-id>/plan", "description": "Task plan markdown."},
         {"uri": "task://<task-id>/verify", "description": "Task verification markdown."},
         {"uri": "task://<task-id>/log", "description": "Task log markdown."},
+        {"uri": "task://<task-id>/promotion", "description": "Recorded promotion receipt JSON for a merged pull request."},
+        {"uri": "task://<task-id>/changeset", "description": "Human-readable merged pull request changeset markdown."},
         {"uri": "task://<task-id>/agents", "description": "Tracked agent records for a task."},
     ]
 
@@ -464,6 +549,19 @@ def _str_list(value: object) -> list[str] | None:
     if not isinstance(value, list):
         raise TypeError(f"expected list value, got: {type(value).__name__}")
     return [str(item) for item in value]
+
+
+def _dict_list(value: object) -> list[dict[str, object]] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise TypeError(f"expected list value, got: {type(value).__name__}")
+    normalized: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise TypeError("expected changed_files entries to be objects")
+        normalized.append({str(key): item[key] for key in item})
+    return normalized
 
 
 def _task_status_projection(task: dict) -> dict[str, object]:

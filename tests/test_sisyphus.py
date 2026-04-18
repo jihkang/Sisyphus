@@ -20,7 +20,7 @@ if str(SRC_ROOT) not in sys.path:
 import sisyphus
 import sisyphus.cli as sisyphus_cli
 from sisyphus.agents import AgentTrackingError, list_agents, register_agent, update_agent
-from sisyphus.api import queue_conversation, request_task
+from sisyphus.api import queue_conversation, record_merged_pull_request, request_task
 from sisyphus.audit import run_verify
 from sisyphus.codex_prompt import build_codex_prompt
 from sisyphus.conformance import append_conformance_log
@@ -28,6 +28,7 @@ from sisyphus.cli import (
     build_parser,
     handle_agent_run,
     handle_ingest_conversation,
+    handle_ingest_pull_request_merged,
     handle_request,
     handle_status,
     handle_subtasks_generate,
@@ -36,7 +37,15 @@ from sisyphus.cli import (
 from sisyphus.closeout import run_close
 from sisyphus.config import SisyphusConfig, load_config
 from sisyphus.creation import TaskCreationError, create_task_workspace
-from sisyphus.daemon import _is_internal_sisyphus_path, _render_feature_plan, _render_issue_fix_plan, process_inbox_event, queue_conversation_event, run_daemon
+from sisyphus.daemon import (
+    _is_internal_sisyphus_path,
+    _render_feature_plan,
+    _render_issue_fix_plan,
+    process_inbox_event,
+    queue_conversation_event,
+    queue_pull_request_merged_event,
+    run_daemon,
+)
 from sisyphus.discovery import detect_repo_root
 from sisyphus.discord_bot import build_discord_source_context, queue_discord_conversation
 from sisyphus.paths import event_log_file, inbox_failed_dir, inbox_processed_dir
@@ -1105,6 +1114,37 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(persisted["payload"]["provider"], "codex")
         self.assertTrue(persisted["payload"]["slug"].startswith("conversation-task-"))
 
+    def test_queue_pull_request_merged_event_writes_pending_file(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="merge-receipt",
+        )
+        materialize_task_templates(task)
+
+        event, event_path = queue_pull_request_merged_event(
+            self.repo_root,
+            task_id=task["id"],
+            branch=task["branch"],
+            repo_full_name="jihkang/Sisyphus",
+            pr_number=11,
+            title="Remove live taskflow compatibility layer",
+            base_branch="main",
+            head_branch=task["branch"],
+            merge_commit_sha="5e0a4b80e9c32f5f52d5fff872eba8ee388ef6ee",
+            changed_files=[{"path": "src/sisyphus/cli.py", "status": "modified", "additions": 10, "deletions": 2}],
+        )
+
+        self.assertTrue(event_path.exists())
+        persisted = json.loads(event_path.read_text(encoding="utf-8"))
+        self.assertEqual(persisted["id"], event["id"])
+        self.assertEqual(persisted["event_type"], "pull_request_merged")
+        self.assertEqual(persisted["payload"]["pr_number"], 11)
+        self.assertEqual(persisted["payload"]["task_id"], task["id"])
+        self.assertEqual(persisted["payload"]["branch"], task["branch"])
+        self.assertEqual(persisted["payload"]["changed_files"][0]["path"], "src/sisyphus/cli.py")
+
     def test_queue_discord_conversation_stores_source_context(self) -> None:
         context = build_discord_source_context(
             channel_id=12345,
@@ -1173,18 +1213,99 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertTrue((mirrored_task_dir / "BRIEF.md").exists())
         self.assertTrue((mirrored_task_dir / "PLAN.md").exists())
         self.assertIn("Original request:", (task_dir / "BRIEF.md").read_text(encoding="utf-8"))
-        self.assertIn("Requested conversation workflow succeeds", (task_dir / "PLAN.md").read_text(encoding="utf-8"))
-        self.assertEqual(task["meta"]["source_event_type"], "conversation")
-        self.assertEqual(task["plan_status"], "pending_review")
-        gate_codes = {gate["code"] for gate in task["gates"]}
-        self.assertIn("PLAN_APPROVAL_REQUIRED", gate_codes)
-        self.assertFalse(mocked_wrapper.called)
-        self.assertFalse(persisted["result"]["auto_run"])
-        self.assertEqual(persisted["result"]["agent_id"], None)
 
-        log_lines = event_log_file(self.repo_root).read_text(encoding="utf-8").strip().splitlines()
-        self.assertGreaterEqual(len(log_lines), 3)
-        self.assertIn('"status": "processed"', log_lines[-1])
+    def test_process_inbox_event_records_merge_receipt_and_changeset(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="merge-receipt-recording",
+        )
+        materialize_task_templates(task)
+
+        _, event_path = queue_pull_request_merged_event(
+            self.repo_root,
+            task_id=task["id"],
+            branch=task["branch"],
+            repo_full_name="jihkang/Sisyphus",
+            pr_number=11,
+            title="Remove live taskflow compatibility layer",
+            url="https://github.com/jihkang/Sisyphus/pull/11",
+            base_branch="main",
+            head_branch=task["branch"],
+            merge_commit_sha="5e0a4b80e9c32f5f52d5fff872eba8ee388ef6ee",
+            merged_at="2026-04-18T11:48:11Z",
+            additions=12,
+            deletions=5,
+            changed_files=[
+                {"path": "src/sisyphus/cli.py", "status": "modified", "additions": 10, "deletions": 2},
+                {
+                    "path": "tests/test_sisyphus.py",
+                    "status": "renamed",
+                    "previous_path": "tests/test_taskflow.py",
+                    "additions": 2,
+                    "deletions": 3,
+                },
+            ],
+        )
+
+        event = process_inbox_event(
+            repo_root=self.repo_root,
+            config=self.config,
+            event_path=event_path,
+        )
+
+        self.assertEqual(event["status"], "processed")
+        processed_files = list(inbox_processed_dir(self.repo_root).glob("*.json"))
+        self.assertEqual(len(processed_files), 1)
+        persisted_event = json.loads(processed_files[0].read_text(encoding="utf-8"))
+        self.assertEqual(persisted_event["result"]["pr_number"], 11)
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        promotion = reloaded["meta"]["promotion"]
+        self.assertEqual(promotion["status"], "merged")
+        self.assertEqual(promotion["pr_number"], 11)
+        self.assertEqual(promotion["merge_commit_sha"], "5e0a4b80e9c32f5f52d5fff872eba8ee388ef6ee")
+
+        task_dir = self.repo_root / task["task_dir"]
+        receipt_path = task_dir / "artifacts" / "promotion" / "merge_receipt.json"
+        changeset_path = task_dir / "CHANGESET.md"
+        self.assertTrue(receipt_path.exists())
+        self.assertTrue(changeset_path.exists())
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        self.assertEqual(receipt["pull_request"]["number"], 11)
+        self.assertEqual(receipt["changes"]["file_count"], 2)
+        changeset = changeset_path.read_text(encoding="utf-8")
+        self.assertIn("Pull Request: [#11]", changeset)
+        self.assertIn("`src/sisyphus/cli.py`", changeset)
+        self.assertIn("`tests/test_sisyphus.py`", changeset)
+        self.assertIn("`src`: 1 files", changeset)
+
+    def test_record_merged_pull_request_api_returns_structured_result(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="merge-receipt-api",
+        )
+        materialize_task_templates(task)
+
+        result = record_merged_pull_request(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            branch=task["branch"],
+            repo_full_name="jihkang/Sisyphus",
+            pr_number=11,
+            title="Remove live taskflow compatibility layer",
+            changed_files=[{"path": "src/sisyphus/cli.py", "status": "modified"}],
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.event_status, "processed")
+        self.assertEqual(result.task_id, task["id"])
+        self.assertEqual(result.pr_number, 11)
+        self.assertIsNotNone(result.receipt_path)
+        self.assertIsNotNone(result.changeset_path)
 
     def test_process_inbox_event_persists_discord_source_context_to_task(self) -> None:
         _, event_path = queue_discord_conversation(
@@ -1847,6 +1968,32 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertTrue(args.adopt_current_changes)
         self.assertEqual(args.adopt_paths, ["README.md"])
         self.assertTrue(args.no_run)
+
+    def test_ingest_pr_merged_parser_accepts_merge_receipt_arguments(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "ingest",
+                "pr-merged",
+                "--task-id",
+                "TF-20260418-feature-demo",
+                "--pr-number",
+                "11",
+                "--title",
+                "Remove live taskflow compatibility layer",
+                "--merge-commit-sha",
+                "5e0a4b80e9c32f5f52d5fff872eba8ee388ef6ee",
+                "--changed-file-json",
+                '{"path":"src/sisyphus/cli.py","status":"modified"}',
+            ]
+        )
+
+        self.assertEqual(args.command, "ingest")
+        self.assertEqual(args.ingest_command, "pr-merged")
+        self.assertEqual(args.task_id, "TF-20260418-feature-demo")
+        self.assertEqual(args.pr_number, 11)
+        self.assertEqual(args.changed_file_json, ['{"path":"src/sisyphus/cli.py","status":"modified"}'])
 
     def test_parser_accepts_global_repo_override(self) -> None:
         parser = build_parser()

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import SisyphusConfig, load_config
-from .daemon import process_inbox_event, queue_conversation_event
+from .daemon import process_inbox_event, queue_conversation_event, queue_pull_request_merged_event
 from .paths import inbox_failed_dir, inbox_processed_dir
 from .state import list_task_records, load_task_record
 from .workflow import run_workflow_cycle
@@ -28,6 +28,33 @@ class TaskRequestResult:
     task_id: str | None
     task: dict | None
     orchestrated: int
+    error: str | None
+    processed_event: dict
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None and self.event_status == "processed"
+
+
+@dataclass(slots=True)
+class QueuedPullRequestMerge:
+    event: dict
+    event_path: Path
+
+    @property
+    def event_id(self) -> str:
+        return str(self.event["id"])
+
+
+@dataclass(slots=True)
+class MergeRecordResult:
+    event_id: str
+    event_status: str
+    event_path: Path
+    task_id: str | None
+    pr_number: int | None
+    receipt_path: Path | None
+    changeset_path: Path | None
     error: str | None
     processed_event: dict
 
@@ -136,6 +163,114 @@ def request_task(
         task_id=str(task_id) if task_id else None,
         task=task,
         orchestrated=orchestrated,
+        error=processed_event.get("error"),
+        processed_event=processed_event,
+    )
+
+
+def queue_pull_request_merged(
+    repo_root: Path,
+    *,
+    pr_number: int,
+    title: str,
+    task_id: str | None = None,
+    branch: str | None = None,
+    repo_full_name: str | None = None,
+    url: str | None = None,
+    base_branch: str | None = None,
+    head_branch: str | None = None,
+    head_sha: str | None = None,
+    merge_commit_sha: str | None = None,
+    merged_at: str | None = None,
+    merged_by: str | None = None,
+    merge_method: str | None = None,
+    additions: int | None = None,
+    deletions: int | None = None,
+    changed_files: list[dict[str, object]] | None = None,
+) -> QueuedPullRequestMerge:
+    event, event_path = queue_pull_request_merged_event(
+        repo_root=repo_root,
+        task_id=task_id,
+        branch=branch,
+        repo_full_name=repo_full_name,
+        pr_number=pr_number,
+        title=title,
+        url=url,
+        base_branch=base_branch,
+        head_branch=head_branch,
+        head_sha=head_sha,
+        merge_commit_sha=merge_commit_sha,
+        merged_at=merged_at,
+        merged_by=merged_by,
+        merge_method=merge_method,
+        additions=additions,
+        deletions=deletions,
+        changed_files=changed_files,
+    )
+    return QueuedPullRequestMerge(event=event, event_path=event_path)
+
+
+def record_merged_pull_request(
+    repo_root: Path,
+    *,
+    config: SisyphusConfig | None = None,
+    pr_number: int,
+    title: str,
+    task_id: str | None = None,
+    branch: str | None = None,
+    repo_full_name: str | None = None,
+    url: str | None = None,
+    base_branch: str | None = None,
+    head_branch: str | None = None,
+    head_sha: str | None = None,
+    merge_commit_sha: str | None = None,
+    merged_at: str | None = None,
+    merged_by: str | None = None,
+    merge_method: str | None = None,
+    additions: int | None = None,
+    deletions: int | None = None,
+    changed_files: list[dict[str, object]] | None = None,
+) -> MergeRecordResult:
+    effective_config = config or load_config(repo_root)
+    queued = queue_pull_request_merged(
+        repo_root=repo_root,
+        task_id=task_id,
+        branch=branch,
+        repo_full_name=repo_full_name,
+        pr_number=pr_number,
+        title=title,
+        url=url,
+        base_branch=base_branch,
+        head_branch=head_branch,
+        head_sha=head_sha,
+        merge_commit_sha=merge_commit_sha,
+        merged_at=merged_at,
+        merged_by=merged_by,
+        merge_method=merge_method,
+        additions=additions,
+        deletions=deletions,
+        changed_files=changed_files,
+    )
+
+    processed_event = process_inbox_event(
+        repo_root=repo_root,
+        config=effective_config,
+        event_path=queued.event_path,
+    )
+    result = processed_event.get("result") if isinstance(processed_event.get("result"), dict) else {}
+    task_id_result = result.get("task_id")
+    pr_number_result = result.get("pr_number")
+    receipt_path = Path(result["receipt_path"]) if result.get("receipt_path") else None
+    changeset_path = Path(result["changeset_path"]) if result.get("changeset_path") else None
+
+    return MergeRecordResult(
+        event_id=queued.event_id,
+        event_status=str(processed_event.get("status")),
+        event_path=_processed_event_path(repo_root=repo_root, event_id=queued.event_id, status=str(processed_event.get("status"))),
+        task_id=str(task_id_result) if task_id_result else None,
+        pr_number=int(pr_number_result) if pr_number_result is not None else None,
+        receipt_path=receipt_path,
+        changeset_path=changeset_path,
         error=processed_event.get("error"),
         processed_event=processed_event,
     )

@@ -12,6 +12,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
+from sisyphus.api import record_merged_pull_request
 from sisyphus.config import load_config
 from sisyphus.conformance import append_conformance_log
 from sisyphus.events import new_event_envelope
@@ -47,7 +48,10 @@ class McpCoreTests(unittest.TestCase):
         resource_uris = {resource["uri"] for resource in self.core.list_resources()}
 
         self.assertIn("sisyphus.request_task", tool_names)
+        self.assertIn("sisyphus.record_merged_pr", tool_names)
         self.assertIn("task://<task-id>/conformance", resource_uris)
+        self.assertIn("task://<task-id>/promotion", resource_uris)
+        self.assertIn("task://<task-id>/changeset", resource_uris)
         request_tool = next(tool for tool in self.core.list_tools() if tool["name"] == "sisyphus.request_task")
         self.assertEqual(request_tool["inputSchema"]["required"], ["message"])
         self.assertFalse(request_tool["inputSchema"]["additionalProperties"])
@@ -62,6 +66,26 @@ class McpCoreTests(unittest.TestCase):
 
         self.assertEqual(record_payload["task"]["id"], task["id"])
         self.assertIn("# Brief", brief_payload)
+
+    def test_reads_task_promotion_and_changeset_resources(self) -> None:
+        task = self._new_task("promotion")
+        record_merged_pull_request(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            branch=task["branch"],
+            repo_full_name="jihkang/Sisyphus",
+            pr_number=11,
+            title="Remove live taskflow compatibility layer",
+            changed_files=[{"path": "src/sisyphus/cli.py", "status": "modified"}],
+        )
+
+        promotion_payload = self.core.read_resource(f"task://{task['id']}/promotion")
+        changeset_payload = self.core.read_resource(f"task://{task['id']}/changeset")
+
+        self.assertEqual(promotion_payload["pull_request"]["number"], 11)
+        self.assertIn("# Changeset", changeset_payload)
+        self.assertIn("`src/sisyphus/cli.py`", changeset_payload)
 
     def test_reads_task_timeline_resource(self) -> None:
         task = self._new_task("timeline")
@@ -168,4 +192,26 @@ class McpCoreTests(unittest.TestCase):
         self.assertEqual(payload["event_status"], "processed")
         self.assertEqual(payload["orchestrated"], 0)
         self.assertIsInstance(payload["orchestrated"], int)
+        self.assertIsNone(payload["error"])
+
+    def test_record_merged_pr_tool_returns_receipt_projection(self) -> None:
+        task = self._new_task("promotion-tool")
+
+        payload = self.core.call_tool(
+            "sisyphus.record_merged_pr",
+            {
+                "task_id": task["id"],
+                "branch": task["branch"],
+                "repo_full_name": "jihkang/Sisyphus",
+                "pr_number": 11,
+                "title": "Remove live taskflow compatibility layer",
+                "changed_files": [{"path": "src/sisyphus/cli.py", "status": "modified"}],
+            },
+        )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["task_id"], task["id"])
+        self.assertEqual(payload["pr_number"], 11)
+        self.assertIsNotNone(payload["receipt_path"])
+        self.assertIsNotNone(payload["changeset_path"])
         self.assertIsNone(payload["error"])
