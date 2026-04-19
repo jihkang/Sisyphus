@@ -50,12 +50,12 @@ The repository now includes the first read-only evolution foundation:
 - `artifacts.py` for the minimum evolution artifact-cycle types
 - `handoff.py` for the reviewable follow-up payload and no-self-approval boundary
 - `dataset.py` for trace extraction from repository-local task and event state
-- `harness.py` for baseline/candidate evaluation planning
+- `harness.py` for baseline/candidate evaluation planning, deterministic summary fallback execution, and bounded isolated Sisyphus evaluation requests
 - `constraints.py` and `fitness.py` for hard guards and weighted scoring
 - `report.py` for stable review/report projection
 - `orchestrator.py` for `execute_evolution_run(...)` and append-only run artifact persistence
 
-The remaining major gaps are isolated harness execution, candidate materialization, MCP/CLI evolution ingress, review-gated Sisyphus follow-up execution, and promotion/invalidation recording.
+The remaining major gaps are candidate materialization, full worktree-backed harness execution, MCP/CLI evolution ingress, review-gated Sisyphus follow-up execution, and promotion/invalidation recording.
 
 ### Implemented Evaluation Loop
 
@@ -159,13 +159,13 @@ src/sisyphus/evolution/
   orchestrator.py
 ```
 
-These modules currently provide planning, scoring, contract vocabulary, and append-only run persistence only. They do not yet include candidate mutation, isolated execution, live follow-up task creation, promotion recording, or MCP ingress.
+These modules currently provide planning, scoring, contract vocabulary, append-only run persistence, and evaluation-only harness execution. They do not yet include candidate mutation, full worktree materialization, live follow-up task creation, promotion recording, or MCP ingress.
 
 ## Planned Additions
 
-The following additions are planned but are not implemented today:
+The following additions are planned but are not fully implemented today:
 
-- isolated harness executor and candidate materialization
+- full worktree-backed harness executor and candidate materialization
 - evolution-to-Sisyphus follow-up bridge
 - promotion and invalidation envelopes
 - CLI and MCP surfaces for `run`, `status`, `report`, and `compare`

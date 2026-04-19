@@ -1,0 +1,143 @@
+{
+  "id": "TF-20260419-feature-replay-evolution-harness-executor-on-main",
+  "type": "feature",
+  "slug": "replay-evolution-harness-executor-on-main",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-19T20:07:46Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved focused replay scope: evaluation-only harness executor, bounded Sisyphus-backed isolated evaluation path, and targeted evolution tests. Explicitly excludes production follow-up bridge, promotion/invalidation, and CLI/MCP ingress.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved focused replay scope: evaluation-only harness executor, bounded Sisyphus-backed isolated evaluation path, and targeted evolution tests. Explicitly excludes production follow-up bridge, promotion/invalidation, and CLI/MCP ingress.",
+      "timestamp": "2026-04-19T20:07:46Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-19T20:07:46Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Frozen spec anchors the evaluation-only harness executor replay on main. Live repo/task-state mutation remains out of scope; only isolated evaluation evidence capture and deterministic summary fallback are permitted in this slice.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-19T20:04:48Z",
+  "updated_at": "2026-04-19T20:36:33Z",
+  "closed_at": "2026-04-19T20:36:33Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260419-feature-replay-evolution-harness-executor-on-main",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-replay-evolution-harness-executor-on-main",
+  "branch": "feat/replay-evolution-harness-executor-on-main",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-19T20:36:04Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "`execute_evolution_harness(...)` can populate completed baseline/candidate metrics through the summary fallback path.",
+        "checked": false
+      },
+      {
+        "name": "A bounded Sisyphus-backed evaluation request can return captured evidence and completed evaluation status.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Narrowed candidate target scope preserves run-order semantics while still executing through the harness.",
+        "checked": false
+      },
+      {
+        "name": "Optional orchestrator integration, if added, keeps the existing read-only default behavior stable.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Failed evaluation executors surface actionable failure metadata and do not mutate repository files.",
+        "checked": false
+      },
+      {
+        "name": "Sisyphus-backed evaluation launch failures keep evidence when available and mark the evaluation as failed rather than silently succeeding.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "execute_evolution_harness(...) can populate completed baseline/candidate metrics through the summary fallback path.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "A bounded Sisyphus-backed evaluation request can return captured evidence and completed evaluation status.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Narrowed candidate target scope preserves run-order semantics while still executing through the harness.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Optional orchestrator integration, if added, keeps the existing read-only default behavior stable.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Failed evaluation executors surface actionable failure metadata and do not mutate repository files.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Sisyphus-backed evaluation launch failures keep evidence when available and mark the evaluation as failed rather than silently succeeding.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-4a03f039dc00",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "replay-evolution-harness-executor-on-main"
+  }
+}

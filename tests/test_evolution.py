@@ -6,7 +6,9 @@ from dataclasses import replace
 from pathlib import Path
 import sys
 import json
+from types import SimpleNamespace
 from typing import get_args
+from unittest.mock import patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -25,10 +27,14 @@ from sisyphus.evolution import (
     EVOLUTION_ARTIFACT_STATUS_FUTURE,
     EVOLUTION_ARTIFACT_STATUS_PLANNED,
     EVOLUTION_DEFAULT_REVIEW_GATES,
+    EVOLUTION_EVALUATION_EXECUTION_MODE_SISYPHUS_TASK,
+    EVOLUTION_EVALUATION_STATUS_COMPLETED,
+    EVOLUTION_EVALUATION_STATUS_FAILED,
     EVOLUTION_EVALUATION_STATUS_PLANNED,
     EVOLUTION_EXTENSION_STAGE_SEQUENCE,
     EVOLUTION_FAILURE_SHAPE,
     EVOLUTION_ISOLATION_MODE_TASK_WORKTREE_COPY,
+    EVOLUTION_OPERATOR_REVIEWABILITY_BLOCKED,
     EVOLUTION_PHASE_1,
     EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
     EVOLUTION_READ_ONLY_RUN_STAGES,
@@ -40,6 +46,7 @@ from sisyphus.evolution import (
     EvolutionCandidateArtifact,
     EvolutionDatasetArtifact,
     EvolutionEvaluationArtifact,
+    EvolutionEvaluationOutcome,
     EvolutionEvidenceSummary,
     EvolutionFollowupRequest,
     EvolutionFollowupRequestArtifact,
@@ -58,8 +65,11 @@ from sisyphus.evolution import (
     VerificationArtifact,
     build_evolution_dataset,
     build_evolution_report,
+    build_sisyphus_evaluation_request,
     evaluate_evolution_constraints,
     evaluate_evolution_fitness,
+    execute_evolution_harness,
+    execute_sisyphus_evaluation,
     execute_evolution_run,
     get_evolution_stage_contract,
     get_evolution_target,
@@ -579,8 +589,8 @@ class EvolutionHarnessTests(unittest.TestCase):
         self.assertIsNone(plan.baseline.metrics.verify_pass_rate)
         self.assertIsNone(plan.baseline.metrics.runtime_ms)
         self.assertIsNone(plan.candidate.metrics.operator_reviewability)
-        self.assertIn("execution not implemented", plan.baseline.notes)
-        self.assertIn("future work", plan.notes)
+        self.assertIn("planned baseline evaluation", plan.baseline.notes)
+        self.assertIn("isolated baseline and candidate execution", plan.notes)
 
     def test_harness_plan_candidate_narrowing_preserves_run_order(self) -> None:
         self._new_task("harness-scope")
@@ -645,6 +655,274 @@ class EvolutionHarnessTests(unittest.TestCase):
         }
 
         self.assertEqual(before, after)
+
+    def test_execute_harness_populates_default_metrics_without_repo_mutation(self) -> None:
+        task_one = self._new_task("harness-exec-one")
+        task_one["verify_status"] = "passed"
+        save_task_record(self.repo_root / task_one["task_dir"] / "task.json", task_one)
+
+        task_two = self._new_task("harness-exec-two")
+        append_conformance_log(
+            task_two,
+            checkpoint_type="post_exec",
+            status="yellow",
+            summary="needs follow-up",
+            source="tests",
+            resolved=False,
+            drift=0,
+        )
+        task_two["verify_status"] = "failed"
+        save_task_record(self.repo_root / task_two["task_dir"] / "task.json", task_two)
+
+        run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+
+        before = {
+            path.relative_to(self.repo_root).as_posix(): path.read_text(encoding="utf-8")
+            for path in sorted(self.repo_root.rglob("*"))
+            if path.is_file()
+        }
+        executed = execute_evolution_harness(plan, dataset)
+        after = {
+            path.relative_to(self.repo_root).as_posix(): path.read_text(encoding="utf-8")
+            for path in sorted(self.repo_root.rglob("*"))
+            if path.is_file()
+        }
+
+        self.assertEqual(before, after)
+        self.assertEqual(executed.baseline.status, EVOLUTION_EVALUATION_STATUS_COMPLETED)
+        self.assertEqual(executed.candidate.status, EVOLUTION_EVALUATION_STATUS_COMPLETED)
+        self.assertEqual(executed.baseline.metrics.verify_pass_rate, 0.5)
+        self.assertEqual(executed.baseline.metrics.conformance_status, "yellow")
+        self.assertEqual(executed.baseline.metrics.drift_count, 0)
+        self.assertEqual(executed.baseline.metrics.unresolved_warning_count, 1)
+        self.assertGreater(executed.baseline.metrics.runtime_ms or 0, 0)
+        self.assertEqual(executed.baseline.metrics.operator_reviewability, "low")
+        self.assertIn("executed baseline and candidate", executed.notes)
+
+    def test_execute_harness_supports_custom_executor_and_scores_results(self) -> None:
+        self._new_task("harness-custom")
+        run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording", "mcp-tool-descriptions"])
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+        calls: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = []
+
+        def executor(evaluation, selected_dataset):
+            calls.append((evaluation.role, evaluation.task_ids, selected_dataset.selected_task_ids))
+            if evaluation.role == "baseline":
+                return EvolutionPlannedMetrics(
+                    verify_pass_rate=0.8,
+                    conformance_status="yellow",
+                    drift_count=1,
+                    unresolved_warning_count=1,
+                    token_estimate=1200,
+                    operator_reviewability="medium",
+                )
+            return EvolutionPlannedMetrics(
+                verify_pass_rate=1.0,
+                conformance_status="green",
+                drift_count=0,
+                unresolved_warning_count=1,
+                token_estimate=900,
+                operator_reviewability="high",
+            )
+
+        executed = execute_evolution_harness(plan, dataset, executor=executor)
+        constraints = evaluate_evolution_constraints(
+            executed,
+            warning_increase_threshold=0,
+            mcp_compatibility_ok=True,
+            output_contract_stable=True,
+        )
+        fitness = evaluate_evolution_fitness(executed, constraints=constraints)
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0][1], dataset.selected_task_ids)
+        self.assertEqual(calls[0][2], dataset.selected_task_ids)
+        self.assertEqual(calls[1][1], dataset.selected_task_ids)
+        self.assertEqual(calls[1][2], dataset.selected_task_ids)
+        self.assertEqual(executed.baseline.status, EVOLUTION_EVALUATION_STATUS_COMPLETED)
+        self.assertEqual(executed.candidate.status, EVOLUTION_EVALUATION_STATUS_COMPLETED)
+        self.assertEqual(constraints.status, "accepted")
+        self.assertEqual(fitness.status, "scored")
+        self.assertTrue(fitness.eligible_for_promotion)
+
+    def test_execute_harness_supports_sisyphus_evaluation_evidence(self) -> None:
+        self._new_task("harness-sisyphus")
+        run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+        task_snapshots: dict[str, dict[str, object]] = {}
+        wrapper_calls: list[tuple[str, list[str]]] = []
+
+        def fake_request_task(repo_root, *, config=None, **kwargs):
+            task_id = f"TF-eval-{kwargs['slug']}"
+            task = {
+                "id": task_id,
+                "branch": f"feat/{kwargs['slug']}",
+                "worktree_path": str(self.repo_root / "_worktrees" / task_id),
+                "status": "open",
+                "plan_status": "pending_review",
+                "spec_status": "draft",
+                "workflow_phase": "plan_in_review",
+            }
+            task_snapshots[task_id] = dict(task)
+            return SimpleNamespace(ok=True, task_id=task_id, task=task, error=None)
+
+        def fake_approve_task_plan(repo_root, config, task_id, *, reviewer, notes):
+            task_snapshots[task_id]["plan_status"] = "approved"
+            return SimpleNamespace(plan_status="approved")
+
+        def fake_freeze_task_spec(repo_root, config, task_id, *, reviewer, notes):
+            task_snapshots[task_id]["spec_status"] = "frozen"
+            task_snapshots[task_id]["workflow_phase"] = "subtask_planning"
+            return SimpleNamespace(spec_status="frozen", workflow_phase="subtask_planning")
+
+        def fake_run_provider_wrapper(provider, argv, *, repo_root=None):
+            wrapper_calls.append((provider, argv))
+            task_snapshots[argv[1]]["status"] = "open"
+            return 0
+
+        def fake_load_task_record(repo_root, task_dir_name, task_id):
+            return (
+                dict(task_snapshots[task_id]),
+                self.repo_root / ".planning" / "tasks" / task_id / "task.json",
+            )
+
+        def executor(evaluation, selected_dataset):
+            request = build_sisyphus_evaluation_request(
+                evaluation,
+                selected_dataset,
+                auto_execute=evaluation.role == "candidate",
+                owned_paths=["docs/self-evolution-mcp-plan.md"],
+            )
+            return execute_sisyphus_evaluation(evaluation, selected_dataset, request=request)
+
+        with (
+            patch("sisyphus.api.request_task", side_effect=fake_request_task),
+            patch("sisyphus.planning.approve_task_plan", side_effect=fake_approve_task_plan),
+            patch("sisyphus.planning.freeze_task_spec", side_effect=fake_freeze_task_spec),
+            patch("sisyphus.provider_wrapper.run_provider_wrapper", side_effect=fake_run_provider_wrapper),
+            patch("sisyphus.state.load_task_record", side_effect=fake_load_task_record),
+        ):
+            executed = execute_evolution_harness(plan, dataset, executor=executor)
+
+        self.assertEqual(executed.baseline.status, EVOLUTION_EVALUATION_STATUS_COMPLETED)
+        self.assertEqual(executed.candidate.status, EVOLUTION_EVALUATION_STATUS_COMPLETED)
+        self.assertEqual(executed.baseline.evidence.mode, EVOLUTION_EVALUATION_EXECUTION_MODE_SISYPHUS_TASK)
+        self.assertIn("TF-eval-", executed.baseline.evidence.task_id or "")
+        self.assertIsNone(executed.baseline.evidence.exit_code)
+        self.assertEqual(executed.candidate.evidence.exit_code, 0)
+        self.assertEqual(executed.candidate.evidence.spec_status, "frozen")
+        self.assertEqual(len(wrapper_calls), 1)
+        self.assertEqual(wrapper_calls[0][0], "codex")
+        self.assertEqual(wrapper_calls[0][1][0], "task")
+
+    def test_execute_harness_captures_sisyphus_evaluation_failure(self) -> None:
+        self._new_task("harness-sisyphus-failure")
+        run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+        task_snapshots: dict[str, dict[str, object]] = {}
+
+        def fake_request_task(repo_root, *, config=None, **kwargs):
+            task_id = f"TF-eval-{kwargs['slug']}"
+            task = {
+                "id": task_id,
+                "branch": f"feat/{kwargs['slug']}",
+                "worktree_path": str(self.repo_root / "_worktrees" / task_id),
+                "status": "open",
+                "plan_status": "pending_review",
+                "spec_status": "draft",
+                "workflow_phase": "plan_in_review",
+            }
+            task_snapshots[task_id] = dict(task)
+            return SimpleNamespace(ok=True, task_id=task_id, task=task, error=None)
+
+        def fake_approve_task_plan(repo_root, config, task_id, *, reviewer, notes):
+            task_snapshots[task_id]["plan_status"] = "approved"
+            return SimpleNamespace(plan_status="approved")
+
+        def fake_freeze_task_spec(repo_root, config, task_id, *, reviewer, notes):
+            task_snapshots[task_id]["spec_status"] = "frozen"
+            task_snapshots[task_id]["workflow_phase"] = "subtask_planning"
+            return SimpleNamespace(spec_status="frozen", workflow_phase="subtask_planning")
+
+        def fake_run_provider_wrapper(provider, argv, *, repo_root=None):
+            if "candidate" in argv[1]:
+                task_snapshots[argv[1]]["status"] = "blocked"
+                return 9
+            return 0
+
+        def fake_load_task_record(repo_root, task_dir_name, task_id):
+            return (
+                dict(task_snapshots[task_id]),
+                self.repo_root / ".planning" / "tasks" / task_id / "task.json",
+            )
+
+        def executor(evaluation, selected_dataset):
+            request = build_sisyphus_evaluation_request(
+                evaluation,
+                selected_dataset,
+                auto_execute=True,
+            )
+            return execute_sisyphus_evaluation(evaluation, selected_dataset, request=request)
+
+        with (
+            patch("sisyphus.api.request_task", side_effect=fake_request_task),
+            patch("sisyphus.planning.approve_task_plan", side_effect=fake_approve_task_plan),
+            patch("sisyphus.planning.freeze_task_spec", side_effect=fake_freeze_task_spec),
+            patch("sisyphus.provider_wrapper.run_provider_wrapper", side_effect=fake_run_provider_wrapper),
+            patch("sisyphus.state.load_task_record", side_effect=fake_load_task_record),
+        ):
+            executed = execute_evolution_harness(plan, dataset, executor=executor)
+
+        self.assertEqual(executed.baseline.status, EVOLUTION_EVALUATION_STATUS_COMPLETED)
+        self.assertEqual(executed.candidate.status, EVOLUTION_EVALUATION_STATUS_FAILED)
+        self.assertEqual(executed.candidate.evidence.mode, EVOLUTION_EVALUATION_EXECUTION_MODE_SISYPHUS_TASK)
+        self.assertEqual(executed.candidate.evidence.exit_code, 9)
+        self.assertEqual(executed.candidate.metrics.verify_pass_rate, 0.0)
+        self.assertIn("exited with code 9", executed.candidate.notes)
+
+    def test_execute_harness_captures_failed_evaluation_without_repo_mutation(self) -> None:
+        self._new_task("harness-failure")
+        run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+
+        def executor(evaluation, selected_dataset):
+            if evaluation.role == "candidate":
+                raise RuntimeError("candidate crashed")
+            return EvolutionPlannedMetrics(
+                verify_pass_rate=1.0,
+                conformance_status="green",
+                drift_count=0,
+                unresolved_warning_count=0,
+                operator_reviewability="high",
+            )
+
+        before = {
+            path.relative_to(self.repo_root).as_posix(): path.read_text(encoding="utf-8")
+            for path in sorted(self.repo_root.rglob("*"))
+            if path.is_file()
+        }
+        executed = execute_evolution_harness(plan, dataset, executor=executor)
+        after = {
+            path.relative_to(self.repo_root).as_posix(): path.read_text(encoding="utf-8")
+            for path in sorted(self.repo_root.rglob("*"))
+            if path.is_file()
+        }
+
+        self.assertEqual(before, after)
+        self.assertEqual(executed.baseline.status, EVOLUTION_EVALUATION_STATUS_COMPLETED)
+        self.assertEqual(executed.candidate.status, EVOLUTION_EVALUATION_STATUS_FAILED)
+        self.assertGreater(executed.candidate.metrics.runtime_ms or 0, 0)
+        self.assertEqual(
+            executed.candidate.metrics.operator_reviewability,
+            EVOLUTION_OPERATOR_REVIEWABILITY_BLOCKED,
+        )
+        self.assertIn("candidate evaluation failed: candidate crashed", executed.candidate.notes)
 
 
 class EvolutionConstraintsAndFitnessTests(unittest.TestCase):

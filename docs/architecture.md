@@ -280,14 +280,14 @@ The current implemented slices are:
 - stage and failure contracts in `stages.py`
 - artifact-cycle and handoff contracts in `artifacts.py` and `handoff.py`
 - dataset extraction from task records, conformance state, verify metadata, and event logs in `dataset.py`
-- baseline/candidate harness planning in `harness.py`
+- baseline/candidate harness planning and evaluation-only execution in `harness.py`
 - hard-guard evaluation and weighted scoring in `constraints.py` and `fitness.py`
 - stable reporting projection in `report.py`
 - read-only orchestration and append-only run persistence in `orchestrator.py`
 
 The following pieces are still future work:
 
-- candidate materialization and isolated harness execution
+- candidate materialization and full worktree-backed harness execution
 - follow-up task handoff into the Sisyphus lifecycle
 - MCP evolution tools/resources
 - promotion and invalidation envelopes backed by receipts
@@ -365,7 +365,7 @@ flowchart TD
     I --> J[Future follow-up request or MCP projection]
 ```
 
-Today this loop is implemented as a planning and evaluation model layer through the read-only orchestrator. It does not yet execute candidate mutations, run an isolated harness executor, or materialize approved results on a branch.
+Today this loop is implemented as a planning and evaluation model layer through the read-only orchestrator plus evaluation-only harness execution helpers. It does not yet execute candidate mutations, materialize branch-backed candidates, or land approved results through the normal Sisyphus lifecycle.
 
 ## Class Diagram
 
