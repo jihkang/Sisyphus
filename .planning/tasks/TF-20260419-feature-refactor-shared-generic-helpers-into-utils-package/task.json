@@ -1,0 +1,274 @@
+{
+  "id": "TF-20260419-feature-refactor-shared-generic-helpers-into-utils-package",
+  "type": "feature",
+  "slug": "refactor-shared-generic-helpers-into-utils-package",
+  "status": "blocked",
+  "stage": "audit",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-19T09:53:15Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Reviewed the helper-refactor plan. The scope now distinguishes generic utility extraction from domain-specific logic and is specific enough to implement without broadening into policy code.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Expanded the task docs into a concrete helper-refactor spec. Locked scope to converting utils.py into a structured utils package, extracting only truly generic helpers, updating live callers, and covering the refactor with focused regression tests.",
+      "timestamp": "2026-04-19T09:53:14Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Reviewed the helper-refactor plan. The scope now distinguishes generic utility extraction from domain-specific logic and is specific enough to implement without broadening into policy code.",
+      "timestamp": "2026-04-19T09:53:15Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-19T09:53:15Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to the shared-generic-helper refactor, caller import cleanup, and focused regression coverage. Promotion logic, artifact policy evaluation, and MCP contract changes remain out of scope.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-19T09:50:29Z",
+  "updated_at": "2026-04-19T09:58:04Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260419-feature-refactor-shared-generic-helpers-into-utils-package",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-refactor-shared-generic-helpers-into-utils-package",
+  "branch": "feat/refactor-shared-generic-helpers-into-utils-package",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-19T09:58:00Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "`sisyphus.utils` continues to expose the existing mapping helpers while also exposing the newly extracted generic coercion helpers.",
+        "checked": false
+      },
+      {
+        "name": "`sisyphus.mcp_core` and `sisyphus.evolution.dataset` still behave the same after switching to shared helper imports.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "`None` and empty-string values are normalized consistently by the shared coercion helper across multiple callers.",
+        "checked": false
+      },
+      {
+        "name": "List coercion still rejects non-list inputs with an actionable error where MCP argument parsing expects list data.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Domain-specific helpers are not moved into the generic utils package during the refactor.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "sisyphus.utils continues to expose the existing mapping helpers while also exposing the newly extracted generic coercion helpers.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_utils"
+      },
+      {
+        "target": "sisyphus.mcp_core and sisyphus.evolution.dataset still behave the same after switching to shared helper imports.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_mcp_core tests.test_evolution"
+      },
+      {
+        "target": "None and empty-string values are normalized consistently by the shared coercion helper across multiple callers.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_utils"
+      },
+      {
+        "target": "List coercion still rejects non-list inputs with an actionable error where MCP argument parsing expects list data.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_utils tests.test_mcp_core"
+      },
+      {
+        "target": "Domain-specific helpers are not moved into the generic utils package during the refactor.",
+        "method": "manual review of touched modules"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [
+    {
+      "code": "DIRTY_WORKTREE",
+      "message": "working tree is dirty",
+      "blocking": true,
+      "source": "close",
+      "created_at": "2026-04-19T09:58:04Z"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "`sisyphus.utils` continues to expose the existing mapping helpers while also exposing the newly extracted generic coercion helpers.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-002",
+      "title": "`sisyphus.mcp_core` and `sisyphus.evolution.dataset` still behave the same after switching to shared helper imports.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-003",
+      "title": "`None` and empty-string values are normalized consistently by the shared coercion helper across multiple callers.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-004",
+      "title": "List coercion still rejects non-list inputs with an actionable error where MCP argument parsing expects list data.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-005",
+      "title": "Domain-specific helpers are not moved into the generic utils package during the refactor.",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    }
+  ],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "source_event_id": "evt-d8a9a41ac72f",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "refactor-shared-generic-helpers-into-utils-package"
+  }
+}

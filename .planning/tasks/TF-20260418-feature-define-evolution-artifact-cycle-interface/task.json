@@ -1,0 +1,208 @@
+{
+  "id": "TF-20260418-feature-define-evolution-artifact-cycle-interface",
+  "type": "feature",
+  "slug": "define-evolution-artifact-cycle-interface",
+  "status": "blocked",
+  "stage": "audit",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-19T07:36:53Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Reviewed the expanded task-specific plan. The artifact-cycle interface task now has explicit ownership boundaries, reconstructability requirements, and scope limits. Approving for spec freeze.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Expanded BRIEF and PLAN from template text into a task-specific spec. Added explicit artifact-cycle acceptance criteria plus hard risks, safety invariants, out-of-scope limits, evidence requirements, and failure/recovery notes so the interface can be reviewed before runtime work begins.",
+      "timestamp": "2026-04-19T07:35:15Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Reviewed the expanded task-specific plan. The artifact-cycle interface task now has explicit ownership boundaries, reconstructability requirements, and scope limits. Approving for spec freeze.",
+      "timestamp": "2026-04-19T07:36:53Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-19T07:37:04Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze the minimum evolution artifact-cycle interface with explicit reconstructability fields and ownership boundaries. Exclude a universal artifact engine from this task.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-18T15:08:05Z",
+  "updated_at": "2026-04-19T08:02:45Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260418-feature-define-evolution-artifact-cycle-interface",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260418-feature-define-evolution-artifact-cycle-interface",
+  "branch": "feat/define-evolution-artifact-cycle-interface",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-19T08:02:40Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "The minimum artifact kinds and fields support the current evolution slice without requiring a generic engine.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Ownership boundaries remain clear between evolution-generated artifacts and Sisyphus authoritative artifacts.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "The interface does not overclaim runtime persistence for artifacts that are still future work.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "The minimum artifact kinds and fields support the current evolution slice without requiring a generic engine.",
+        "method": "targeted unit test in tests.test_evolution"
+      },
+      {
+        "target": "Ownership boundaries remain clear between evolution-generated artifacts and Sisyphus authoritative artifacts.",
+        "method": "manual review of docs and type definitions"
+      },
+      {
+        "target": "The interface does not overclaim runtime persistence for artifacts that are still future work.",
+        "method": "manual review of docs and type definitions"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [
+    {
+      "code": "DIRTY_WORKTREE",
+      "message": "working tree is dirty",
+      "blocking": true,
+      "source": "close",
+      "created_at": "2026-04-19T08:02:45Z"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "The minimum artifact kinds and fields support the current evolution slice without requiring a generic engine.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-002",
+      "title": "Ownership boundaries remain clear between evolution-generated artifacts and Sisyphus authoritative artifacts.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-003",
+      "title": "The interface does not overclaim runtime persistence for artifacts that are still future work.",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    }
+  ],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "source_event_id": "evt-8689607a9549",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "define-evolution-artifact-cycle-interface"
+  }
+}

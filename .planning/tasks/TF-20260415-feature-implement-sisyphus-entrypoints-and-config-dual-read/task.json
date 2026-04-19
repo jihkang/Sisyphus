@@ -1,0 +1,140 @@
+{
+  "id": "TF-20260415-feature-implement-sisyphus-entrypoints-and-config-dual-read",
+  "type": "feature",
+  "slug": "implement-sisyphus-entrypoints-and-config-dual-read",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-15T10:00:59Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the entrypoint/config slice: implement sisyphus module wrappers and config dual-read, keep taskflow compatibility shims, and leave protocol/persisted identifiers out of scope.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised the task to the concrete migration slice: add canonical sisyphus CLI/MCP module entrypoints, move canonical console scripts to those modules, add .sisyphus.toml preferred config loading with .taskflow.toml fallback, and update docs/tests accordingly while preserving taskflow compatibility.",
+      "timestamp": "2026-04-15T10:00:59Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the entrypoint/config slice: implement sisyphus module wrappers and config dual-read, keep taskflow compatibility shims, and leave protocol/persisted identifiers out of scope.",
+      "timestamp": "2026-04-15T10:00:59Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-15T10:00:59Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to canonical sisyphus CLI/MCP module entrypoints, pyproject script routing, .sisyphus.toml preferred config/discovery with legacy fallback, and matching docs/tests. Do not rename src/taskflow, taskflow.event.v1, or TF task ids in this task.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-15T09:58:46Z",
+  "updated_at": "2026-04-15T10:10:49Z",
+  "closed_at": "2026-04-15T10:10:49Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260415-feature-implement-sisyphus-entrypoints-and-config-dual-read",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260415-feature-implement-sisyphus-entrypoints-and-config-dual-read",
+  "branch": "feat/implement-sisyphus-entrypoints-and-config-dual-read",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-15T10:10:41Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Canonical `sisyphus` CLI and MCP module entrypoints resolve to working wrappers.",
+        "checked": false
+      },
+      {
+        "name": "A repository configured only with `.sisyphus.toml` loads expected settings and is discoverable as a repo root.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "When both config files are present, `.sisyphus.toml` wins deterministically.",
+        "checked": false
+      },
+      {
+        "name": "A repository that still has only `.taskflow.toml` continues to work without migration.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "This slice does not accidentally rename high-risk protocol or persisted identifiers such as `taskflow.event.v1` or `TF-...`.",
+        "checked": false
+      },
+      {
+        "name": "Direct launcher docs do not point to nonexistent module paths.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Canonical sisyphus CLI and MCP module entrypoints resolve to working wrappers.",
+        "method": "python -m unittest tests.test_taskflow tests.test_mcp_server -v"
+      },
+      {
+        "target": "A repository configured only with .sisyphus.toml loads expected settings and is discoverable as a repo root.",
+        "method": "python -m unittest tests.test_event_bus tests.test_taskflow tests.test_mcp_server -v"
+      },
+      {
+        "target": "Config precedence and legacy fallback remain deterministic.",
+        "method": "python -m unittest tests.test_event_bus tests.test_taskflow tests.test_mcp_server -v"
+      },
+      {
+        "target": "High-risk identifiers are unchanged and docs point to real module paths.",
+        "method": "manual review of diff"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-0570aeb56e8e",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "implement-sisyphus-entrypoints-and-config-dual-read"
+  }
+}

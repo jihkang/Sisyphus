@@ -1,0 +1,133 @@
+{
+  "id": "TF-20260415-feature-implement-evolution-candidate-materialization",
+  "type": "feature",
+  "slug": "implement-evolution-candidate-materialization",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-15T11:53:43Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved to proceed with latest-local-baseline alignment plus bounded Phase 1 target materialization inside isolated Sisyphus evaluation worktrees. Scope excludes MCP surface and promotion/PR automation.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved to proceed with latest-local-baseline alignment plus bounded Phase 1 target materialization inside isolated Sisyphus evaluation worktrees. Scope excludes MCP surface and promotion/PR automation.",
+      "timestamp": "2026-04-15T11:53:43Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-15T11:53:43Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Spec frozen for the candidate materialization slice: baseline snapshots, candidate-only text/policy rewrites, evaluation evidence plumbing, and focused regression coverage.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-15T11:47:37Z",
+  "updated_at": "2026-04-15T12:03:14Z",
+  "closed_at": "2026-04-15T12:03:14Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260415-feature-implement-evolution-candidate-materialization",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260415-feature-implement-evolution-candidate-materialization",
+  "branch": "feat/implement-evolution-candidate-materialization",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-15T12:03:11Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "A baseline evaluation task captures task-local source snapshots and emits materialization evidence without mutating the evaluation worktree sources.",
+        "checked": false
+      },
+      {
+        "name": "A candidate evaluation task applies bounded Phase 1 text/policy rewrites in its isolated worktree and exposes the manifest and touched files through evaluation evidence.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Multiple selected targets preserve registry order while materializing only the requested source files.",
+        "checked": false
+      },
+      {
+        "name": "Materialization artifacts stay task-local and do not leak writes back into the source repository root.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Missing rewrite anchors or an unavailable evaluation worktree fail the evaluation with actionable evidence instead of silently continuing.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "A baseline evaluation task captures task-local source snapshots and emits materialization evidence without mutating the evaluation worktree sources.",
+        "method": "python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "A candidate evaluation task applies bounded Phase 1 text/policy rewrites in its isolated worktree and exposes the manifest and touched files through evaluation evidence.",
+        "method": "python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "Multiple selected targets preserve registry order while materializing only the requested source files.",
+        "method": "python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "Materialization artifacts stay task-local and do not leak writes back into the source repository root.",
+        "method": "python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "Missing rewrite anchors or an unavailable evaluation worktree fail the evaluation with actionable evidence instead of silently continuing.",
+        "method": "python -m unittest tests.test_evolution -v"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-250adbf9b6cb",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "implement-evolution-candidate-materialization"
+  }
+}
