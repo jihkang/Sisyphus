@@ -51,11 +51,12 @@ The repository now includes the first read-only evolution foundation:
 - `handoff.py` for the reviewable follow-up payload and no-self-approval boundary
 - `dataset.py` for trace extraction from repository-local task and event state
 - `harness.py` for baseline/candidate evaluation planning, deterministic summary fallback execution, and bounded isolated Sisyphus evaluation requests
+- `materialization.py` for bounded baseline/candidate snapshot preparation inside isolated evaluation worktrees
 - `constraints.py` and `fitness.py` for hard guards and weighted scoring
 - `report.py` for stable review/report projection
 - `orchestrator.py` for `execute_evolution_run(...)` and append-only run artifact persistence
 
-The remaining major gaps are candidate materialization, full worktree-backed harness execution, MCP/CLI evolution ingress, review-gated Sisyphus follow-up execution, and promotion/invalidation recording.
+The remaining major gaps are full worktree-backed harness execution, MCP/CLI evolution ingress, review-gated Sisyphus follow-up execution, and promotion/invalidation recording.
 
 ### Implemented Evaluation Loop
 
@@ -149,6 +150,7 @@ src/sisyphus/evolution/
   targets.py
   dataset.py
   harness.py
+  materialization.py
   fitness.py
   constraints.py
   report.py
@@ -159,13 +161,13 @@ src/sisyphus/evolution/
   orchestrator.py
 ```
 
-These modules currently provide planning, scoring, contract vocabulary, append-only run persistence, and evaluation-only harness execution. They do not yet include candidate mutation, full worktree materialization, live follow-up task creation, promotion recording, or MCP ingress.
+These modules currently provide planning, scoring, contract vocabulary, append-only run persistence, evaluation-only harness execution, and bounded candidate materialization inside isolated evaluation worktrees. They do not yet include branch-backed candidate execution, live follow-up task creation, promotion recording, or MCP ingress.
 
 ## Planned Additions
 
 The following additions are planned but are not fully implemented today:
 
-- full worktree-backed harness executor and candidate materialization
+- full worktree-backed harness executor
 - evolution-to-Sisyphus follow-up bridge
 - promotion and invalidation envelopes
 - CLI and MCP surfaces for `run`, `status`, `report`, and `compare`

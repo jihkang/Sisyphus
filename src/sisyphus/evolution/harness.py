@@ -10,6 +10,13 @@ from ..conformance import CONFORMANCE_GREEN, CONFORMANCE_RED, CONFORMANCE_YELLOW
 from ..utils import optional_str
 
 from .dataset import EvolutionDataset
+from .materialization import (
+    EVOLUTION_MATERIALIZATION_STATUS_FAILED,
+    EvolutionMaterialization,
+    EvolutionMaterializationError,
+    materialize_evolution_evaluation,
+    ordered_target_source_paths,
+)
 from .runner import EvolutionRun
 
 
@@ -54,6 +61,11 @@ class EvolutionEvaluationEvidence:
     spec_status: str | None = None
     workflow_phase: str | None = None
     exit_code: int | None = None
+    materialization_status: str | None = None
+    materialization_manifest_path: str | None = None
+    materialization_snapshot_root: str | None = None
+    materialized_target_ids: tuple[str, ...] = ()
+    materialized_file_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,6 +288,10 @@ def build_sisyphus_evaluation_request(
         merged_source_context.update(source_context)
 
     slug_suffix = evaluation.evaluation_id.lower().replace(":", "-")
+    effective_owned_paths = _merge_owned_paths(
+        ordered_target_source_paths(evaluation.target_ids),
+        tuple(str(path) for path in owned_paths or ()),
+    )
     return EvolutionSisyphusEvaluationRequest(
         title=title or f"Run {evaluation.role} evolution evaluation {evaluation.evaluation_id}",
         message=message or _default_sisyphus_evaluation_message(evaluation, dataset),
@@ -285,7 +301,7 @@ def build_sisyphus_evaluation_request(
         agent_id=agent_id,
         role=role,
         provider=provider,
-        owned_paths=tuple(str(path) for path in owned_paths or ()),
+        owned_paths=effective_owned_paths,
         provider_args=tuple(str(arg) for arg in provider_args or ()),
         source_context=merged_source_context,
         auto_execute=auto_execute,
@@ -387,12 +403,41 @@ def execute_sisyphus_evaluation(
             ),
         )
 
+    latest_task, _ = load_task_record(
+        repo_root=repo_root,
+        task_dir_name=config.task_dir,
+        task_id=task_id,
+    )
+    try:
+        materialization = materialize_evolution_evaluation(evaluation, task=latest_task)
+    except EvolutionMaterializationError as exc:
+        detail = f"Sisyphus evaluation task {task_id} materialization failed: {exc}"
+        raise EvolutionEvaluationExecutionError(
+            detail,
+            metrics=metrics,
+            evidence=_evaluation_evidence_from_task(
+                latest_task,
+                sisyphus_request,
+                detail=detail,
+                plan_status=plan_outcome.plan_status,
+                spec_status=spec_outcome.spec_status,
+                workflow_phase=spec_outcome.workflow_phase,
+                materialization_status=EVOLUTION_MATERIALIZATION_STATUS_FAILED,
+            ),
+        )
+
+    effective_owned_paths = _merge_owned_paths(
+        sisyphus_request.owned_paths,
+        materialization.file_paths,
+        (materialization.manifest_path,),
+    )
+
     exit_code = None
     if sisyphus_request.auto_execute:
         wrapper_args = ["task", task_id, sisyphus_request.agent_id, "--role", sisyphus_request.role]
         if sisyphus_request.instruction:
             wrapper_args.extend(["--instruction", sisyphus_request.instruction])
-        for path in sisyphus_request.owned_paths:
+        for path in effective_owned_paths:
             wrapper_args.extend(["--owned-path", path])
         for arg in sisyphus_request.provider_args:
             wrapper_args.extend(["--provider-arg", arg])
@@ -416,6 +461,7 @@ def execute_sisyphus_evaluation(
                     sisyphus_request,
                     detail=detail,
                     exit_code=exit_code,
+                    materialization=materialization,
                 ),
             )
 
@@ -425,9 +471,9 @@ def execute_sisyphus_evaluation(
         task_id=task_id,
     )
     detail = (
-        f"created and executed isolated Sisyphus evaluation task {task_id}"
+        f"created and executed isolated Sisyphus evaluation task {task_id} with {materialization.status}"
         if sisyphus_request.auto_execute
-        else f"created isolated Sisyphus evaluation task {task_id}"
+        else f"created isolated Sisyphus evaluation task {task_id} with {materialization.status}"
     )
     return EvolutionEvaluationOutcome(
         metrics=metrics,
@@ -436,6 +482,7 @@ def execute_sisyphus_evaluation(
             sisyphus_request,
             detail=detail,
             exit_code=exit_code,
+            materialization=materialization,
         ),
     )
 
@@ -613,6 +660,8 @@ def _evaluation_evidence_from_task(
     plan_status: str | None = None,
     spec_status: str | None = None,
     workflow_phase: str | None = None,
+    materialization: EvolutionMaterialization | None = None,
+    materialization_status: str | None = None,
 ) -> EvolutionEvaluationEvidence:
     return EvolutionEvaluationEvidence(
         mode=EVOLUTION_EVALUATION_EXECUTION_MODE_SISYPHUS_TASK,
@@ -627,4 +676,22 @@ def _evaluation_evidence_from_task(
         spec_status=spec_status or optional_str(task.get("spec_status")),
         workflow_phase=workflow_phase or optional_str(task.get("workflow_phase")),
         exit_code=exit_code,
+        materialization_status=materialization_status or (materialization.status if materialization else None),
+        materialization_manifest_path=materialization.manifest_path if materialization else None,
+        materialization_snapshot_root=materialization.snapshot_root if materialization else None,
+        materialized_target_ids=materialization.target_ids if materialization else (),
+        materialized_file_paths=materialization.file_paths if materialization else (),
     )
+
+
+def _merge_owned_paths(*groups: Sequence[str]) -> tuple[str, ...]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for path in group:
+            normalized = str(path).strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            merged.append(normalized)
+    return tuple(merged)

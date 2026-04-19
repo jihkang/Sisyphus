@@ -34,6 +34,8 @@ from sisyphus.evolution import (
     EVOLUTION_EXTENSION_STAGE_SEQUENCE,
     EVOLUTION_FAILURE_SHAPE,
     EVOLUTION_ISOLATION_MODE_TASK_WORKTREE_COPY,
+    EVOLUTION_MATERIALIZATION_STATUS_BASELINE_CAPTURED,
+    EVOLUTION_MATERIALIZATION_STATUS_CANDIDATE_APPLIED,
     EVOLUTION_OPERATOR_REVIEWABILITY_BLOCKED,
     EVOLUTION_PHASE_1,
     EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
@@ -50,6 +52,7 @@ from sisyphus.evolution import (
     EvolutionEvidenceSummary,
     EvolutionFollowupRequest,
     EvolutionFollowupRequestArtifact,
+    EvolutionMaterializationError,
     EvolutionPlannedMetrics,
     EvolutionPromotionCandidate,
     EvolutionReportArtifact,
@@ -75,6 +78,8 @@ from sisyphus.evolution import (
     get_evolution_target,
     list_evolution_stage_contracts,
     list_evolution_targets,
+    materialize_evolution_evaluation,
+    ordered_target_source_paths,
     plan_evolution_harness,
     plan_evolution_run,
 )
@@ -561,6 +566,43 @@ class EvolutionHarnessTests(unittest.TestCase):
         materialize_task_templates(task)
         return task
 
+    def _repo_files(self, root: Path | None = None) -> dict[str, str]:
+        repo_root = root or self.repo_root
+        return {
+            path.relative_to(repo_root).as_posix(): path.read_text(encoding="utf-8")
+            for path in sorted(repo_root.rglob("*"))
+            if path.is_file()
+        }
+
+    def _seed_phase_1_sources(self, root: Path | None = None) -> None:
+        repo_root = root or self.repo_root
+        for source_path in ordered_target_source_paths(
+            [
+                "execution-contract-wording",
+                "mcp-tool-descriptions",
+                "agent-instruction-sections",
+                "conformance-summary-wording",
+                "review-gate-explanation-text",
+            ]
+        ):
+            target_path = repo_root / source_path
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text((PROJECT_ROOT / source_path).read_text(encoding="utf-8"), encoding="utf-8")
+
+    def _build_evaluation_task(self, task_id: str, worktree_root: Path) -> dict:
+        task_dir = Path(".planning/tasks") / task_id
+        (worktree_root / task_dir).mkdir(parents=True, exist_ok=True)
+        return {
+            "id": task_id,
+            "task_dir": task_dir.as_posix(),
+            "worktree_path": str(worktree_root),
+            "branch": f"feat/{task_id.lower()}",
+            "status": "open",
+            "plan_status": "approved",
+            "spec_status": "frozen",
+            "workflow_phase": "subtask_planning",
+        }
+
     def test_harness_plan_pairs_run_and_dataset(self) -> None:
         self._new_task("harness-plan")
         run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording", "mcp-tool-descriptions"])
@@ -656,6 +698,164 @@ class EvolutionHarnessTests(unittest.TestCase):
 
         self.assertEqual(before, after)
 
+    def test_materialize_baseline_captures_task_local_source_snapshots_without_source_rewrite(self) -> None:
+        self._seed_phase_1_sources()
+        self._new_task("materialize-baseline")
+        run = plan_evolution_run(
+            self.repo_root,
+            target_ids=["execution-contract-wording", "agent-instruction-sections"],
+        )
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+        evaluation_task = self._build_evaluation_task("TF-eval-baseline", self.repo_root)
+
+        conformance_before = (self.repo_root / "src/sisyphus/conformance.py").read_text(encoding="utf-8")
+        prompt_before = (self.repo_root / "src/sisyphus/codex_prompt.py").read_text(encoding="utf-8")
+
+        materialization = materialize_evolution_evaluation(plan.baseline, task=evaluation_task)
+
+        self.assertEqual(materialization.status, EVOLUTION_MATERIALIZATION_STATUS_BASELINE_CAPTURED)
+        self.assertEqual(
+            materialization.file_paths,
+            ("src/sisyphus/conformance.py", "src/sisyphus/codex_prompt.py"),
+        )
+        self.assertEqual(
+            (self.repo_root / "src/sisyphus/conformance.py").read_text(encoding="utf-8"),
+            conformance_before,
+        )
+        self.assertEqual(
+            (self.repo_root / "src/sisyphus/codex_prompt.py").read_text(encoding="utf-8"),
+            prompt_before,
+        )
+        self.assertTrue((self.repo_root / materialization.manifest_path).is_file())
+        self.assertTrue(
+            (
+                self.repo_root
+                / materialization.snapshot_root
+                / "src/sisyphus/conformance.py"
+            ).is_file()
+        )
+
+    def test_materialize_candidate_applies_bounded_target_rewrites(self) -> None:
+        self._seed_phase_1_sources()
+        self._new_task("materialize-candidate")
+        run = plan_evolution_run(
+            self.repo_root,
+            target_ids=["execution-contract-wording", "review-gate-explanation-text"],
+        )
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+        evaluation_task = self._build_evaluation_task("TF-eval-candidate", self.repo_root)
+
+        materialization = materialize_evolution_evaluation(plan.candidate, task=evaluation_task)
+        conformance_text = (self.repo_root / "src/sisyphus/conformance.py").read_text(encoding="utf-8")
+        audit_text = (self.repo_root / "src/sisyphus/audit.py").read_text(encoding="utf-8")
+
+        self.assertEqual(materialization.status, EVOLUTION_MATERIALIZATION_STATUS_CANDIDATE_APPLIED)
+        self.assertEqual(
+            tuple(target.target_id for target in materialization.targets),
+            ("execution-contract-wording", "review-gate-explanation-text"),
+        )
+        self.assertIn("must be resolved before continuing", conformance_text)
+        self.assertIn("before review can pass", audit_text)
+        self.assertTrue((self.repo_root / materialization.manifest_path).is_file())
+        self.assertTrue(
+            (
+                self.repo_root
+                / materialization.snapshot_root
+                / "src/sisyphus/audit.py"
+            ).is_file()
+        )
+
+    def test_materialize_candidate_fails_loudly_when_anchor_is_missing(self) -> None:
+        self._seed_phase_1_sources()
+        self._new_task("materialize-failure")
+        conformance_path = self.repo_root / "src/sisyphus/conformance.py"
+        conformance_path.write_text(
+            conformance_path.read_text(encoding="utf-8").replace(
+                "clarification or warning is pending",
+                "unexpected candidate wording is already present",
+            ),
+            encoding="utf-8",
+        )
+        run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+        evaluation_task = self._build_evaluation_task("TF-eval-failure", self.repo_root)
+
+        with self.assertRaisesRegex(EvolutionMaterializationError, "bounded mutation anchor missing"):
+            materialize_evolution_evaluation(plan.candidate, task=evaluation_task)
+
+    def test_execute_sisyphus_evaluation_records_materialization_evidence_and_manifest_owned_path(self) -> None:
+        self._seed_phase_1_sources()
+        self._new_task("harness-sisyphus-materialized")
+        run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+        task_id = "TF-eval-materialized"
+        evaluation_worktree = self.repo_root / "_worktrees" / task_id
+        evaluation_worktree.mkdir(parents=True, exist_ok=True)
+        self._seed_phase_1_sources(evaluation_worktree)
+        task_snapshot = self._build_evaluation_task(task_id, evaluation_worktree)
+        task_snapshots = {task_id: dict(task_snapshot)}
+        wrapper_calls: dict[str, object] = {}
+
+        def fake_request_task(repo_root, *, config=None, **kwargs):
+            task_snapshots[task_id] = dict(task_snapshot)
+            return SimpleNamespace(ok=True, task_id=task_id, task=dict(task_snapshot), error=None)
+
+        def fake_approve_task_plan(repo_root, config, task_id, *, reviewer, notes):
+            task_snapshots[task_id]["plan_status"] = "approved"
+            return SimpleNamespace(plan_status="approved")
+
+        def fake_freeze_task_spec(repo_root, config, task_id, *, reviewer, notes):
+            task_snapshots[task_id]["spec_status"] = "frozen"
+            task_snapshots[task_id]["workflow_phase"] = "subtask_planning"
+            return SimpleNamespace(spec_status="frozen", workflow_phase="subtask_planning")
+
+        def fake_run_provider_wrapper(provider, argv, *, repo_root=None):
+            wrapper_calls["provider"] = provider
+            wrapper_calls["argv"] = argv
+            wrapper_calls["repo_root"] = repo_root
+            return 0
+
+        def fake_load_task_record(repo_root, task_dir_name, task_id):
+            return (
+                dict(task_snapshots[task_id]),
+                evaluation_worktree / ".planning" / "tasks" / task_id / "task.json",
+            )
+
+        request = build_sisyphus_evaluation_request(
+            plan.candidate,
+            dataset,
+            auto_execute=True,
+            owned_paths=["docs/self-evolution-mcp-plan.md"],
+        )
+
+        with (
+            patch("sisyphus.api.request_task", side_effect=fake_request_task),
+            patch("sisyphus.planning.approve_task_plan", side_effect=fake_approve_task_plan),
+            patch("sisyphus.planning.freeze_task_spec", side_effect=fake_freeze_task_spec),
+            patch("sisyphus.provider_wrapper.run_provider_wrapper", side_effect=fake_run_provider_wrapper),
+            patch("sisyphus.state.load_task_record", side_effect=fake_load_task_record),
+        ):
+            outcome = execute_sisyphus_evaluation(plan.candidate, dataset, request=request)
+
+        self.assertIsNotNone(outcome.evidence)
+        self.assertEqual(outcome.evidence.mode, EVOLUTION_EVALUATION_EXECUTION_MODE_SISYPHUS_TASK)
+        self.assertEqual(outcome.evidence.materialization_status, EVOLUTION_MATERIALIZATION_STATUS_CANDIDATE_APPLIED)
+        self.assertEqual(outcome.evidence.materialized_target_ids, plan.candidate.target_ids)
+        self.assertEqual(outcome.evidence.materialized_file_paths, ("src/sisyphus/conformance.py",))
+        self.assertTrue((evaluation_worktree / outcome.evidence.materialization_manifest_path).is_file())
+        self.assertIn("--owned-path", wrapper_calls["argv"])
+        self.assertIn("src/sisyphus/conformance.py", wrapper_calls["argv"])
+        self.assertIn("docs/self-evolution-mcp-plan.md", wrapper_calls["argv"])
+        self.assertIn(outcome.evidence.materialization_manifest_path, wrapper_calls["argv"])
+        self.assertIn(
+            "must be resolved before continuing",
+            (evaluation_worktree / "src/sisyphus/conformance.py").read_text(encoding="utf-8"),
+        )
+
     def test_execute_harness_populates_default_metrics_without_repo_mutation(self) -> None:
         task_one = self._new_task("harness-exec-one")
         task_one["verify_status"] = "passed"
@@ -749,6 +949,7 @@ class EvolutionHarnessTests(unittest.TestCase):
         self.assertTrue(fitness.eligible_for_promotion)
 
     def test_execute_harness_supports_sisyphus_evaluation_evidence(self) -> None:
+        self._seed_phase_1_sources()
         self._new_task("harness-sisyphus")
         run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
         dataset = build_evolution_dataset(self.repo_root)
@@ -758,15 +959,13 @@ class EvolutionHarnessTests(unittest.TestCase):
 
         def fake_request_task(repo_root, *, config=None, **kwargs):
             task_id = f"TF-eval-{kwargs['slug']}"
-            task = {
-                "id": task_id,
-                "branch": f"feat/{kwargs['slug']}",
-                "worktree_path": str(self.repo_root / "_worktrees" / task_id),
-                "status": "open",
-                "plan_status": "pending_review",
-                "spec_status": "draft",
-                "workflow_phase": "plan_in_review",
-            }
+            worktree_root = self.repo_root / "_worktrees" / task_id
+            worktree_root.mkdir(parents=True, exist_ok=True)
+            self._seed_phase_1_sources(worktree_root)
+            task = self._build_evaluation_task(task_id, worktree_root)
+            task["plan_status"] = "pending_review"
+            task["spec_status"] = "draft"
+            task["workflow_phase"] = "plan_in_review"
             task_snapshots[task_id] = dict(task)
             return SimpleNamespace(ok=True, task_id=task_id, task=task, error=None)
 
@@ -820,6 +1019,7 @@ class EvolutionHarnessTests(unittest.TestCase):
         self.assertEqual(wrapper_calls[0][1][0], "task")
 
     def test_execute_harness_captures_sisyphus_evaluation_failure(self) -> None:
+        self._seed_phase_1_sources()
         self._new_task("harness-sisyphus-failure")
         run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
         dataset = build_evolution_dataset(self.repo_root)
@@ -828,15 +1028,13 @@ class EvolutionHarnessTests(unittest.TestCase):
 
         def fake_request_task(repo_root, *, config=None, **kwargs):
             task_id = f"TF-eval-{kwargs['slug']}"
-            task = {
-                "id": task_id,
-                "branch": f"feat/{kwargs['slug']}",
-                "worktree_path": str(self.repo_root / "_worktrees" / task_id),
-                "status": "open",
-                "plan_status": "pending_review",
-                "spec_status": "draft",
-                "workflow_phase": "plan_in_review",
-            }
+            worktree_root = self.repo_root / "_worktrees" / task_id
+            worktree_root.mkdir(parents=True, exist_ok=True)
+            self._seed_phase_1_sources(worktree_root)
+            task = self._build_evaluation_task(task_id, worktree_root)
+            task["plan_status"] = "pending_review"
+            task["spec_status"] = "draft"
+            task["workflow_phase"] = "plan_in_review"
             task_snapshots[task_id] = dict(task)
             return SimpleNamespace(ok=True, task_id=task_id, task=task, error=None)
 
