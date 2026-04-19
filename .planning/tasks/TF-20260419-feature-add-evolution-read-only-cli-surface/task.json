@@ -1,0 +1,252 @@
+{
+  "id": "TF-20260419-feature-add-evolution-read-only-cli-surface",
+  "type": "feature",
+  "slug": "add-evolution-read-only-cli-surface",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-19T22:47:28Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the read-only CLI slice: add evolution run/status/report/compare over current evolution contracts and artifacts, and keep scope out of MCP/event/promotion/follow-up execution work.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the read-only CLI slice: add evolution run/status/report/compare over current evolution contracts and artifacts, and keep scope out of MCP/event/promotion/follow-up execution work.",
+      "timestamp": "2026-04-19T22:47:28Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-19T22:47:34Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to the CLI-only read surface for evolution run/status/report/compare. No promotion, follow-up execution, MCP surface, or event-bus work in this slice.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-19T22:45:43Z",
+  "updated_at": "2026-04-19T23:00:16Z",
+  "closed_at": "2026-04-19T23:00:16Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260419-feature-add-evolution-read-only-cli-surface",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-cli-surface",
+  "branch": "feat/add-evolution-read-only-cli-surface",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-cli-surface && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_sisyphus tests.test_evolution",
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-cli-surface && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m compileall -q src"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-19T23:00:12Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-cli-surface && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_sisyphus tests.test_evolution",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-cli-surface && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_sisyphus tests.test_evolution",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-19T23:00:08Z",
+      "finished_at": "2026-04-19T23:00:12Z",
+      "duration_ms": null,
+      "output_excerpt": "workflow_phase: execution"
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-cli-surface && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m compileall -q src",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-cli-surface && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m compileall -q src",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-19T23:00:12Z",
+      "finished_at": "2026-04-19T23:00:12Z",
+      "duration_ms": null,
+      "output_excerpt": ""
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Operators can invoke `evolution run`, `status`, `report`, and `compare` against the current evolution contracts and stored run artifacts.",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Status/report commands surface clear output when a run exists but later-stage artifacts are still pending.",
+        "checked": true
+      },
+      {
+        "name": "Compare behaves predictably when baseline/candidate metrics are partial rather than complete.",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Unknown run ids or missing report artifacts surface actionable CLI errors without mutating task state.",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Operators can invoke evolution run, status, report, and compare against the current evolution contracts and stored run artifacts.",
+        "method": "python -m unittest -q tests.test_sisyphus tests.test_evolution"
+      },
+      {
+        "target": "Status/report commands surface clear output when a run exists but later-stage artifacts are still pending.",
+        "method": "python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Compare behaves predictably when baseline/candidate metrics are partial rather than complete.",
+        "method": "python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Unknown run ids or missing report artifacts surface actionable CLI errors without mutating task state.",
+        "method": "targeted regression test"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "Operators can invoke `evolution run`, `status`, `report`, and `compare` against the current evolution contracts and stored run artifacts.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-002",
+      "title": "Status/report commands surface clear output when a run exists but later-stage artifacts are still pending.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-003",
+      "title": "Compare behaves predictably when baseline/candidate metrics are partial rather than complete.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-004",
+      "title": "Unknown run ids or missing report artifacts surface actionable CLI errors without mutating task state.",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    }
+  ],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-04d7dad2921b",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "add-evolution-read-only-cli-surface"
+  }
+}
