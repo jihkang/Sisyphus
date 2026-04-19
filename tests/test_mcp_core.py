@@ -13,6 +13,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from sisyphus.api import record_merged_pull_request
+from sisyphus.audit import run_verify
 from sisyphus.config import load_config
 from sisyphus.conformance import append_conformance_log
 from sisyphus.events import new_event_envelope
@@ -43,6 +44,79 @@ class McpCoreTests(unittest.TestCase):
         materialize_task_templates(task)
         return task
 
+    def _fill_feature_docs(self, task: dict) -> None:
+        task_dir = self.repo_root / task["task_dir"]
+        (task_dir / "BRIEF.md").write_text(
+            "\n".join(
+                [
+                    "# Brief",
+                    "",
+                    "## Task",
+                    "",
+                    f"- Task ID: `{task['id']}`",
+                    "",
+                    "## Problem",
+                    "",
+                    "- Need a reconstructable artifact projection.",
+                    "",
+                    "## Desired Outcome",
+                    "",
+                    "- Feature projection is stable.",
+                    "",
+                    "## Acceptance Criteria",
+                    "",
+                    "- [x] Projection creates a feature change envelope",
+                    "- [x] Projection preserves verification evidence",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (task_dir / "PLAN.md").write_text(
+            "\n".join(
+                [
+                    "# Plan",
+                    "",
+                    "## Implementation Plan",
+                    "",
+                    "1. Build projection.",
+                    "",
+                    "## Risks",
+                    "",
+                    "- Adapter shape could drift.",
+                    "",
+                    "## Test Strategy",
+                    "",
+                    "### Normal Cases",
+                    "",
+                    "- [x] Verified task projects a feature envelope",
+                    "",
+                    "### Edge Cases",
+                    "",
+                    "- [x] Missing verify output stays pending",
+                    "",
+                    "### Exception Cases",
+                    "",
+                    "- [x] Missing docs fail clearly",
+                    "",
+                    "## Verification Mapping",
+                    "",
+                    "- `Verified task projects a feature envelope` -> `unit_test`",
+                    "- `Missing verify output stays pending` -> `unit_test`",
+                    "- `Missing docs fail clearly` -> `unit_test`",
+                    "",
+                    "## External LLM Review",
+                    "",
+                    "- Required: `no`",
+                    "- Provider: `n/a`",
+                    "- Purpose: `n/a`",
+                    "- Trigger: `n/a`",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
     def test_lists_tools_and_resources(self) -> None:
         tool_names = {tool["name"] for tool in self.core.list_tools()}
         resource_uris = {resource["uri"] for resource in self.core.list_resources()}
@@ -52,6 +126,8 @@ class McpCoreTests(unittest.TestCase):
         self.assertIn("task://<task-id>/conformance", resource_uris)
         self.assertIn("task://<task-id>/promotion", resource_uris)
         self.assertIn("task://<task-id>/changeset", resource_uris)
+        self.assertIn("task://<task-id>/artifact-graph", resource_uris)
+        self.assertIn("task://<task-id>/promotion-summary", resource_uris)
         request_tool = next(tool for tool in self.core.list_tools() if tool["name"] == "sisyphus.request_task")
         self.assertEqual(request_tool["inputSchema"]["required"], ["message"])
         self.assertFalse(request_tool["inputSchema"]["additionalProperties"])
@@ -118,6 +194,38 @@ class McpCoreTests(unittest.TestCase):
         self.assertEqual(len(timeline_payload["task_history"]), 2)
         self.assertEqual(timeline_payload["subtasks"][0]["subtask_id"], "S1")
         self.assertEqual(len(timeline_payload["subtasks"][0]["history"]), 2)
+
+    def test_reads_feature_task_artifact_resources(self) -> None:
+        task = self._new_task("artifact-graph")
+        self._fill_feature_docs(task)
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="approved",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="frozen",
+        )
+        run_verify(self.repo_root, self.config, task["id"])
+
+        graph_payload = self.core.read_resource(f"task://{task['id']}/artifact-graph")
+        slot_payload = self.core.read_resource(f"task://{task['id']}/slot-bindings")
+        claim_payload = self.core.read_resource(f"task://{task['id']}/verification-claims")
+        promotion_payload = self.core.read_resource(f"task://{task['id']}/promotion-summary")
+        invalidation_payload = self.core.read_resource(f"task://{task['id']}/invalidation-summary")
+
+        self.assertEqual(graph_payload["task_id"], task["id"])
+        self.assertEqual(graph_payload["composite"]["artifact_type"], "feature_change")
+        self.assertEqual(slot_payload["slot_bindings"]["spec"]["slot_name"], "spec")
+        self.assertTrue(claim_payload["claims"])
+        self.assertEqual(promotion_payload["promotion"]["decision"], "promotable")
+        self.assertEqual(invalidation_payload["invalidation"]["status"], "fresh")
 
     def test_reads_repo_status_and_schema_resources(self) -> None:
         task = self._new_task("board")
