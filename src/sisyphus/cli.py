@@ -22,6 +22,14 @@ from .config import load_config
 from .creation import TaskCreationError, create_task_workspace
 from .daemon import run_daemon
 from .discovery import detect_repo_root
+from .evolution.surface import (
+    compare_evolution_runs,
+    load_evolution_run_artifacts,
+    render_evolution_run_compare,
+    render_evolution_run_overview,
+    render_evolution_run_report,
+    render_evolution_run_status,
+)
 from .planning import (
     approve_task_plan,
     enforce_plan_approved,
@@ -117,6 +125,18 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--blocked", dest="only_blocked", action="store_true")
     status_parser.add_argument("--agents", action="store_true")
     status_parser.add_argument("--stale-after-seconds", type=int, default=DEFAULT_STALE_AFTER_SECONDS)
+
+    evolution_parser = subparsers.add_parser("evolution")
+    evolution_subparsers = evolution_parser.add_subparsers(dest="evolution_command", required=True)
+    evolution_run_parser = evolution_subparsers.add_parser("run")
+    evolution_run_parser.add_argument("run_id")
+    evolution_status_parser = evolution_subparsers.add_parser("status")
+    evolution_status_parser.add_argument("run_id")
+    evolution_report_parser = evolution_subparsers.add_parser("report")
+    evolution_report_parser.add_argument("run_id")
+    evolution_compare_parser = evolution_subparsers.add_parser("compare")
+    evolution_compare_parser.add_argument("left_run_id")
+    evolution_compare_parser.add_argument("right_run_id")
 
     agents_parser = subparsers.add_parser("agents")
     agents_parser.add_argument("--task-id")
@@ -924,6 +944,56 @@ def handle_status(
     return 0
 
 
+def handle_evolution_run(run_id: str, repo_root: str | Path | None = None) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    try:
+        artifacts = load_evolution_run_artifacts(repo_root, run_id)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(render_evolution_run_overview(artifacts), end="")
+    return 0
+
+
+def handle_evolution_status(run_id: str, repo_root: str | Path | None = None) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    try:
+        artifacts = load_evolution_run_artifacts(repo_root, run_id)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(render_evolution_run_status(artifacts), end="")
+    return 0
+
+
+def handle_evolution_report(run_id: str, repo_root: str | Path | None = None) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    try:
+        artifacts = load_evolution_run_artifacts(repo_root, run_id)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(render_evolution_run_report(artifacts), end="")
+    return 0
+
+
+def handle_evolution_compare(
+    left_run_id: str,
+    right_run_id: str,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    try:
+        left = load_evolution_run_artifacts(repo_root, left_run_id)
+        right = load_evolution_run_artifacts(repo_root, right_run_id)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    comparison = compare_evolution_runs(left, right)
+    print(render_evolution_run_compare(comparison), end="")
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args, extras = parser.parse_known_args()
@@ -1099,6 +1169,19 @@ def main() -> int:
             channel_ids=args.channel_ids,
             repo_root=args.repo_root,
         )
+    if args.command == "evolution":
+        if args.evolution_command == "run":
+            return handle_evolution_run(run_id=args.run_id, repo_root=args.repo_root)
+        if args.evolution_command == "status":
+            return handle_evolution_status(run_id=args.run_id, repo_root=args.repo_root)
+        if args.evolution_command == "report":
+            return handle_evolution_report(run_id=args.run_id, repo_root=args.repo_root)
+        if args.evolution_command == "compare":
+            return handle_evolution_compare(
+                left_run_id=args.left_run_id,
+                right_run_id=args.right_run_id,
+                repo_root=args.repo_root,
+            )
     if args.command == "status":
         return handle_status(
             as_json=args.json,
