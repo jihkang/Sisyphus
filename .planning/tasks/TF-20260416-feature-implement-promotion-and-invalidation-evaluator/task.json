@@ -2,25 +2,33 @@
   "id": "TF-20260416-feature-implement-promotion-and-invalidation-evaluator",
   "type": "feature",
   "slug": "implement-promotion-and-invalidation-evaluator",
-  "status": "open",
-  "stage": "spec",
-  "plan_status": "pending_review",
-  "plan_reviewed_at": null,
-  "plan_reviewed_by": null,
-  "plan_review_notes": null,
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-19T16:22:36Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the policy-evaluator slice: add PromotionDecision and InvalidationRecord models plus read-only helpers that derive candidate, verified, promotable, stale, and invalid outcomes for FeatureChangeArtifact without wiring workflow mutations.",
   "plan_review_round": 0,
   "max_plan_review_rounds": 3,
-  "plan_review_history": [],
-  "workflow_phase": "plan_in_review",
-  "spec_status": "draft",
-  "spec_frozen_at": null,
-  "spec_reviewed_by": null,
-  "spec_review_notes": null,
-  "audit_attempts": 0,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the policy-evaluator slice: add PromotionDecision and InvalidationRecord models plus read-only helpers that derive candidate, verified, promotable, stale, and invalid outcomes for FeatureChangeArtifact without wiring workflow mutations.",
+      "timestamp": "2026-04-19T16:22:36Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-19T16:22:42Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to read-only FeatureChangeArtifact policy evaluation models and tests. No workflow mutation routing or automatic promotion transitions in this slice.",
+  "audit_attempts": 1,
   "max_audit_attempts": 10,
   "created_at": "2026-04-16T17:14:29Z",
-  "updated_at": "2026-04-16T17:14:29Z",
-  "closed_at": null,
+  "updated_at": "2026-04-19T16:28:35Z",
+  "closed_at": "2026-04-19T16:28:35Z",
   "repo_root": "/Users/jihokang/Documents/Sisyphus",
   "task_dir": ".planning/tasks/TF-20260416-feature-implement-promotion-and-invalidation-evaluator",
   "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260416-feature-implement-promotion-and-invalidation-evaluator",
@@ -28,14 +36,50 @@
   "base_branch": "main",
   "verify_profile": "default",
   "verify_commands": [],
-  "verify_status": "not_run",
-  "last_verified_at": null,
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-19T16:28:28Z",
   "last_verify_results": [],
   "test_strategy": {
-    "normal_cases": [],
-    "edge_cases": [],
-    "exception_cases": [],
-    "verification_methods": [],
+    "normal_cases": [
+      {
+        "name": "A verified feature projection with required slots, passing claims, and matching lineage evaluates as promotable.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "A pre-verify feature projection stays in candidate state and reports the missing promotion obligations instead of failing evaluation.",
+        "checked": false
+      },
+      {
+        "name": "A lineage mismatch or stale child artifact produces a stale invalidation record without mutating the task.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "A failed invariant, failed verification claim, or selected implementation that is not part of the candidate set evaluates as invalid with explicit blocking reasons.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "A verified feature projection with required slots, passing claims, and matching lineage evaluates as promotable.",
+        "method": "python -m unittest -q tests.test_artifact_evaluator"
+      },
+      {
+        "target": "A pre-verify feature projection stays in candidate state and reports the missing promotion obligations instead of failing evaluation.",
+        "method": "python -m unittest -q tests.test_artifact_evaluator"
+      },
+      {
+        "target": "A lineage mismatch or stale child artifact produces a stale invalidation record without mutating the task.",
+        "method": "python -m unittest -q tests.test_artifact_evaluator"
+      },
+      {
+        "target": "A failed invariant, failed verification claim, or selected implementation that is not part of the candidate set evaluates as invalid with explicit blocking reasons.",
+        "method": "python -m unittest -q tests.test_artifact_evaluator"
+      }
+    ],
     "external_llm": {
       "required": false,
       "provider": null,
@@ -71,7 +115,7 @@
   },
   "meta": {
     "sequence": null,
-    "close_override_used": false,
+    "close_override_used": true,
     "source_event_id": "evt-1e3b914810fa",
     "source_event_type": "conversation",
     "default_provider": "codex",

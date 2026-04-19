@@ -21,6 +21,10 @@ INVARIANT_STATUS_PASSED = "passed"
 INVARIANT_STATUS_FAILED = "failed"
 INVARIANT_STATUS_PENDING = "pending"
 
+VERIFICATION_CLAIM_STATUS_PASSED = "passed"
+VERIFICATION_CLAIM_STATUS_FAILED = "failed"
+VERIFICATION_CLAIM_STATUS_PENDING = "pending"
+
 _ARTIFACT_REF_FIELDS = frozenset({"artifact_id", "artifact_type", "revision"})
 _TASK_SPEC_REF_FIELDS = frozenset({"task_id", "revision", "doc_path"})
 _TASK_RUN_REF_FIELDS = frozenset({"task_id", "run_id", "status", "receipt_locator"})
@@ -39,7 +43,7 @@ _FEATURE_CHANGE_SLOT_BINDINGS_FIELDS = frozenset(
         "execution_receipts",
     }
 )
-_VERIFICATION_CLAIM_FIELDS = frozenset({"claim_id", "claim", "scope", "dependency_refs", "evidence_refs"})
+_VERIFICATION_CLAIM_FIELDS = frozenset({"claim_id", "claim", "scope", "status", "dependency_refs", "evidence_refs"})
 _COMMON_RECORD_FIELDS = frozenset(
     {
         "schema_version",
@@ -306,6 +310,7 @@ class VerificationClaimRecord:
     claim_id: str
     claim: str
     scope: str
+    status: str = VERIFICATION_CLAIM_STATUS_PASSED
     dependency_refs: tuple[ArtifactRef, ...] = ()
     evidence_refs: tuple[ArtifactRef, ...] = ()
 
@@ -313,6 +318,7 @@ class VerificationClaimRecord:
         object.__setattr__(self, "claim_id", _require_string(self.claim_id, "claim_id"))
         object.__setattr__(self, "claim", _require_string(self.claim, "claim"))
         object.__setattr__(self, "scope", _require_string(self.scope, "scope"))
+        object.__setattr__(self, "status", _require_string(self.status, "status"))
         object.__setattr__(
             self,
             "dependency_refs",
@@ -329,6 +335,7 @@ class VerificationClaimRecord:
             "claim_id": self.claim_id,
             "claim": self.claim,
             "scope": self.scope,
+            "status": self.status,
             "dependency_refs": [artifact.to_dict() for artifact in self.dependency_refs],
             "evidence_refs": [artifact.to_dict() for artifact in self.evidence_refs],
         }
@@ -341,6 +348,7 @@ class VerificationClaimRecord:
             claim_id=_require_string(mapping.get("claim_id"), "verification_claim.claim_id"),
             claim=_require_string(mapping.get("claim"), "verification_claim.claim"),
             scope=_require_string(mapping.get("scope"), "verification_claim.scope"),
+            status=_optional_string(mapping.get("status")) or VERIFICATION_CLAIM_STATUS_PASSED,
             dependency_refs=_load_tuple(
                 mapping.get("dependency_refs", []),
                 ArtifactRef.from_dict,
@@ -735,5 +743,8 @@ __all__ = [
     "TaskRunRef",
     "TaskSpecRef",
     "VerificationClaimRecord",
+    "VERIFICATION_CLAIM_STATUS_FAILED",
+    "VERIFICATION_CLAIM_STATUS_PASSED",
+    "VERIFICATION_CLAIM_STATUS_PENDING",
     "load_artifact_record",
 ]

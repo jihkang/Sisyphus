@@ -19,6 +19,7 @@ from .artifacts import (
     TaskRunRef,
     TaskSpecRef,
     VerificationClaimRecord,
+    VERIFICATION_CLAIM_STATUS_PASSED,
 )
 from .config import SisyphusConfig
 from .state import load_task_record
@@ -37,6 +38,14 @@ class FeatureTaskArtifactProjection:
     verification_claims: tuple[VerificationClaimRecord, ...]
     execution_receipts: tuple[ArtifactRecord, ...]
     task_run_refs: tuple[TaskRunRef, ...]
+
+    def atomic_artifacts(self) -> tuple[ArtifactRecord, ...]:
+        return (
+            self.spec_artifact,
+            self.implementation_artifact,
+            *self.test_artifacts,
+            *self.execution_receipts,
+        )
 
 
 def project_feature_task(repo_root: Path, config: SisyphusConfig, task_id: str) -> FeatureTaskArtifactProjection:
@@ -238,6 +247,7 @@ def _build_verification_claims(
             claim_id=_artifact_id(task, "verification-claim-1"),
             claim=f"feature task {task['id']} verify flow passed for {feature_id}",
             scope="composite",
+            status=VERIFICATION_CLAIM_STATUS_PASSED,
             dependency_refs=dependency_refs,
             evidence_refs=evidence_refs,
         ),
