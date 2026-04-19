@@ -5,6 +5,7 @@ import json
 from urllib.parse import urlparse
 
 from .agents import list_agents
+from .artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
 from .api import get_task, list_tasks, record_merged_pull_request, request_task
 from .audit import run_verify
 from .bus_jsonl import read_jsonl_events, resolve_event_bus_path
@@ -267,6 +268,8 @@ class SisyphusMcpCoreService:
                     task_id=task_id,
                 )
             }
+        if is_feature_task_artifact_resource(resource_name):
+            return read_feature_task_artifact_resource(task, task_dir, resource_name)
 
         doc_key = _resource_doc_key(resource_name, task)
         if doc_key is None:
@@ -519,6 +522,11 @@ def mcp_resource_definitions() -> list[dict[str, object]]:
         {"uri": "task://<task-id>/promotion", "description": "Recorded promotion receipt JSON for a merged pull request."},
         {"uri": "task://<task-id>/changeset", "description": "Human-readable merged pull request changeset markdown."},
         {"uri": "task://<task-id>/agents", "description": "Tracked agent records for a task."},
+        {"uri": "task://<task-id>/artifact-graph", "description": "Read-only FeatureChangeArtifact graph projection for a feature task."},
+        {"uri": "task://<task-id>/slot-bindings", "description": "Projected slot bindings for a feature task artifact envelope."},
+        {"uri": "task://<task-id>/verification-claims", "description": "Projected verification claims bound to a feature task artifact envelope."},
+        {"uri": "task://<task-id>/promotion-summary", "description": "Read-only promotion decision summary derived from the feature task artifact projection."},
+        {"uri": "task://<task-id>/invalidation-summary", "description": "Read-only invalidation summary derived from the feature task artifact projection."},
     ]
 
 

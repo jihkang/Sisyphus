@@ -3,32 +3,28 @@
 ## Audit Summary
 
 - Attempt: `1/10`
-- Status: `not_run | passed | failed`
-- Result: `go next task | return to current task`
+- Stage: `done`
+- Status: `passed`
+- Result: `go next task`
 
-## Commands
+## Command Results
 
-- [ ] Command 1
-- [ ] Command 2
+- No verify commands configured
 
-## Results
+## Test Coverage Check
 
-### Command Results
+- Normal cases defined: `yes`
+- Edge cases defined: `yes`
+- Exception cases defined: `yes`
+- Verification methods defined: `yes`
 
-- Command 1 -> `pending`
-- Command 2 -> `pending`
+## External LLM Review
 
-### Test Coverage Check
-
-- [ ] Normal cases covered
-- [ ] Edge cases covered
-- [ ] Exception cases covered
-
-### External LLM Review
-
-- Required: `yes/no`
-- Status: `not_needed | pending | passed | failed`
-- Notes:
+- Required: `no`
+- Status: `not_needed`
+- Provider: `n/a`
+- Purpose: `n/a`
+- Trigger: `n/a`
 
 ## Gates
 

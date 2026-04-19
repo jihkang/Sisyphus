@@ -2,25 +2,33 @@
   "id": "TF-20260416-feature-expose-artifact-graph-via-mcp",
   "type": "feature",
   "slug": "expose-artifact-graph-via-mcp",
-  "status": "open",
-  "stage": "spec",
-  "plan_status": "pending_review",
-  "plan_reviewed_at": null,
-  "plan_reviewed_by": null,
-  "plan_review_notes": null,
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-19T16:22:35Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the read-only MCP artifact surface slice: expose task-scoped artifact graph, slot bindings, verification claims, and promotion/invalidation summaries from the existing feature-task projection without adding mutation tooling.",
   "plan_review_round": 0,
   "max_plan_review_rounds": 3,
-  "plan_review_history": [],
-  "workflow_phase": "plan_in_review",
-  "spec_status": "draft",
-  "spec_frozen_at": null,
-  "spec_reviewed_by": null,
-  "spec_review_notes": null,
-  "audit_attempts": 0,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the read-only MCP artifact surface slice: expose task-scoped artifact graph, slot bindings, verification claims, and promotion/invalidation summaries from the existing feature-task projection without adding mutation tooling.",
+      "timestamp": "2026-04-19T16:22:35Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-19T16:22:42Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to read-only MCP artifact inspection for feature tasks only. Reuse the typed artifact projection path and keep mutation tooling out of this slice.",
+  "audit_attempts": 1,
   "max_audit_attempts": 10,
   "created_at": "2026-04-16T17:14:29Z",
-  "updated_at": "2026-04-16T17:14:29Z",
-  "closed_at": null,
+  "updated_at": "2026-04-19T16:28:35Z",
+  "closed_at": "2026-04-19T16:28:35Z",
   "repo_root": "/Users/jihokang/Documents/Sisyphus",
   "task_dir": ".planning/tasks/TF-20260416-feature-expose-artifact-graph-via-mcp",
   "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260416-feature-expose-artifact-graph-via-mcp",
@@ -28,14 +36,42 @@
   "base_branch": "main",
   "verify_profile": "default",
   "verify_commands": [],
-  "verify_status": "not_run",
-  "last_verified_at": null,
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-19T16:28:28Z",
   "last_verify_results": [],
   "test_strategy": {
-    "normal_cases": [],
-    "edge_cases": [],
-    "exception_cases": [],
-    "verification_methods": [],
+    "normal_cases": [
+      {
+        "name": "A verified feature task exposes artifact graph, slot bindings, verification claims, and promotion summary resources through MCP.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "A feature task that has not passed verify still returns a candidate projection and a non-promotable summary without failing the resource read.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Unsupported task types or missing required task docs return actionable errors when reading artifact resources.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "A verified feature task exposes artifact graph, slot bindings, verification claims, and promotion summary resources through MCP.",
+        "method": "python -m unittest -q tests.test_mcp_core"
+      },
+      {
+        "target": "A feature task that has not passed verify still returns a candidate projection and a non-promotable summary without failing the resource read.",
+        "method": "python -m unittest -q tests.test_mcp_core tests.test_artifact_projection"
+      },
+      {
+        "target": "Unsupported task types or missing required task docs return actionable errors when reading artifact resources.",
+        "method": "python -m unittest -q tests.test_mcp_core tests.test_artifact_projection"
+      }
+    ],
     "external_llm": {
       "required": false,
       "provider": null,
@@ -71,7 +107,7 @@
   },
   "meta": {
     "sequence": null,
-    "close_override_used": false,
+    "close_override_used": true,
     "source_event_id": "evt-a1672f1efbe2",
     "source_event_type": "conversation",
     "default_provider": "codex",
