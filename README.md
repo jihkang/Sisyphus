@@ -228,6 +228,8 @@ sisyphus-mcp
 
 The MCP entrypoint is backed by the official MCP Python SDK over stdio.
 
+The recommended launcher also sets `PYTHONPATH=/absolute/path/to/Sisyphus/src` so active MCP registrations prefer the current repo source over any stale installed package copy.
+
 Quick start from the Sisyphus repo root:
 
 ```bash
@@ -287,6 +289,7 @@ uv run python -m unittest discover -s tests -v
 
 - `sisyphus` is the preferred command surface.
 - The direct MCP launcher is `python -m sisyphus.mcp_server`.
+- For durable local registration, include `PYTHONPATH=/absolute/path/to/Sisyphus/src` in the MCP server environment.
 - The package name is currently `taskflow-kit`.
 - Project philosophy: see `docs/philosophy.md`.
 - LinkedIn weekly summary example: see `docs/linkedin-weekly-main-summary-2026-04-17.md`.

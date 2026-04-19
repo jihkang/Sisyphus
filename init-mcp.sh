@@ -52,6 +52,16 @@ print_command() {
   printf '%s\n' "${quoted[*]}"
 }
 
+repo_pythonpath() {
+  local inherited_pythonpath="${PYTHONPATH:-}"
+  local repo_src="$REPO_ROOT/src"
+  if [[ -n "$inherited_pythonpath" ]]; then
+    printf '%s:%s' "$repo_src" "$inherited_pythonpath"
+    return 0
+  fi
+  printf '%s' "$repo_src"
+}
+
 resolve_repo_root() {
   if [[ ! -d "$REPO_ROOT" ]]; then
     echo "Repository root does not exist: $REPO_ROOT" >&2
@@ -89,12 +99,15 @@ resolve_codex_bin() {
 register_codex() {
   local codex_bin="$1"
   local python_bin="$2"
+  local pythonpath_value
+  pythonpath_value="$(repo_pythonpath)"
   if [[ "$DRY_RUN" -eq 1 ]]; then
     print_command "$codex_bin" mcp remove "$SERVER_NAME"
     print_command \
       "$codex_bin" mcp add "$SERVER_NAME" \
       --env "SISYPHUS_REPO_ROOT=$REPO_ROOT" \
       --env "SISYPHUS_MCP_DEBUG_LOG=$MCP_DEBUG_LOG" \
+      --env "PYTHONPATH=$pythonpath_value" \
       -- \
       "$python_bin" -m sisyphus.mcp_server
     return 0
@@ -104,31 +117,33 @@ register_codex() {
   "$codex_bin" mcp add "$SERVER_NAME" \
     --env "SISYPHUS_REPO_ROOT=$REPO_ROOT" \
     --env "SISYPHUS_MCP_DEBUG_LOG=$MCP_DEBUG_LOG" \
+    --env "PYTHONPATH=$pythonpath_value" \
     -- \
     "$python_bin" -m sisyphus.mcp_server
 }
 
 print_claude_project_config() {
   local python_bin="$2"
-  "$python_bin" - "$1" "$SERVER_NAME" "$python_bin" "$REPO_ROOT" "$MCP_DEBUG_LOG" <<'PY'
+  PYTHONPATH="$(repo_pythonpath)" "$python_bin" - "$1" "$SERVER_NAME" "$python_bin" "$REPO_ROOT" "$MCP_DEBUG_LOG" "${PYTHONPATH:-}" <<'PY'
 import json
 import pathlib
 import sys
+
+from sisyphus.mcp_launcher import build_stdio_server_config
 
 path = pathlib.Path(sys.argv[1])
 name = sys.argv[2]
 command = sys.argv[3]
 repo_root = sys.argv[4]
 debug_log = sys.argv[5]
+inherited_pythonpath = sys.argv[6] or None
 
-server_config = {
-    "command": command,
-    "args": ["-m", "sisyphus.mcp_server"],
-    "env": {
-        "SISYPHUS_REPO_ROOT": repo_root,
-        "SISYPHUS_MCP_DEBUG_LOG": debug_log,
-    },
-}
+server_config = build_stdio_server_config(
+    command,
+    repo_root,
+    debug_log,
+    inherited_pythonpath=inherited_pythonpath,
+)
 
 data = {}
 if path.exists():
