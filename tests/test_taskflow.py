@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import io
 import json
 from pathlib import Path
@@ -21,7 +22,6 @@ import sisyphus.cli as sisyphus_cli
 from sisyphus.agents import AgentTrackingError, list_agents, register_agent, update_agent
 from sisyphus.api import queue_conversation, request_task
 from sisyphus.audit import run_verify
-import taskflow.cli as taskflow_cli
 from sisyphus.codex_prompt import build_codex_prompt
 from sisyphus.conformance import append_conformance_log
 from sisyphus.cli import (
@@ -31,9 +31,10 @@ from sisyphus.cli import (
     handle_request,
     handle_status,
     handle_subtasks_generate,
+    main as cli_main,
 )
 from sisyphus.closeout import run_close
-from sisyphus.config import SisyphusConfig, TaskflowConfig, load_config
+from sisyphus.config import SisyphusConfig, load_config
 from sisyphus.creation import TaskCreationError, create_task_workspace
 from sisyphus.daemon import _is_internal_sisyphus_path, _render_feature_plan, _render_issue_fix_plan, process_inbox_event, queue_conversation_event, run_daemon
 from sisyphus.discovery import detect_repo_root
@@ -282,7 +283,7 @@ class SisyphusVerifyTests(unittest.TestCase):
         persisted["plan_status"] = "approved"
         task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
 
-        with mock.patch("taskflow.closeout.is_dirty_worktree", return_value=True):
+        with mock.patch("sisyphus.closeout.is_dirty_worktree", return_value=True):
             blocked = run_close(self.repo_root, self.config, task["id"], allow_dirty=False)
             closed = run_close(self.repo_root, self.config, task["id"], allow_dirty=True)
 
@@ -427,7 +428,7 @@ class SisyphusNewTests(unittest.TestCase):
     def test_create_task_rolls_back_on_template_failure(self) -> None:
         preview = build_task_record(self.repo_root, self.config, "feature", "rollback-check")
 
-        with mock.patch("taskflow.creation.materialize_task_templates", side_effect=RuntimeError("boom")):
+        with mock.patch("sisyphus.creation.materialize_task_templates", side_effect=RuntimeError("boom")):
             with self.assertRaises(TaskCreationError):
                 create_task_workspace(
                     repo_root=self.repo_root,
@@ -628,7 +629,7 @@ class SisyphusAgentTests(unittest.TestCase):
             status="completed",
         )
 
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
             buffer = io.StringIO()
             with redirect_stdout(buffer):
                 exit_code = handle_status(
@@ -646,7 +647,7 @@ class SisyphusAgentTests(unittest.TestCase):
         self.assertIn("worker-5 provider=n/a role=explorer status=completed step=-", rendered)
 
     def test_agent_run_marks_completed_automatically(self) -> None:
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
             exit_code = handle_agent_run(
                 task_id=self.task["id"],
                 agent_id="worker-run-ok",
@@ -654,7 +655,7 @@ class SisyphusAgentTests(unittest.TestCase):
                 provider="codex",
                 step="running codex wrapper",
                 summary="spawned by wrapper",
-                owned_paths=["src/taskflow/agents.py"],
+                owned_paths=["src/sisyphus/agents.py"],
                 heartbeat_seconds=1,
                 command=[sys.executable, "-c", "print('final success summary'); import sys; sys.exit(0)"],
             )
@@ -674,7 +675,7 @@ class SisyphusAgentTests(unittest.TestCase):
         self.assertIn("final success summary", completed["last_message_summary"])
 
     def test_agent_run_marks_failed_automatically(self) -> None:
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
             exit_code = handle_agent_run(
                 task_id=self.task["id"],
                 agent_id="worker-run-fail",
@@ -707,7 +708,7 @@ class SisyphusAgentTests(unittest.TestCase):
         )
         materialize_task_templates(task)
 
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
             exit_code = handle_agent_run(
                 task_id=task["id"],
                 agent_id="worker-blocked",
@@ -747,7 +748,7 @@ class SisyphusAgentTests(unittest.TestCase):
             notes="plan approved",
         )
 
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
             exit_code = handle_agent_run(
                 task_id=task["id"],
                 agent_id="worker-spec-blocked",
@@ -812,7 +813,7 @@ class SisyphusAgentTests(unittest.TestCase):
         }
         task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
 
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
             buffer = io.StringIO()
             with redirect_stdout(buffer):
                 exit_code = handle_status(
@@ -830,9 +831,9 @@ class SisyphusAgentTests(unittest.TestCase):
 
     def test_codex_wrapper_builds_default_codex_exec_command(self) -> None:
         (self.repo_root / ".venv" / "Scripts").mkdir(parents=True, exist_ok=True)
-        with mock.patch("taskflow.provider_wrapper.Path.cwd", return_value=self.repo_root):
-            with mock.patch("taskflow.provider_wrapper._resolve_codex_executable", return_value="codex.cmd"):
-                with mock.patch("taskflow.cli.handle_agent_run", return_value=0) as mocked_run:
+        with mock.patch("sisyphus.provider_wrapper.Path.cwd", return_value=self.repo_root):
+            with mock.patch("sisyphus.provider_wrapper._resolve_codex_executable", return_value="codex.cmd"):
+                with mock.patch("sisyphus.cli.handle_agent_run", return_value=0) as mocked_run:
                     exit_code = run_provider_wrapper(
                         "codex",
                         [self.task["id"], "worker-codex"],
@@ -850,9 +851,9 @@ class SisyphusAgentTests(unittest.TestCase):
         self.assertEqual(kwargs["env"]["GIT_CONFIG_VALUE_0"], expected_repo_root)
 
     def test_codex_wrapper_with_options_still_builds_default_launch(self) -> None:
-        with mock.patch("taskflow.provider_wrapper.Path.cwd", return_value=self.repo_root):
-            with mock.patch("taskflow.provider_wrapper._resolve_codex_executable", return_value="codex.cmd"):
-                with mock.patch("taskflow.cli.handle_agent_run", return_value=0) as mocked_run:
+        with mock.patch("sisyphus.provider_wrapper.Path.cwd", return_value=self.repo_root):
+            with mock.patch("sisyphus.provider_wrapper._resolve_codex_executable", return_value="codex.cmd"):
+                with mock.patch("sisyphus.cli.handle_agent_run", return_value=0) as mocked_run:
                     exit_code = run_provider_wrapper(
                         "codex",
                         [
@@ -880,10 +881,10 @@ class SisyphusAgentTests(unittest.TestCase):
             output_path.write_text("STATUS: blocked\nworkspace is read-only\n", encoding="utf-8")
             return 0
 
-        with mock.patch("taskflow.provider_wrapper.Path.cwd", return_value=self.repo_root):
-            with mock.patch("taskflow.provider_wrapper._resolve_codex_executable", return_value="codex.cmd"):
-                with mock.patch("taskflow.cli.handle_agent_run", side_effect=fake_handle_agent_run):
-                    with mock.patch("taskflow.provider_wrapper.update_agent") as mocked_update:
+        with mock.patch("sisyphus.provider_wrapper.Path.cwd", return_value=self.repo_root):
+            with mock.patch("sisyphus.provider_wrapper._resolve_codex_executable", return_value="codex.cmd"):
+                with mock.patch("sisyphus.cli.handle_agent_run", side_effect=fake_handle_agent_run):
+                    with mock.patch("sisyphus.provider_wrapper.update_agent") as mocked_update:
                         exit_code = run_provider_wrapper(
                             "codex",
                             [self.task["id"], "worker-blocked-result"],
@@ -902,8 +903,8 @@ class SisyphusAgentTests(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "initial"], cwd=self.repo_root, check=True, capture_output=True, text=True)
 
         buffer = io.StringIO()
-        with mock.patch("taskflow.provider_wrapper.Path.cwd", return_value=self.repo_root):
-            with mock.patch("taskflow.daemon.run_provider_wrapper", return_value=0) as mocked_nested_run:
+        with mock.patch("sisyphus.provider_wrapper.Path.cwd", return_value=self.repo_root):
+            with mock.patch("sisyphus.daemon.run_provider_wrapper", return_value=0) as mocked_nested_run:
                 with redirect_stdout(buffer):
                     exit_code = run_provider_wrapper(
                         "codex",
@@ -933,7 +934,7 @@ class SisyphusAgentTests(unittest.TestCase):
         self.assertFalse(mocked_nested_run.called)
 
     def test_agent_run_marks_failed_when_command_cannot_start(self) -> None:
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
             exit_code = handle_agent_run(
                 task_id=self.task["id"],
                 agent_id="worker-missing-binary",
@@ -963,8 +964,8 @@ class SisyphusAgentTests(unittest.TestCase):
         process.stdin = io.StringIO()
         process.wait.return_value = 0
 
-        with mock.patch("taskflow.cli.detect_repo_root", return_value=self.repo_root):
-            with mock.patch("taskflow.agent_runtime.subprocess.Popen", return_value=process) as mocked_popen:
+        with mock.patch("sisyphus.cli.detect_repo_root", return_value=self.repo_root):
+            with mock.patch("sisyphus.agent_runtime.subprocess.Popen", return_value=process) as mocked_popen:
                 exit_code = handle_agent_run(
                     task_id=self.task["id"],
                     agent_id="worker-utf8",
@@ -1150,7 +1151,7 @@ class SisyphusDaemonTests(unittest.TestCase):
             instruction="focus on status output first",
         )
 
-        with mock.patch("taskflow.daemon.run_provider_wrapper", return_value=0) as mocked_wrapper:
+        with mock.patch("sisyphus.daemon.run_provider_wrapper", return_value=0) as mocked_wrapper:
             event = process_inbox_event(
                 repo_root=self.repo_root,
                 config=self.config,
@@ -1434,7 +1435,7 @@ class SisyphusDaemonTests(unittest.TestCase):
             reviewer="reviewer-1",
             notes="spec locked",
         )
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
             exit_code = handle_subtasks_generate(task["id"])
 
         self.assertEqual(freeze.spec_status, "frozen")
@@ -1445,7 +1446,7 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(persisted["subtasks"][0]["title"], "Happy path works")
 
     def test_run_daemon_once_respects_no_run_events(self) -> None:
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
             exit_code = handle_ingest_conversation(
                 message="CLI를 통해 conversation event를 생성해줘",
                 title="Create queued task only",
@@ -1463,7 +1464,7 @@ class SisyphusDaemonTests(unittest.TestCase):
             )
 
         self.assertEqual(exit_code, 0)
-        with mock.patch("taskflow.daemon.run_provider_wrapper", return_value=0) as mocked_wrapper:
+        with mock.patch("sisyphus.daemon.run_provider_wrapper", return_value=0) as mocked_wrapper:
             stats = run_daemon(
                 repo_root=self.repo_root,
                 config=self.config,
@@ -1486,7 +1487,7 @@ class SisyphusDaemonTests(unittest.TestCase):
             message="show agent status in one place",
         )
 
-        with mock.patch("taskflow.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper) as mocked_wrapper:
+        with mock.patch("sisyphus.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper) as mocked_wrapper:
             stats = run_daemon(
                 repo_root=self.repo_root,
                 config=self.config,
@@ -1509,8 +1510,8 @@ class SisyphusDaemonTests(unittest.TestCase):
 
     def test_request_command_stops_at_pending_review_until_user_approval(self) -> None:
         buffer = io.StringIO()
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
-            with mock.patch("taskflow.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper) as mocked_wrapper:
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
+            with mock.patch("sisyphus.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper) as mocked_wrapper:
                 with redirect_stdout(buffer):
                     exit_code = handle_request(
                         message="show agent status in one place",
@@ -1546,8 +1547,8 @@ class SisyphusDaemonTests(unittest.TestCase):
 
     def test_request_command_respects_no_run(self) -> None:
         buffer = io.StringIO()
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
-            with mock.patch("taskflow.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper) as mocked_wrapper:
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
+            with mock.patch("sisyphus.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper) as mocked_wrapper:
                 with redirect_stdout(buffer):
                     exit_code = handle_request(
                         message="create the task but stop before execution",
@@ -1584,7 +1585,7 @@ class SisyphusDaemonTests(unittest.TestCase):
         (self.repo_root / "README.md").write_text("# changed in root\n", encoding="utf-8")
         buffer = io.StringIO()
 
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
             with redirect_stdout(buffer):
                 exit_code = handle_request(
                     message="attach my current edit to the task",
@@ -1625,7 +1626,7 @@ class SisyphusDaemonTests(unittest.TestCase):
         existing_file.write_text(json.dumps(persisted_existing, indent=2) + "\n", encoding="utf-8")
 
         buffer = io.StringIO()
-        with mock.patch("taskflow.cli.Path.cwd", return_value=self.repo_root):
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
             with redirect_stdout(buffer):
                 exit_code = handle_request(
                     message="continue the actual implementation work",
@@ -1654,8 +1655,8 @@ class SisyphusDaemonTests(unittest.TestCase):
         outside_root.mkdir(parents=True, exist_ok=True)
         buffer = io.StringIO()
 
-        with mock.patch("taskflow.cli.Path.cwd", return_value=outside_root):
-            with mock.patch("taskflow.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper):
+        with mock.patch("sisyphus.cli.Path.cwd", return_value=outside_root):
+            with mock.patch("sisyphus.workflow.run_provider_wrapper", side_effect=self._fake_workflow_wrapper):
                 with redirect_stdout(buffer):
                     exit_code = handle_request(
                         message="show agent status in one place",
@@ -1771,9 +1772,9 @@ class SisyphusDaemonTests(unittest.TestCase):
             message="로컬 codex 실행이 실패하는 경우도 남겨줘",
         )
 
-        with mock.patch("taskflow.daemon.enforce_plan_approved", side_effect=lambda **kwargs: (True, load_task_record(self.repo_root, self.config.task_dir, kwargs["task_id"])[0])):
-            with mock.patch("taskflow.daemon.enforce_spec_frozen", side_effect=lambda **kwargs: (True, load_task_record(self.repo_root, self.config.task_dir, kwargs["task_id"])[0])):
-                with mock.patch("taskflow.daemon.run_provider_wrapper", return_value=7):
+        with mock.patch("sisyphus.daemon.enforce_plan_approved", side_effect=lambda **kwargs: (True, load_task_record(self.repo_root, self.config.task_dir, kwargs["task_id"])[0])):
+            with mock.patch("sisyphus.daemon.enforce_spec_frozen", side_effect=lambda **kwargs: (True, load_task_record(self.repo_root, self.config.task_dir, kwargs["task_id"])[0])):
+                with mock.patch("sisyphus.daemon.run_provider_wrapper", return_value=7):
                     event = process_inbox_event(
                         repo_root=self.repo_root,
                         config=self.config,
@@ -1817,8 +1818,8 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertIn("usage: sisyphus", parser.format_usage())
 
     def test_sisyphus_cli_module_reexports_parser_and_main(self) -> None:
-        self.assertIs(sisyphus_cli.build_parser, taskflow_cli.build_parser)
-        self.assertIs(sisyphus_cli.main, taskflow_cli.main)
+        self.assertIs(sisyphus_cli.build_parser, build_parser)
+        self.assertIs(sisyphus_cli.main, cli_main)
 
     def test_request_parser_accepts_conversation_arguments(self) -> None:
         parser = build_parser()
@@ -1895,8 +1896,11 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertIs(sisyphus.request_task, request_task)
         self.assertIs(sisyphus.queue_conversation, queue_conversation)
 
-    def test_config_uses_sisyphus_name_with_taskflow_alias_preserved(self) -> None:
-        self.assertIs(TaskflowConfig, SisyphusConfig)
+    def test_taskflow_package_is_no_longer_available(self) -> None:
+        with self.assertRaises(ModuleNotFoundError):
+            importlib.import_module("taskflow")
+
+    def test_config_uses_sisyphus_name(self) -> None:
         self.assertIsInstance(self.config, SisyphusConfig)
 
     def test_internal_sisyphus_path_helper_preserves_legacy_behavior(self) -> None:
@@ -1909,7 +1913,7 @@ class SisyphusDaemonTests(unittest.TestCase):
         nested.mkdir(parents=True, exist_ok=True)
         (self.repo_root / ".sisyphus.toml").write_text('base_branch = "canonical"\n', encoding="utf-8")
 
-        with mock.patch("taskflow.discovery.subprocess.run", side_effect=subprocess.CalledProcessError(1, ["git"])):
+        with mock.patch("sisyphus.discovery.subprocess.run", side_effect=subprocess.CalledProcessError(1, ["git"])):
             resolved = detect_repo_root(nested)
 
         self.assertEqual(resolved, self.repo_root.resolve())
@@ -1919,7 +1923,7 @@ class SisyphusDaemonTests(unittest.TestCase):
         nested.mkdir(parents=True, exist_ok=True)
         (self.repo_root / ".sisyphus.toml").unlink(missing_ok=True)
 
-        with mock.patch("taskflow.discovery.subprocess.run", side_effect=subprocess.CalledProcessError(1, ["git"])):
+        with mock.patch("sisyphus.discovery.subprocess.run", side_effect=subprocess.CalledProcessError(1, ["git"])):
             resolved = detect_repo_root(nested)
 
         self.assertEqual(resolved, self.repo_root.resolve())
@@ -1936,7 +1940,7 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertIn("`Regression scenario now passes` -> `sisyphus verify`", rendered)
         self.assertNotIn("`Regression scenario now passes` -> `taskflow verify`", rendered)
 
-    def test_template_resources_are_packaged_under_legacy_taskflow_package(self) -> None:
+    def test_template_resources_are_packaged_under_canonical_sisyphus_package(self) -> None:
         root = template_root()
 
         self.assertTrue(root.joinpath("feature", "BRIEF.md").is_file())

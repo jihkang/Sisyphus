@@ -36,8 +36,6 @@ Codex supports MCP server registration from the CLI.
 
 The preferred direct Python launcher path is `sisyphus.mcp_server`.
 
-The legacy module path `taskflow.mcp_server` remains available as a compatibility alias.
-
 Add Sisyphus for the current repository:
 
 ```bash

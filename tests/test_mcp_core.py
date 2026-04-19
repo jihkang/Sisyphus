@@ -159,7 +159,7 @@ class McpCoreTests(unittest.TestCase):
             error=None,
         )
 
-        with mock.patch("taskflow.mcp_core.request_task", return_value=fake_result):
+        with mock.patch("sisyphus.mcp_core.request_task", return_value=fake_result):
             payload = self.core.call_tool("sisyphus.request_task", {"message": "create a task"})
 
         self.assertTrue(payload["ok"])
@@ -169,3 +169,13 @@ class McpCoreTests(unittest.TestCase):
         self.assertEqual(payload["orchestrated"], 0)
         self.assertIsInstance(payload["orchestrated"], int)
         self.assertIsNone(payload["error"])
+
+    def test_request_task_tool_rejects_non_list_owned_paths(self) -> None:
+        with self.assertRaisesRegex(TypeError, "expected list value, got: str"):
+            self.core.call_tool(
+                "sisyphus.request_task",
+                {
+                    "message": "create a task",
+                    "owned_paths": "src/sisyphus",
+                },
+            )

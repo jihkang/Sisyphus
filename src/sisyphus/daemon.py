@@ -570,10 +570,6 @@ def _is_internal_sisyphus_path(relative_path: str) -> bool:
     return normalized == ".planning" or normalized.startswith(".planning/")
 
 
-def _is_internal_taskflow_path(relative_path: str) -> bool:
-    return _is_internal_sisyphus_path(relative_path)
-
-
 def _render_brief(
     task: dict,
     title: str,

@@ -34,24 +34,25 @@ These are the key files already added or updated:
 
 - [docs/architecture.md](./architecture.md)
 - [docs/mcp-clients.md](./mcp-clients.md)
-- [src/taskflow/conformance.py](../src/taskflow/conformance.py)
-- [src/taskflow/bus.py](../src/taskflow/bus.py)
-- [src/taskflow/bus_jsonl.py](../src/taskflow/bus_jsonl.py)
-- [src/taskflow/events.py](../src/taskflow/events.py)
-- [src/taskflow/mcp_core.py](../src/taskflow/mcp_core.py)
-- [src/taskflow/mcp_server.py](../src/taskflow/mcp_server.py)
+- [src/sisyphus/conformance.py](../src/sisyphus/conformance.py)
+- [src/sisyphus/bus.py](../src/sisyphus/bus.py)
+- [src/sisyphus/bus_jsonl.py](../src/sisyphus/bus_jsonl.py)
+- [src/sisyphus/events.py](../src/sisyphus/events.py)
+- [src/sisyphus/mcp_core.py](../src/sisyphus/mcp_core.py)
+- [src/sisyphus/mcp_server.py](../src/sisyphus/mcp_server.py)
 
 ## Implemented Foundation
 
 The repository now includes the first read-only evolution foundation:
 
-- `targets.py` and `runner.py` for target selection and run planning
+- `targets.py`, `runner.py`, and a stage-aware execution path for target selection, guarded run orchestration, and follow-up automation
 - `dataset.py` for trace extraction from repository-local task and event state
-- `harness.py` for baseline/candidate evaluation planning
+- `mutators.py` for bounded Phase 1 text/policy materialization inside isolated evaluation worktrees
+- `harness.py` for baseline/candidate evaluation execution, Sisyphus-backed evidence capture, and isolated evaluation task creation
 - `constraints.py` and `fitness.py` for hard guards and weighted scoring
 - `report.py` for stable review/report projection
 
-The remaining major gaps are still candidate mutation, executed harness runs, MCP evolution tools/resources, and approval-driven branch materialization.
+The remaining major gaps are now real task execution metrics inside the mutated evaluation worktrees, MCP evolution tools/resources, and approval-driven promotion or branch materialization.
 
 ### Implemented Evaluation Loop
 
@@ -68,7 +69,7 @@ flowchart TD
     H --> I[Future MCP evolution surface and approval flow]
 ```
 
-This is intentionally separate from the live task workflow. The evolution subsystem currently models and evaluates candidate runs from repository-local traces without mutating live task state.
+This is intentionally separate from the live task workflow. The evolution subsystem now materializes bounded baseline/candidate artifacts inside isolated Sisyphus evaluation worktrees while still keeping live task state untouched.
 
 ## Constraint
 
@@ -95,6 +96,14 @@ MCP clients
 ```
 
 Runtime orchestration and self-evolution must remain separate.
+
+The stronger version of that rule is:
+
+- Sisyphus owns the authoritative runtime contract and durable work graph
+- Hermes-like capabilities may be absorbed as planning, decomposition, or recovery intelligence
+- those capabilities must not become the source of truth for receipts, artifact relations, verification, promotion, or invalidation
+
+In other words, intelligence is allowed to operate on the work world, but authority must remain inside Sisyphus.
 
 ## Target Scope
 
@@ -131,7 +140,7 @@ Only evolve text/policy assets first:
 Create a new evolution package:
 
 ```text
-src/taskflow/evolution/
+src/sisyphus/evolution/
   targets.py
   dataset.py
   mutators.py
@@ -149,9 +158,9 @@ src/taskflow/evolution/
 - `dataset.py`
   - builds evaluation sets from task records, events, conformance history, verify logs
 - `mutators.py`
-  - generates candidate prompt/policy/code variants
+  - generates bounded Phase 1 prompt/policy/code rewrites and task-local materialization artifacts
 - `harness.py`
-  - runs baseline vs candidate on the same dataset
+  - runs baseline vs candidate on the same dataset and records isolated evaluation evidence
 - `fitness.py`
   - computes scores
 - `constraints.py`
@@ -266,7 +275,7 @@ Use Sisyphus tools instead of editing task status directly:
 
 #### Workstream A. Evolution architecture
 
-- add `src/taskflow/evolution/`
+- add `src/sisyphus/evolution/`
 - define run model and target registry
 - document evaluation flow
 
