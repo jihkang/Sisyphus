@@ -13,6 +13,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from sisyphus.artifact_evaluator import (
+    FeatureChangePolicy,
     INVALIDATION_STATUS_FRESH,
     INVALIDATION_STATUS_INVALID,
     INVALIDATION_STATUS_STALE,
@@ -25,6 +26,7 @@ from sisyphus.artifacts import (
     ARTIFACT_STATE_STALE,
     ARTIFACT_STATE_VERIFIED,
     INVARIANT_STATUS_FAILED,
+    ArtifactRecord,
     ArtifactInvariantRecord,
     ArtifactRef,
     NamedSlotBinding,
@@ -204,6 +206,56 @@ class ArtifactEvaluatorTests(unittest.TestCase):
         self.assertEqual(evaluation.derived_state, ARTIFACT_STATE_STALE)
         self.assertEqual(evaluation.invalidation.status, INVALIDATION_STATUS_STALE)
         self.assertEqual(evaluation.invalidation.stale_inputs[0].artifact_id, stale_implementation.artifact_id)
+
+    def test_stale_approval_blocks_promotable_state_when_approvals_are_required(self) -> None:
+        projection = self._prepare_projection("artifact-evaluator-stale-approval", verified=True)
+        stale_approval = ArtifactRecord(
+            artifact_id="artifact-approval-1",
+            artifact_type="approval",
+            state=ARTIFACT_STATE_STALE,
+        )
+        bindings = replace(
+            projection.slot_bindings,
+            approvals=projection.slot_bindings.approvals.__class__(
+                slot_name="approvals",
+                artifacts=(ArtifactRef("artifact-approval-1", "approval"),),
+            ),
+        )
+
+        evaluation = evaluate_feature_change_artifact(
+            projection.feature_change_artifact,
+            slot_bindings=bindings,
+            verification_claims=projection.verification_claims,
+            artifacts=(*projection.atomic_artifacts(), stale_approval),
+            policy=FeatureChangePolicy(require_approvals=True),
+        )
+
+        self.assertEqual(evaluation.derived_state, ARTIFACT_STATE_STALE)
+        self.assertEqual(evaluation.invalidation.status, INVALIDATION_STATUS_STALE)
+        self.assertEqual(evaluation.invalidation.stale_inputs[0].artifact_id, stale_approval.artifact_id)
+
+    def test_passed_claim_must_bind_current_spec_selected_impl_and_tests(self) -> None:
+        projection = self._prepare_projection("artifact-evaluator-claim-mismatch", verified=True)
+        mismatched_claim = replace(
+            projection.verification_claims[0],
+            dependency_refs=(
+                ArtifactRef(projection.spec_artifact.artifact_id, projection.spec_artifact.artifact_type),
+                ArtifactRef("artifact-old-selected", "implementation_candidate"),
+            ),
+        )
+
+        evaluation = evaluate_feature_change_artifact(
+            projection.feature_change_artifact,
+            slot_bindings=projection.slot_bindings,
+            verification_claims=(mismatched_claim,),
+            artifacts=projection.atomic_artifacts(),
+        )
+
+        self.assertEqual(evaluation.derived_state, "invalid")
+        self.assertIn(
+            f"verification_claim_dependency_mismatch:{mismatched_claim.claim_id}",
+            evaluation.promotion.blocking_reasons,
+        )
 
     def test_failed_invariant_or_claim_evaluates_as_invalid(self) -> None:
         projection = self._prepare_projection("artifact-evaluator-invalid", verified=True)

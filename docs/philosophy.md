@@ -199,6 +199,14 @@ That means:
 - stop before human approval boundaries
 - stop when evidence is insufficient
 
+For the evolution subsystem, this rule is stricter:
+
+- automate candidate planning and read-only evaluation
+- allow isolated evidence gathering
+- do not let evolution approve its own work
+- do not let evolution freeze specs or promote results
+- require the normal Sisyphus lifecycle for any live repository change
+
 ## Summary
 
 Sisyphus is not only a task runner and not only a thinking aid.

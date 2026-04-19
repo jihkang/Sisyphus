@@ -2,8 +2,8 @@
   "id": "TF-20260418-feature-define-evolution-stage-transition-and-failure-contract",
   "type": "feature",
   "slug": "define-evolution-stage-transition-and-failure-contract",
-  "status": "blocked",
-  "stage": "audit",
+  "status": "closed",
+  "stage": "done",
   "plan_status": "approved",
   "plan_reviewed_at": "2026-04-19T07:36:54Z",
   "plan_reviewed_by": "codex",
@@ -34,8 +34,8 @@
   "audit_attempts": 1,
   "max_audit_attempts": 10,
   "created_at": "2026-04-18T15:08:11Z",
-  "updated_at": "2026-04-19T08:16:16Z",
-  "closed_at": null,
+  "updated_at": "2026-04-19T19:58:43Z",
+  "closed_at": "2026-04-19T19:58:43Z",
   "repo_root": "/Users/jihokang/Documents/Sisyphus",
   "task_dir": ".planning/tasks/TF-20260418-feature-define-evolution-stage-transition-and-failure-contract",
   "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260418-feature-define-evolution-stage-transition-and-failure-contract",
@@ -87,15 +87,7 @@
       "status": "not_needed"
     }
   },
-  "gates": [
-    {
-      "code": "DIRTY_WORKTREE",
-      "message": "working tree is dirty",
-      "blocking": true,
-      "source": "close",
-      "created_at": "2026-04-19T08:16:16Z"
-    }
-  ],
+  "gates": [],
   "subtasks": [
     {
       "id": "subtask-001",
@@ -198,7 +190,7 @@
   },
   "meta": {
     "sequence": null,
-    "close_override_used": false,
+    "close_override_used": true,
     "source_event_id": "evt-6bdc69dbfd42",
     "source_event_type": "conversation",
     "default_provider": "codex",

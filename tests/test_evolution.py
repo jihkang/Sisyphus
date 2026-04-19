@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 import sys
 import json
+from typing import get_args
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -14,16 +15,55 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from sisyphus.evolution import (
+    EVOLUTION_ALL_RUN_STAGES,
+    EVOLUTION_ARTIFACT_KIND_EXECUTION_RECEIPT,
+    EVOLUTION_ARTIFACT_KIND_REPORT,
+    EVOLUTION_ARTIFACT_KIND_RUN_SPEC,
+    EVOLUTION_ARTIFACT_KIND_VERIFICATION,
+    EVOLUTION_ARTIFACT_OWNER_EVOLUTION,
+    EVOLUTION_ARTIFACT_OWNER_SISYPHUS,
+    EVOLUTION_ARTIFACT_STATUS_FUTURE,
+    EVOLUTION_ARTIFACT_STATUS_PLANNED,
+    EVOLUTION_DEFAULT_REVIEW_GATES,
     EVOLUTION_EVALUATION_STATUS_PLANNED,
+    EVOLUTION_EXTENSION_STAGE_SEQUENCE,
+    EVOLUTION_FAILURE_SHAPE,
     EVOLUTION_ISOLATION_MODE_TASK_WORKTREE_COPY,
     EVOLUTION_PHASE_1,
+    EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
+    EVOLUTION_READ_ONLY_RUN_STAGES,
+    EVOLUTION_READ_ONLY_STAGE_SEQUENCE,
+    EVOLUTION_STAGE_FAILED,
+    EVOLUTION_STAGE_REPORT_BUILT,
     EVOLUTION_TARGET_KIND_TEXT_POLICY,
+    EvolutionArtifactRef,
+    EvolutionCandidateArtifact,
+    EvolutionDatasetArtifact,
+    EvolutionEvaluationArtifact,
+    EvolutionEvidenceSummary,
+    EvolutionFollowupRequest,
+    EvolutionFollowupRequestArtifact,
     EvolutionPlannedMetrics,
+    EvolutionPromotionCandidate,
+    EvolutionReportArtifact,
+    EvolutionRunExecutionError,
+    EvolutionRunRequest,
+    EvolutionRunResult,
+    EvolutionRunSpec,
+    EvolutionRunStage,
+    EvolutionStageFailure,
+    EvolutionVerificationObligation,
+    ExecutionReceiptArtifact,
+    PromotionDecisionArtifact,
+    VerificationArtifact,
     build_evolution_dataset,
     build_evolution_report,
     evaluate_evolution_constraints,
     evaluate_evolution_fitness,
+    execute_evolution_run,
+    get_evolution_stage_contract,
     get_evolution_target,
+    list_evolution_stage_contracts,
     list_evolution_targets,
     plan_evolution_harness,
     plan_evolution_run,
@@ -64,9 +104,14 @@ class EvolutionCoreTests(unittest.TestCase):
 
         self.assertEqual(run.selection_mode, "default")
         self.assertEqual(run.target_ids, tuple(target.target_id for target in list_evolution_targets()))
+        self.assertEqual(run.stage, "planned")
         self.assertEqual(run.status, "planned")
         self.assertEqual(run.dataset_status, "not_built")
         self.assertFalse(run.mutates_live_task_state)
+        self.assertEqual(run.request.repo_root, str(repo_root.resolve()))
+        self.assertEqual(run.request.target_ids, ())
+        self.assertEqual(run.request.run_id, run.run_id)
+        self.assertEqual(run.request.created_at, run.created_at)
         self.assertEqual(before, after)
 
     def test_plan_run_preserves_registry_order_for_explicit_subset(self) -> None:
@@ -97,6 +142,250 @@ class EvolutionCoreTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "unknown evolution target ids: missing-target"):
                 plan_evolution_run(repo_root, target_ids=["missing-target"])
+
+    def test_stage_contracts_cover_current_slice(self) -> None:
+        self.assertEqual(
+            EVOLUTION_READ_ONLY_STAGE_SEQUENCE,
+            (
+                "planned",
+                "dataset_built",
+                "harness_planned",
+                "constraints_evaluated",
+                "fitness_evaluated",
+                "report_built",
+                "failed",
+            ),
+        )
+        self.assertEqual(
+            EVOLUTION_EXTENSION_STAGE_SEQUENCE,
+            (
+                "ready_for_review",
+                "followup_requested",
+                "promoted",
+                "invalidated",
+                "rejected",
+            ),
+        )
+        self.assertEqual(EVOLUTION_READ_ONLY_RUN_STAGES[0], "planned")
+        self.assertEqual(EVOLUTION_ALL_RUN_STAGES[-1], "rejected")
+        self.assertEqual(
+            get_args(EvolutionRunStage),
+            EVOLUTION_READ_ONLY_STAGE_SEQUENCE + EVOLUTION_EXTENSION_STAGE_SEQUENCE,
+        )
+
+        contracts = list_evolution_stage_contracts(include_future=False)
+        self.assertEqual(tuple(contract.stage for contract in contracts), EVOLUTION_READ_ONLY_STAGE_SEQUENCE)
+        self.assertTrue(all(contract.future_only is False for contract in contracts))
+        self.assertEqual(get_evolution_stage_contract("report_built").output_artifact, "EvolutionReport")
+
+        failure = EvolutionStageFailure(
+            stage="constraints_evaluated",
+            code="missing_metric_values",
+            message="constraints are pending because the harness has no executed metrics yet",
+            partial_results=("EvolutionHarnessPlan", "EvolutionDataset"),
+            recoverable=True,
+        )
+        self.assertEqual(failure.stage, "constraints_evaluated")
+        self.assertEqual(failure.partial_results, ("EvolutionHarnessPlan", "EvolutionDataset"))
+        self.assertTrue(failure.recoverable)
+        self.assertEqual(get_evolution_stage_contract("failed").failure_shape, EVOLUTION_FAILURE_SHAPE)
+
+    def test_contract_vocabulary_uses_request_and_result_types(self) -> None:
+        artifact_ref = EvolutionArtifactRef(
+            artifact_id="artifact-report",
+            kind=EVOLUTION_ARTIFACT_KIND_REPORT,
+            owner=EVOLUTION_ARTIFACT_OWNER_EVOLUTION,
+            notes="contract only",
+        )
+        failure = EvolutionStageFailure(
+            stage="failed",
+            code="missing_metrics",
+            message="comparison metrics are not attached yet",
+            recoverable=True,
+            partial_results=("report",),
+        )
+        result = EvolutionRunResult(
+            run_id="EVR-123",
+            stage="failed",
+            summary="read-only planning is complete but execution evidence is still pending",
+            artifact_refs=(artifact_ref,),
+            failure=failure,
+        )
+        candidate = EvolutionPromotionCandidate(
+            run_id="EVR-123",
+            candidate_id="candidate-001",
+            claim="improves wording clarity without increasing drift",
+            evidence=(artifact_ref,),
+        )
+        request = EvolutionRunRequest(
+            repo_root="/tmp/repo",
+            target_ids=("execution-contract-wording",),
+            run_id="EVR-123",
+            created_at="2026-04-19T00:00:00Z",
+            notes="planning-only request",
+        )
+
+        self.assertEqual(result.failure, failure)
+        self.assertEqual(candidate.status, "planned_only")
+        self.assertEqual(request.target_ids, ("execution-contract-wording",))
+
+    def test_artifact_cycle_exposes_minimum_vertical_slice_types(self) -> None:
+        run_spec = EvolutionRunSpec(
+            artifact_id="artifact-run-spec",
+            producing_stage="planned",
+            status=EVOLUTION_ARTIFACT_STATUS_PLANNED,
+            run_id="EVR-123",
+            repo_root="/tmp/repo",
+            selection_mode="default",
+            target_ids=("execution-contract-wording",),
+            notes="planning-only run spec",
+        )
+        run_ref = EvolutionArtifactRef(
+            artifact_id=run_spec.artifact_id,
+            kind=run_spec.kind,
+            owner=run_spec.owner,
+            notes="run spec dependency",
+        )
+        dataset = EvolutionDatasetArtifact(
+            artifact_id="artifact-dataset",
+            producing_stage="dataset_built",
+            status=EVOLUTION_ARTIFACT_STATUS_PLANNED,
+            run_id="EVR-123",
+            selected_task_ids=("TF-1", "TF-2"),
+            task_count=2,
+            event_count=4,
+            trace_sources=("task_records", "events"),
+            depends_on=(run_ref,),
+        )
+        candidate = EvolutionCandidateArtifact(
+            artifact_id="artifact-candidate",
+            producing_stage="harness_planned",
+            status=EVOLUTION_ARTIFACT_STATUS_PLANNED,
+            run_id="EVR-123",
+            candidate_id="candidate-001",
+            candidate_role="candidate",
+            target_ids=("execution-contract-wording",),
+            change_summary=("tighten wording",),
+            depends_on=(run_ref,),
+        )
+        evaluation = EvolutionEvaluationArtifact(
+            artifact_id="artifact-evaluation",
+            producing_stage="constraints_evaluated",
+            status=EVOLUTION_ARTIFACT_STATUS_PLANNED,
+            run_id="EVR-123",
+            candidate_id="candidate-001",
+            evaluation_scope="read_only",
+            metric_fields=("verify_pass_rate", "drift_count"),
+            summary_lines=("metrics pending",),
+            depends_on=(run_ref,),
+            evidence_refs=(run_ref,),
+        )
+        report = EvolutionReportArtifact(
+            artifact_id="artifact-report",
+            producing_stage="report_built",
+            status=EVOLUTION_ARTIFACT_STATUS_PLANNED,
+            run_id="EVR-123",
+            headline="Reviewable report pending execution evidence",
+            recommendation="await_execution",
+            comparison_summary=("no executed harness results yet",),
+            depends_on=(run_ref,),
+            evidence_refs=(run_ref,),
+        )
+        followup = EvolutionFollowupRequestArtifact(
+            artifact_id="artifact-followup",
+            producing_stage="ready_for_review",
+            status=EVOLUTION_ARTIFACT_STATUS_FUTURE,
+            run_id="EVR-123",
+            title="Request normal Sisyphus follow-up task",
+            summary="handoff instead of direct mutation",
+            requested_task_type="feature",
+            requested_targets=("execution-contract-wording",),
+            depends_on=(run_ref,),
+            evidence_refs=(run_ref,),
+        )
+        receipt = ExecutionReceiptArtifact(
+            artifact_id="artifact-receipt",
+            producing_stage="followup_requested",
+            status=EVOLUTION_ARTIFACT_STATUS_FUTURE,
+            run_id="EVR-123",
+            task_id="TF-123",
+            receipt_kind="task_run",
+            receipt_locator=".planning/tasks/TF-123/receipts/task_run.json",
+            depends_on=(run_ref,),
+            evidence_refs=(run_ref,),
+        )
+        verification = VerificationArtifact(
+            artifact_id="artifact-verification",
+            producing_stage="followup_requested",
+            status=EVOLUTION_ARTIFACT_STATUS_FUTURE,
+            run_id="EVR-123",
+            claim="follow-up matches the reviewed evolution request",
+            verification_scope="cross",
+            result="pending",
+            depends_on=(run_ref,),
+            evidence_refs=(run_ref,),
+        )
+        promotion = PromotionDecisionArtifact(
+            artifact_id="artifact-promotion",
+            producing_stage="ready_for_review",
+            status=EVOLUTION_ARTIFACT_STATUS_FUTURE,
+            run_id="EVR-123",
+            decision="pending_followup_execution",
+            claim="candidate is eligible for reviewable handoff",
+            followup_task_id="TF-123",
+            depends_on=(run_ref,),
+            evidence_refs=(run_ref,),
+        )
+
+        self.assertEqual(run_spec.kind, EVOLUTION_ARTIFACT_KIND_RUN_SPEC)
+        self.assertEqual(run_spec.owner, EVOLUTION_ARTIFACT_OWNER_EVOLUTION)
+        self.assertEqual(report.kind, EVOLUTION_ARTIFACT_KIND_REPORT)
+        self.assertEqual(followup.owner, EVOLUTION_ARTIFACT_OWNER_EVOLUTION)
+        self.assertEqual(receipt.kind, EVOLUTION_ARTIFACT_KIND_EXECUTION_RECEIPT)
+        self.assertEqual(receipt.owner, EVOLUTION_ARTIFACT_OWNER_SISYPHUS)
+        self.assertEqual(verification.kind, EVOLUTION_ARTIFACT_KIND_VERIFICATION)
+        self.assertEqual(promotion.owner, EVOLUTION_ARTIFACT_OWNER_SISYPHUS)
+        self.assertFalse(dataset.persisted)
+        self.assertEqual(candidate.depends_on[0], run_ref)
+        self.assertEqual(evaluation.evidence_refs[0], run_ref)
+        self.assertEqual(promotion.followup_task_id, "TF-123")
+
+    def test_followup_request_is_reviewable_request_only(self) -> None:
+        request = EvolutionFollowupRequest(
+            source_run_id="EVR-1234567890ab",
+            candidate_id="candidate-001",
+            title="Refine evolution report wording",
+            summary="Request a follow-up task to land the reviewed wording change through Sisyphus.",
+            requested_task_type="feature",
+            target_scope=("execution-contract-wording", "review-gate-explanation-text"),
+            instruction_set=(
+                "Update the wording in the documented sections only.",
+                "Preserve the current review and verify gates.",
+            ),
+            owned_paths=("docs/architecture.md", "docs/self-evolution-mcp-plan.md"),
+            expected_verification_obligations=(
+                EvolutionVerificationObligation(
+                    claim="handoff request includes the review context required for operator approval",
+                    method="targeted unit test in tests.test_evolution",
+                ),
+            ),
+            evidence_summary=(
+                EvolutionEvidenceSummary(
+                    kind="fitness_delta",
+                    summary="candidate improves wording coverage without changing live task state",
+                    locator=".planning/evolution/runs/EVR-1234567890ab/report.md",
+                ),
+            ),
+            promotion_intent=EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
+        )
+
+        self.assertEqual(request.target_scope, ("execution-contract-wording", "review-gate-explanation-text"))
+        self.assertEqual(request.required_review_gates, EVOLUTION_DEFAULT_REVIEW_GATES)
+        self.assertTrue(request.request_only)
+        self.assertFalse(request.permits_plan_approval)
+        self.assertFalse(request.permits_spec_freeze)
+        self.assertFalse(request.permits_execution)
+        self.assertFalse(request.permits_promotion)
 
 
 class EvolutionDatasetTests(unittest.TestCase):
@@ -636,6 +925,99 @@ class EvolutionReportTests(unittest.TestCase):
 
         self.assertEqual(dataset.selected_task_ids, harness.dataset_task_ids)
         self.assertEqual(before, after)
+
+
+class EvolutionOrchestratorTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.repo_root = Path(self.tempdir.name)
+        (self.repo_root / ".taskflow.toml").write_text("", encoding="utf-8")
+        self.config = load_config(self.repo_root)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def _new_task(self, slug: str) -> dict:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug=slug,
+        )
+        materialize_task_templates(task)
+        return task
+
+    def _repo_snapshot(self) -> dict[str, str]:
+        return {
+            path.relative_to(self.repo_root).as_posix(): path.read_text(encoding="utf-8")
+            for path in sorted(self.repo_root.rglob("*"))
+            if path.is_file() and ".planning/evolution/runs/" not in path.as_posix()
+        }
+
+    def test_execute_run_persists_expected_stage_artifacts(self) -> None:
+        task = self._new_task("orchestrator-run")
+        event_path = self.repo_root / ".planning" / "events.jsonl"
+        event_path.parent.mkdir(parents=True, exist_ok=True)
+        event_path.write_text(
+            json.dumps({"event_id": "evt-1", "event_type": "task.updated", "data": {"task_id": task["id"]}}) + "\n",
+            encoding="utf-8",
+        )
+        before = self._repo_snapshot()
+
+        executed = execute_evolution_run(self.repo_root, run_id="EVR-orchestrator-success")
+
+        after = self._repo_snapshot()
+        artifact_dir = self.repo_root / ".planning" / "evolution" / "runs" / "EVR-orchestrator-success"
+        self.assertEqual(executed.final_stage, EVOLUTION_STAGE_REPORT_BUILT)
+        self.assertIsNone(executed.failure)
+        self.assertEqual(before, after)
+        self.assertTrue((artifact_dir / "run.json").exists())
+        self.assertTrue((artifact_dir / "dataset.json").exists())
+        self.assertTrue((artifact_dir / "harness_plan.json").exists())
+        self.assertTrue((artifact_dir / "constraints.json").exists())
+        self.assertTrue((artifact_dir / "fitness.json").exists())
+        self.assertTrue((artifact_dir / "report.md").exists())
+
+        constraints_payload = json.loads((artifact_dir / "constraints.json").read_text(encoding="utf-8"))
+        fitness_payload = json.loads((artifact_dir / "fitness.json").read_text(encoding="utf-8"))
+        self.assertEqual(constraints_payload["status"], "pending")
+        self.assertEqual(fitness_payload["status"], "pending")
+
+    def test_execute_run_persists_pending_results_without_fabricating_metrics(self) -> None:
+        self._new_task("orchestrator-pending")
+
+        executed = execute_evolution_run(self.repo_root, run_id="EVR-orchestrator-pending")
+
+        self.assertEqual(executed.constraint_result.status, "pending")
+        self.assertIsNone(executed.constraint_result.accepted)
+        self.assertEqual(executed.fitness_result.status, "pending")
+        self.assertIsNone(executed.fitness_result.score_delta)
+        self.assertEqual(executed.report.status, "planned")
+
+    def test_execute_run_persists_stage_failure_without_live_repo_mutation(self) -> None:
+        self._new_task("orchestrator-failure")
+        before = self._repo_snapshot()
+
+        def _broken_report_builder(*args, **kwargs):
+            raise RuntimeError("report build exploded")
+
+        with self.assertRaises(EvolutionRunExecutionError) as ctx:
+            execute_evolution_run(
+                self.repo_root,
+                run_id="EVR-orchestrator-failure",
+                report_builder=_broken_report_builder,
+            )
+
+        after = self._repo_snapshot()
+        artifact_dir = self.repo_root / ".planning" / "evolution" / "runs" / "EVR-orchestrator-failure"
+        failure_payload = json.loads((artifact_dir / "failure.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(before, after)
+        self.assertEqual(ctx.exception.result.final_stage, EVOLUTION_STAGE_FAILED)
+        self.assertEqual(ctx.exception.result.failure.stage, "report_built")
+        self.assertEqual(failure_payload["stage"], "report_built")
+        self.assertIn("fitness.json", failure_payload["partial_artifacts"])
+        self.assertEqual(failure_payload["error_type"], "RuntimeError")
 
 
 if __name__ == "__main__":
