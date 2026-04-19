@@ -5,3 +5,4 @@ args = ["-m", "sisyphus.mcp_server"]
 [mcp_servers.sisyphus.env]
 SISYPHUS_REPO_ROOT = "/absolute/path/to/your/repository"
 SISYPHUS_MCP_DEBUG_LOG = "/tmp/sisyphus-mcp-debug.log"
+PYTHONPATH = "/absolute/path/to/Sisyphus/src"

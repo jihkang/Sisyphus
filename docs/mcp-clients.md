@@ -35,17 +35,18 @@ That script does two things:
 Codex supports MCP server registration from the CLI.
 
 The preferred direct Python launcher path is `sisyphus.mcp_server`.
+To avoid stale installed package copies after local renames or migrations, include `PYTHONPATH=/absolute/path/to/Sisyphus/src` in the MCP server environment.
 
 Add Sisyphus for the current repository:
 
 ```bash
-codex mcp add sisyphus -- /absolute/path/to/Sisyphus/.venv/bin/python -m sisyphus.mcp_server
+codex mcp add sisyphus --env PYTHONPATH=/absolute/path/to/Sisyphus/src -- /absolute/path/to/Sisyphus/.venv/bin/python -m sisyphus.mcp_server
 ```
 
 Add Sisyphus for a specific repository:
 
 ```bash
-codex mcp add sisyphus --env SISYPHUS_REPO_ROOT=/absolute/path/to/your/repository --env SISYPHUS_MCP_DEBUG_LOG=/tmp/sisyphus-mcp-debug.log -- /absolute/path/to/Sisyphus/.venv/bin/python -m sisyphus.mcp_server
+codex mcp add sisyphus --env SISYPHUS_REPO_ROOT=/absolute/path/to/your/repository --env SISYPHUS_MCP_DEBUG_LOG=/tmp/sisyphus-mcp-debug.log --env PYTHONPATH=/absolute/path/to/Sisyphus/src -- /absolute/path/to/Sisyphus/.venv/bin/python -m sisyphus.mcp_server
 ```
 
 Inspect the registration:
@@ -74,7 +75,8 @@ cat > .mcp.json <<'EOF'
       "args": ["-m", "sisyphus.mcp_server"],
       "env": {
         "SISYPHUS_REPO_ROOT": "/absolute/path/to/your/repository",
-        "SISYPHUS_MCP_DEBUG_LOG": "/tmp/sisyphus-mcp-debug.log"
+        "SISYPHUS_MCP_DEBUG_LOG": "/tmp/sisyphus-mcp-debug.log",
+        "PYTHONPATH": "/absolute/path/to/Sisyphus/src"
       }
     }
   }
@@ -123,3 +125,5 @@ It also exposes these resource groups:
 - task conformance summary
 - task docs such as brief, plan, verify, and log
 - task agent records
+
+If an MCP tool still reports a legacy `taskflow` path after the rename, rerun `./init-mcp.sh` so the registration picks up the current repo source tree through `PYTHONPATH`.

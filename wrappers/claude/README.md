@@ -25,7 +25,8 @@ Tracked wrapper for manual Claude-oriented commands.
       "args": ["-m", "sisyphus.mcp_server"],
       "env": {
         "SISYPHUS_REPO_ROOT": "/absolute/path/to/your/repository",
-        "SISYPHUS_MCP_DEBUG_LOG": "/tmp/sisyphus-mcp-debug.log"
+        "SISYPHUS_MCP_DEBUG_LOG": "/tmp/sisyphus-mcp-debug.log",
+        "PYTHONPATH": "/absolute/path/to/Sisyphus/src"
       }
     }
   }
@@ -41,10 +42,13 @@ claude mcp add-json sisyphus '{
   "args": ["-m", "sisyphus.mcp_server"],
   "env": {
     "SISYPHUS_REPO_ROOT": "/absolute/path/to/your/repository",
-    "SISYPHUS_MCP_DEBUG_LOG": "/tmp/sisyphus-mcp-debug.log"
+    "SISYPHUS_MCP_DEBUG_LOG": "/tmp/sisyphus-mcp-debug.log",
+    "PYTHONPATH": "/absolute/path/to/Sisyphus/src"
   }
 }'
 ```
+
+로컬 rename이나 패키지 전환 직후에는 `PYTHONPATH`로 repo `src/`를 우선시해야 stale 설치본을 피할 수 있다.
 
 등록 확인:
 
