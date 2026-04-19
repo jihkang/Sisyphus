@@ -14,6 +14,7 @@ from .gitops import copy_relative_path, current_branch_name, list_dirty_paths, r
 from .events import new_event_envelope
 from .paths import event_log_file, inbox_failed_dir, inbox_pending_dir, inbox_processed_dir
 from .planning import enforce_plan_approved, enforce_spec_frozen
+from .promotion import record_merged_pull_request
 from .provider_wrapper import run_provider_wrapper
 from .state import list_task_records, load_task_record, save_task_record, sync_task_support_files, utc_now
 from .utils import project_fields
@@ -35,6 +36,25 @@ CONVERSATION_FIELD_DEFAULTS = {
     "adopt_current_changes": False,
     "adopt_paths": list,
     "auto_run": True,
+}
+
+PULL_REQUEST_MERGED_FIELD_DEFAULTS = {
+    "task_id": None,
+    "branch": None,
+    "repo_full_name": None,
+    "pr_number": None,
+    "title": "",
+    "url": None,
+    "base_branch": None,
+    "head_branch": None,
+    "head_sha": None,
+    "merge_commit_sha": None,
+    "merged_at": None,
+    "merged_by": None,
+    "merge_method": None,
+    "additions": None,
+    "deletions": None,
+    "changed_files": list,
 }
 
 
@@ -132,6 +152,103 @@ def queue_conversation_event(
     return event, event_path
 
 
+def queue_pull_request_merged_event(
+    repo_root: Path,
+    *,
+    pr_number: int,
+    title: str,
+    task_id: str | None = None,
+    branch: str | None = None,
+    repo_full_name: str | None = None,
+    url: str | None = None,
+    base_branch: str | None = None,
+    head_branch: str | None = None,
+    head_sha: str | None = None,
+    merge_commit_sha: str | None = None,
+    merged_at: str | None = None,
+    merged_by: str | None = None,
+    merge_method: str | None = None,
+    additions: int | None = None,
+    deletions: int | None = None,
+    changed_files: list[dict[str, object]] | None = None,
+) -> tuple[dict, Path]:
+    if pr_number < 1:
+        raise DaemonError("pull request merge event requires a positive pr_number")
+    normalized_title = title.strip()
+    if not normalized_title:
+        raise DaemonError("pull request merge event requires a non-empty title")
+    normalized_branch = (branch or head_branch or "").strip()
+    if not normalized_branch and not (task_id or "").strip():
+        raise DaemonError("pull request merge event requires task_id or branch/head_branch")
+
+    normalized_changed_files: list[dict[str, object]] = []
+    for item in changed_files or []:
+        if not isinstance(item, dict):
+            raise DaemonError("changed_files entries must be mapping objects")
+        normalized_changed_files.append(dict(item))
+
+    payload = project_fields(
+        {
+            "task_id": (task_id or "").strip() or None,
+            "branch": normalized_branch or None,
+            "repo_full_name": (repo_full_name or "").strip() or None,
+            "pr_number": pr_number,
+            "title": normalized_title,
+            "url": (url or "").strip() or None,
+            "base_branch": (base_branch or "").strip() or None,
+            "head_branch": (head_branch or "").strip() or None,
+            "head_sha": (head_sha or "").strip() or None,
+            "merge_commit_sha": (merge_commit_sha or "").strip() or None,
+            "merged_at": (merged_at or "").strip() or None,
+            "merged_by": (merged_by or "").strip() or None,
+            "merge_method": (merge_method or "").strip() or None,
+            "additions": additions,
+            "deletions": deletions,
+            "changed_files": normalized_changed_files,
+        },
+        PULL_REQUEST_MERGED_FIELD_DEFAULTS,
+    )
+
+    event_id = _new_event_id()
+    event = {
+        "id": event_id,
+        "event_type": "pull_request_merged",
+        "status": "queued",
+        "created_at": utc_now(),
+        "updated_at": utc_now(),
+        "payload": payload,
+        "result": None,
+        "error": None,
+    }
+    target_dir = inbox_pending_dir(repo_root)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    event_path = target_dir / f"{event_id}.json"
+    event_path.write_text(json.dumps(event, indent=2) + "\n", encoding="utf-8")
+    _append_event_log(
+        repo_root,
+        {
+            "timestamp": utc_now(),
+            "event_id": event_id,
+            "event_type": "pull_request_merged",
+            "status": "queued",
+            "message": f"pull request merge event queued for pr #{pr_number}",
+        },
+    )
+    build_event_publisher(repo_root, load_config(repo_root)).publish(
+        new_event_envelope(
+            "pull_request.merged.queued",
+            source={"module": "daemon"},
+            data={
+                "event_id": event_id,
+                "task_id": payload.get("task_id"),
+                "branch": payload.get("branch"),
+                "pr_number": pr_number,
+            },
+        )
+    )
+    return event, event_path
+
+
 def run_daemon(
     repo_root: Path,
     config: SisyphusConfig,
@@ -189,9 +306,13 @@ def process_inbox_event(
     )
 
     try:
-        if event.get("event_type") != "conversation":
+        event_type = str(event.get("event_type"))
+        if event_type == "conversation":
+            result = _process_conversation_event(repo_root=repo_root, config=config, event=event)
+        elif event_type == "pull_request_merged":
+            result = _process_pull_request_merged_event(repo_root=repo_root, config=config, event=event)
+        else:
             raise DaemonError(f"unsupported event type: {event.get('event_type')}")
-        result = _process_conversation_event(repo_root=repo_root, config=config, event=event)
         event["status"] = "processed"
         event["updated_at"] = utc_now()
         event["result"] = result
@@ -199,6 +320,11 @@ def process_inbox_event(
         destination = inbox_processed_dir(repo_root) / event_path.name
         if stats is not None:
             stats.processed += 1
+        success_message = (
+            f"created task {result['task_id']}"
+            if event_type == "conversation"
+            else f"recorded merge receipt for task {result['task_id']}"
+        )
         _append_event_log(
             repo_root,
             {
@@ -206,18 +332,23 @@ def process_inbox_event(
                 "event_id": event.get("id"),
                 "event_type": event.get("event_type"),
                 "status": "processed",
-                "message": f"created task {result['task_id']}",
+                "message": success_message,
                 "result": result,
             },
         )
+        processed_envelope_type = "conversation.processed" if event_type == "conversation" else "pull_request.merged.processed"
+        processed_data = {"event_id": event.get("id"), "task_id": result.get("task_id"), "status": "processed"}
+        if event_type == "pull_request_merged":
+            processed_data["pr_number"] = result.get("pr_number")
         publisher.publish(
             new_event_envelope(
-                "conversation.processed",
+                processed_envelope_type,
                 source={"module": "daemon"},
-                data={"event_id": event.get("id"), "task_id": result.get("task_id"), "status": "processed"},
+                data=processed_data,
             )
         )
     except Exception as exc:
+        event_type = str(event.get("event_type"))
         event["status"] = "failed"
         event["updated_at"] = utc_now()
         event["error"] = str(exc)
@@ -234,9 +365,10 @@ def process_inbox_event(
                 "message": str(exc),
             },
         )
+        failed_envelope_type = "conversation.failed" if event_type == "conversation" else "pull_request.merged.failed"
         publisher.publish(
             new_event_envelope(
-                "conversation.failed",
+                failed_envelope_type,
                 source={"module": "daemon"},
                 data={"event_id": event.get("id"), "status": "failed", "error": str(exc)},
             )
@@ -370,6 +502,56 @@ def _process_conversation_event(repo_root: Path, config: SisyphusConfig, event: 
         "plan_status": task.get("plan_status"),
         "spec_status": task.get("spec_status"),
         "blocked_reason": blocked_reason,
+    }
+
+
+def _process_pull_request_merged_event(repo_root: Path, config: SisyphusConfig, event: dict) -> dict:
+    publisher = build_event_publisher(repo_root, config)
+    payload = project_fields(event.get("payload", {}), PULL_REQUEST_MERGED_FIELD_DEFAULTS)
+    outcome = record_merged_pull_request(
+        repo_root=repo_root,
+        config=config,
+        task_id=str(payload["task_id"]) if payload.get("task_id") else None,
+        branch=str(payload["branch"]) if payload.get("branch") else None,
+        repo_full_name=str(payload["repo_full_name"]) if payload.get("repo_full_name") else None,
+        pr_number=int(payload["pr_number"]),
+        title=str(payload["title"]),
+        url=str(payload["url"]) if payload.get("url") else None,
+        base_branch=str(payload["base_branch"]) if payload.get("base_branch") else None,
+        head_branch=str(payload["head_branch"]) if payload.get("head_branch") else None,
+        head_sha=str(payload["head_sha"]) if payload.get("head_sha") else None,
+        merge_commit_sha=str(payload["merge_commit_sha"]) if payload.get("merge_commit_sha") else None,
+        merged_at=str(payload["merged_at"]) if payload.get("merged_at") else None,
+        merged_by=str(payload["merged_by"]) if payload.get("merged_by") else None,
+        merge_method=str(payload["merge_method"]) if payload.get("merge_method") else None,
+        additions=int(payload["additions"]) if payload.get("additions") is not None else None,
+        deletions=int(payload["deletions"]) if payload.get("deletions") is not None else None,
+        changed_files=[dict(item) for item in payload.get("changed_files", []) if isinstance(item, dict)],
+    )
+    publisher.publish(
+        new_event_envelope(
+            "promotion.recorded",
+            source={"module": "daemon"},
+            data={
+                "promotion_kind": "pull_request_merge",
+                "task_id": outcome.task_id,
+                "branch": outcome.branch,
+                "pr_number": outcome.pr_number,
+                "title": outcome.title,
+                "recorded_at": outcome.recorded_at,
+                "receipt_path": str(outcome.receipt_path),
+                "changeset_path": str(outcome.changeset_path),
+            },
+        )
+    )
+    return {
+        "task_id": outcome.task_id,
+        "branch": outcome.branch,
+        "pr_number": outcome.pr_number,
+        "title": outcome.title,
+        "recorded_at": outcome.recorded_at,
+        "receipt_path": str(outcome.receipt_path),
+        "changeset_path": str(outcome.changeset_path),
     }
 
 
