@@ -45,14 +45,17 @@ These are the key files already added or updated:
 
 The repository now includes the first read-only evolution foundation:
 
-- `targets.py`, `runner.py`, and a stage-aware execution path for target selection, guarded run orchestration, and follow-up automation
+- `targets.py` and `runner.py` for target selection, run planning, and request/result contracts
+- `stages.py` for the read-only stage machine and stage-aware failure contract
+- `artifacts.py` for the minimum evolution artifact-cycle types
+- `handoff.py` for the reviewable follow-up payload and no-self-approval boundary
 - `dataset.py` for trace extraction from repository-local task and event state
-- `mutators.py` for bounded Phase 1 text/policy materialization inside isolated evaluation worktrees
-- `harness.py` for baseline/candidate evaluation execution, Sisyphus-backed evidence capture, and isolated evaluation task creation
+- `harness.py` for baseline/candidate evaluation planning
 - `constraints.py` and `fitness.py` for hard guards and weighted scoring
 - `report.py` for stable review/report projection
+- `orchestrator.py` for `execute_evolution_run(...)` and append-only run artifact persistence
 
-The remaining major gaps are now real task execution metrics inside the mutated evaluation worktrees, MCP evolution tools/resources, and approval-driven promotion or branch materialization.
+The remaining major gaps are isolated harness execution, candidate materialization, MCP/CLI evolution ingress, review-gated Sisyphus follow-up execution, and promotion/invalidation recording.
 
 ### Implemented Evaluation Loop
 
@@ -66,10 +69,11 @@ flowchart TD
     E --> G[Fitness scoring]
     F --> H[Stable report model]
     G --> H
-    H --> I[Future MCP evolution surface and approval flow]
+    H --> I[Append-only run artifacts]
+    I --> J[Future follow-up request or MCP projection]
 ```
 
-This is intentionally separate from the live task workflow. The evolution subsystem now materializes bounded baseline/candidate artifacts inside isolated Sisyphus evaluation worktrees while still keeping live task state untouched.
+This is intentionally separate from the live task workflow. The evolution subsystem currently models and evaluates candidate runs from repository-local traces without mutating live task state. `execute_evolution_run(...)` may write only under `.planning/evolution/runs/<run_id>/`.
 
 ## Constraint
 
@@ -91,8 +95,9 @@ The correct architecture for Sisyphus is:
 MCP clients
   -> Sisyphus MCP gateway
   -> evolution control plane
-  -> harness / evaluator / report generator
-  -> branch / PR proposal
+  -> read-only planning / scoring / report generation
+  -> future follow-up request
+  -> normal Sisyphus lifecycle for any real execution
 ```
 
 Runtime orchestration and self-evolution must remain separate.
@@ -135,40 +140,35 @@ Only evolve text/policy assets first:
 
 - deeper orchestration logic only after harness quality is proven
 
-## Required New Modules
+## Current Module Surface
 
-Create a new evolution package:
+The current implementation surface is:
 
 ```text
 src/sisyphus/evolution/
   targets.py
   dataset.py
-  mutators.py
   harness.py
   fitness.py
   constraints.py
   report.py
   runner.py
+  stages.py
+  artifacts.py
+  handoff.py
+  orchestrator.py
 ```
 
-### Responsibility Split
+These modules currently provide planning, scoring, contract vocabulary, and append-only run persistence only. They do not yet include candidate mutation, isolated execution, live follow-up task creation, promotion recording, or MCP ingress.
 
-- `targets.py`
-  - declares what can be evolved
-- `dataset.py`
-  - builds evaluation sets from task records, events, conformance history, verify logs
-- `mutators.py`
-  - generates bounded Phase 1 prompt/policy/code rewrites and task-local materialization artifacts
-- `harness.py`
-  - runs baseline vs candidate on the same dataset and records isolated evaluation evidence
-- `fitness.py`
-  - computes scores
-- `constraints.py`
-  - enforces hard guards
-- `report.py`
-  - emits comparison reports
-- `runner.py`
-  - orchestrates a single evolution run
+## Planned Additions
+
+The following additions are planned but are not implemented today:
+
+- isolated harness executor and candidate materialization
+- evolution-to-Sisyphus follow-up bridge
+- promotion and invalidation envelopes
+- CLI and MCP surfaces for `run`, `status`, `report`, and `compare`
 
 ## Harness Requirements
 
@@ -207,32 +207,32 @@ Use:
 - task/worktree copies
 - isolated evaluation runs
 
-## MCP Surface To Add
+## MCP Surface To Add Later
 
-The next implementation pass should expose evolution through MCP.
+The next implementation pass should expose evolution through MCP, but only after the run artifact cycle and handoff contract are fixed.
 
 ### Tools
 
-- `sisyphus.evolution_start`
+- `sisyphus.evolution_run`
   - start a new evolution run
 - `sisyphus.evolution_status`
   - fetch run status
+- `sisyphus.evolution_report`
+  - fetch the reviewable report for a run
 - `sisyphus.evolution_compare`
-  - compare baseline and best candidate
-- `sisyphus.evolution_approve`
-  - approve a candidate
-- `sisyphus.evolution_branch`
-  - materialize approved result on a branch
+  - compare baseline and candidate results
+
+The system should not expose approval or branch-materialization tools until receipts and promotion envelopes exist.
 
 ### Resources
 
-- `repo://status/evolution`
-  - current evolution run board
 - `evolution://<run-id>/report`
   - human-readable run report
 - `evolution://<run-id>/dataset`
   - evaluation set metadata
-- `evolution://<run-id>/candidates`
+- `evolution://<run-id>/status`
+  - run stage and failure status
+- `evolution://<run-id>/compare`
   - candidate summaries and scores
 
 ## Next-Run MCP Workflow
@@ -273,59 +273,54 @@ Use Sisyphus tools instead of editing task status directly:
 
 ### 4. Implement in this order
 
-#### Workstream A. Evolution architecture
+#### Workstream A. Contract alignment
 
-- add `src/sisyphus/evolution/`
-- define run model and target registry
-- document evaluation flow
+- keep current behavior separate from near-next scaffolding
+- document the read-only planning and scoring slice
+- preserve the no-self-approval boundary
 
-#### Workstream B. Dataset builder
+#### Workstream B. Read-only orchestration
 
-- mine task records
-- mine conformance history
-- mine event bus JSONL
-- define eval example schema
+- persist run-local artifacts under `.planning/evolution/runs/<run_id>/`
+- orchestrate run planning, dataset building, harness planning, constraints, fitness, and report generation
 
-#### Workstream C. Harness
+#### Workstream C. Isolated evaluation executor
 
-- baseline vs candidate runner
-- isolated task/worktree execution
-- result capture
+- materialize baseline and candidate snapshots
+- run the evaluation harness in isolated worktrees or copies
+- capture results, metrics, and evidence without touching live task state
 
-#### Workstream D. Fitness and constraints
+#### Workstream D. Sisyphus bridge
 
-- scoring rules
-- rejection rules
-- semantic and compatibility checks
+- convert reviewed evolution output into a Sisyphus follow-up task request
+- preserve plan review, approval policy, spec freeze, verify, and receipt gates
 
-#### Workstream E. MCP evolution interface
+#### Workstream E. Surface and projection
 
-- add tools
-- add resources
-- add status/report projection
+- add CLI and MCP status/report/compare surfaces
+- expose append-only run artifacts through stable views
 
-#### Workstream F. Reporting
+#### Workstream F. Promotion and invalidation
 
-- report generator
-- branch proposal output
-- human approval path
+- record promotion candidates and invalidation decisions as evidence-backed envelopes
+- connect follow-up execution receipts and verification artifacts back to the original evolution run
 
 ## Suggested Task Breakdown
 
 These should become Sisyphus subtasks in the next run:
 
-1. `evolution-core`
-   - add run model, target registry, runner skeleton
-2. `evolution-dataset`
-   - build dataset extraction from task/event/conformance sources
-3. `evolution-harness`
-   - implement baseline/candidate evaluation runner
-4. `evolution-fitness`
-   - implement scoring and hard constraints
-5. `evolution-mcp-surface`
-   - expose evolution tools/resources over MCP
-6. `evolution-reporting`
-   - generate compare/report outputs and branch proposal metadata
+1. `freeze-evolution-authority-boundary-and-safety-rules`
+   - lock the execution authority boundary
+2. `align-evolution-contract-and-doc-reality`
+   - keep contract names and docs aligned to real behavior
+3. `define-evolution-artifact-cycle-interface`
+   - define the minimum artifact vocabulary for the next slices
+4. `define-evolution-stage-transition-and-failure-contract`
+   - freeze the stage model and failure payloads
+5. `define-evolution-to-sisyphus-handoff-payload`
+   - define the reviewable follow-up request contract
+6. `implement-execute-evolution-run-read-only-orchestrator`
+   - wire the current planning and scoring slices into an append-only run flow
 
 ## Acceptance Criteria
 
@@ -333,11 +328,11 @@ The first self-evolution milestone is complete when:
 
 - a target can be selected from a registry
 - a dataset can be generated from existing Sisyphus traces
-- baseline and candidate can both run through the harness
+- baseline and candidate evaluation can be planned and, later, executed in an isolated harness
 - a score and constraint result can be produced
-- a report is stored and exposed over MCP
+- a report is stored as a run artifact
 - no live task state is mutated during evaluation
-- approval is required before branch materialization
+- approval is required before any follow-up execution or branch materialization
 
 ## Guidance For The Next Codex Run
 

@@ -277,17 +277,31 @@ The repository now also contains a separate read-only evolution control plane in
 The current implemented slices are:
 
 - target registry and run planning in `targets.py` and `runner.py`
+- stage and failure contracts in `stages.py`
+- artifact-cycle and handoff contracts in `artifacts.py` and `handoff.py`
 - dataset extraction from task records, conformance state, verify metadata, and event logs in `dataset.py`
 - baseline/candidate harness planning in `harness.py`
 - hard-guard evaluation and weighted scoring in `constraints.py` and `fitness.py`
 - stable reporting projection in `report.py`
+- read-only orchestration and append-only run persistence in `orchestrator.py`
 
 The following pieces are still future work:
 
-- candidate mutation generation in `mutators.py`
-- executed harness runs against isolated copies
+- candidate materialization and isolated harness execution
+- follow-up task handoff into the Sisyphus lifecycle
 - MCP evolution tools/resources
-- approval and branch materialization flow
+- promotion and invalidation envelopes backed by receipts
+
+### Evolution Authority Boundary
+
+The control-plane boundary is strict:
+
+- evolution owns planning, candidate comparison, guard evaluation, fitness scoring, and report generation
+- evolution may write append-only run artifacts under `.planning/evolution/runs/<run_id>/`
+- evolution must not mutate live repository state, live task state, approval state, or promotion state
+- Sisyphus owns task creation, plan review, spec freeze, provider execution, verification, receipts, promotion, and invalidation
+
+In practical terms, an evolution run may recommend or request a follow-up task, but it may not approve, freeze, verify, or promote its own result.
 
 ### Evolution System Diagram
 
@@ -309,22 +323,29 @@ flowchart LR
     subgraph Evolution["Evolution control plane"]
         Targets[Target registry]
         Run[Run planner]
+        Stages[Stage contracts]
+        Artifacts[Artifact and handoff contracts]
         Dataset[Dataset builder]
         Harness[Harness planner]
         Guards[Constraints]
         Fitness[Fitness scorer]
         Report[Report model]
+        Orchestrator[Read-only orchestrator]
 
         Targets --> Run
+        Run --> Stages
+        Run --> Artifacts
         Run --> Dataset
         Dataset --> Harness
         Harness --> Guards
         Harness --> Fitness
         Guards --> Report
         Fitness --> Report
+        Report --> Orchestrator
     end
 
     RepoState --> Dataset
+    Report -. future follow-up request .-> Workflow
     MCP -. future evolution MCP surface .-> Report
 ```
 
@@ -340,10 +361,11 @@ flowchart TD
     E --> G[Compute weighted fitness]
     F --> H[Build reviewable report]
     G --> H
-    H --> I[Future MCP projection and approval flow]
+    H --> I[Append-only run artifacts]
+    I --> J[Future follow-up request or MCP projection]
 ```
 
-Today this loop is implemented as a planning and evaluation model layer through the report stage. It does not yet execute candidate mutations or materialize approved results on a branch.
+Today this loop is implemented as a planning and evaluation model layer through the read-only orchestrator. It does not yet execute candidate mutations, run an isolated harness executor, or materialize approved results on a branch.
 
 ## Class Diagram
 
