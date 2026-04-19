@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from unittest import mock
@@ -117,12 +118,132 @@ class McpCoreTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def _write_evolution_run(
+        self,
+        run_id: str,
+        *,
+        target_ids: tuple[str, ...],
+        task_count: int = 2,
+        event_count: int = 3,
+        score_delta: float = 0.25,
+    ) -> Path:
+        artifact_dir = self.repo_root / ".planning" / "evolution" / "runs" / run_id
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "run.json").write_text(
+            json.dumps(
+                {
+                    "run": {
+                        "run_id": run_id,
+                        "repo_root": str(self.repo_root),
+                        "target_ids": list(target_ids),
+                        "selection_mode": "explicit",
+                        "status": "planned",
+                        "stage": "planned",
+                    },
+                    "artifact_dir": str(artifact_dir),
+                    "entrypoint": "execute_evolution_run",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "dataset.json").write_text(
+            json.dumps(
+                {
+                    "repo_root": str(self.repo_root),
+                    "generated_at": "2026-04-20T00:00:00Z",
+                    "event_log_path": str(self.repo_root / ".planning" / "events.jsonl"),
+                    "selected_task_ids": [f"{run_id}-task-1", f"{run_id}-task-2"],
+                    "task_traces": [],
+                    "event_traces": [],
+                    "task_count": task_count,
+                    "event_count": event_count,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "harness_plan.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "repo_root": str(self.repo_root),
+                    "created_at": "2026-04-20T00:00:00Z",
+                    "dataset_task_ids": [f"{run_id}-task-1", f"{run_id}-task-2"],
+                    "dataset_event_count": event_count,
+                    "baseline": {"evaluation_id": f"{run_id}:baseline", "role": "baseline"},
+                    "candidate": {"evaluation_id": f"{run_id}:candidate", "role": "candidate"},
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "constraints.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "evaluated_at": "2026-04-20T00:00:00Z",
+                    "status": "accepted",
+                    "accepted": True,
+                    "blocking_failure_count": 0,
+                    "pending_guard_count": 0,
+                    "checks": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "fitness.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "evaluated_at": "2026-04-20T00:00:00Z",
+                    "status": "scored",
+                    "eligible_for_promotion": True,
+                    "comparable_metric_count": 2,
+                    "baseline_score": 0.62,
+                    "candidate_score": 0.62 + score_delta,
+                    "score_delta": score_delta,
+                    "comparisons": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "report.md").write_text(
+            "\n".join(
+                [
+                    "# Evolution Report",
+                    "",
+                    f"- Run ID: `{run_id}`",
+                    "- Status: `ready_for_review`",
+                    "- Recommendation: `review_candidate`",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return artifact_dir
+
     def test_lists_tools_and_resources(self) -> None:
         tool_names = {tool["name"] for tool in self.core.list_tools()}
         resource_uris = {resource["uri"] for resource in self.core.list_resources()}
 
         self.assertIn("sisyphus.request_task", tool_names)
         self.assertIn("sisyphus.record_merged_pr", tool_names)
+        self.assertIn("sisyphus.evolution_run", tool_names)
+        self.assertIn("sisyphus.evolution_status", tool_names)
+        self.assertIn("sisyphus.evolution_report", tool_names)
+        self.assertIn("sisyphus.evolution_compare", tool_names)
+        self.assertIn("evolution://<run-id>/run", resource_uris)
+        self.assertIn("evolution://<run-id>/status", resource_uris)
+        self.assertIn("evolution://<run-id>/report", resource_uris)
+        self.assertIn("evolution://compare/<left-run-id>/<right-run-id>", resource_uris)
         self.assertIn("task://<task-id>/conformance", resource_uris)
         self.assertIn("task://<task-id>/promotion", resource_uris)
         self.assertIn("task://<task-id>/changeset", resource_uris)
@@ -258,6 +379,48 @@ class McpCoreTests(unittest.TestCase):
 
         self.assertEqual(payload["events"][0]["event_id"], "evt_1")
         self.assertEqual(payload["events"][1]["event_id"], "evt_2")
+
+    def test_calls_and_reads_evolution_surface(self) -> None:
+        self._write_evolution_run("EVR-mcp-alpha", target_ids=("execution-contract-wording",))
+        self._write_evolution_run(
+            "EVR-mcp-beta",
+            target_ids=("execution-contract-wording", "mcp-tool-descriptions"),
+            task_count=4,
+            event_count=7,
+            score_delta=0.40,
+        )
+
+        run_payload = self.core.call_tool("sisyphus.evolution_run", {"run_id": "EVR-mcp-alpha"})
+        status_payload = self.core.call_tool("sisyphus.evolution_status", {"run_id": "EVR-mcp-alpha"})
+        report_payload = self.core.call_tool("sisyphus.evolution_report", {"run_id": "EVR-mcp-alpha"})
+        compare_payload = self.core.call_tool(
+            "sisyphus.evolution_compare",
+            {"left_run_id": "EVR-mcp-alpha", "right_run_id": "EVR-mcp-beta"},
+        )
+
+        self.assertEqual(run_payload["resource_uri"], "evolution://EVR-mcp-alpha/run")
+        self.assertIn("final_stage: report_built", run_payload["content"])
+        self.assertIn("Run ID: EVR-mcp-alpha", status_payload["content"])
+        self.assertIn("# Evolution Report", report_payload["content"])
+        self.assertEqual(compare_payload["resource_uri"], "evolution://compare/EVR-mcp-alpha/EVR-mcp-beta")
+        self.assertIn("Dataset Tasks: 2 -> 4", compare_payload["content"])
+
+        run_resource = self.core.read_resource("evolution://EVR-mcp-alpha/run")
+        status_resource = self.core.read_resource("evolution://EVR-mcp-alpha/status")
+        report_resource = self.core.read_resource("evolution://EVR-mcp-alpha/report")
+        compare_resource = self.core.read_resource("evolution://compare/EVR-mcp-alpha/EVR-mcp-beta")
+
+        self.assertIn("evolution run EVR-mcp-alpha", run_resource)
+        self.assertIn("Run ID: EVR-mcp-alpha", status_resource)
+        self.assertIn("# Evolution Report", report_resource)
+        self.assertIn("Dataset Tasks: 2 -> 4", compare_resource)
+
+    def test_missing_evolution_run_raises_clear_error(self) -> None:
+        with self.assertRaises(FileNotFoundError):
+            self.core.call_tool("sisyphus.evolution_run", {"run_id": "EVR-missing"})
+
+        with self.assertRaises(FileNotFoundError):
+            self.core.read_resource("evolution://EVR-missing/status")
 
     def test_calls_tool_against_repo_state(self) -> None:
         task = self._new_task("generate")

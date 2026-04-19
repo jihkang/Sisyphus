@@ -13,6 +13,14 @@ from .closeout import run_close
 from .config import load_config
 from .conformance import ensure_task_conformance_defaults, summarize_subtask_conformance, summarize_task_conformance
 from .daemon import run_daemon
+from .evolution.surface import (
+    compare_evolution_runs,
+    load_evolution_run_artifacts,
+    render_evolution_run_compare,
+    render_evolution_run_overview,
+    render_evolution_run_report,
+    render_evolution_run_status,
+)
 from .planning import (
     approve_task_plan,
     freeze_task_spec,
@@ -76,6 +84,46 @@ class SisyphusMcpCoreService:
         if tool_name == "sisyphus.get_task":
             task_id = str(args["task_id"])
             return {"task": get_task(repo_root=self.repo_root, task_id=task_id, config=config)}
+
+        if tool_name == "sisyphus.evolution_run":
+            run_id = str(args["run_id"])
+            artifacts = load_evolution_run_artifacts(self.repo_root, run_id)
+            return {
+                "run_id": run_id,
+                "resource_uri": _evolution_run_uri(run_id, "run"),
+                "content": render_evolution_run_overview(artifacts),
+            }
+
+        if tool_name == "sisyphus.evolution_status":
+            run_id = str(args["run_id"])
+            artifacts = load_evolution_run_artifacts(self.repo_root, run_id)
+            return {
+                "run_id": run_id,
+                "resource_uri": _evolution_run_uri(run_id, "status"),
+                "content": render_evolution_run_status(artifacts),
+            }
+
+        if tool_name == "sisyphus.evolution_report":
+            run_id = str(args["run_id"])
+            artifacts = load_evolution_run_artifacts(self.repo_root, run_id)
+            return {
+                "run_id": run_id,
+                "resource_uri": _evolution_run_uri(run_id, "report"),
+                "content": render_evolution_run_report(artifacts),
+            }
+
+        if tool_name == "sisyphus.evolution_compare":
+            left_run_id = str(args["left_run_id"])
+            right_run_id = str(args["right_run_id"])
+            left = load_evolution_run_artifacts(self.repo_root, left_run_id)
+            right = load_evolution_run_artifacts(self.repo_root, right_run_id)
+            comparison = compare_evolution_runs(left, right)
+            return {
+                "left_run_id": left_run_id,
+                "right_run_id": right_run_id,
+                "resource_uri": _evolution_compare_uri(left_run_id, right_run_id),
+                "content": render_evolution_run_compare(comparison),
+            }
 
         if tool_name == "sisyphus.record_merged_pr":
             result = record_merged_pull_request(
@@ -235,6 +283,8 @@ class SisyphusMcpCoreService:
             }
         if parsed.scheme == "repo" and parsed.netloc == "schema" and parsed.path == "/mcp":
             return _mcp_schema_markdown()
+        if parsed.scheme == "evolution":
+            return _read_evolution_resource(self.repo_root, parsed)
 
         if parsed.scheme != "task":
             raise ValueError(f"unsupported MCP resource URI: {uri}")
@@ -339,6 +389,82 @@ def mcp_tool_definitions() -> list[dict[str, object]]:
                 "additionalProperties": False,
             },
             "outputSchema": {"type": "object", "properties": {"task": {"type": "object"}}},
+        },
+        {
+            "name": "sisyphus.evolution_run",
+            "description": "Render the read-only overview for a persisted evolution run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"run_id": {"type": "string"}},
+                "required": ["run_id"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "resource_uri": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+            },
+        },
+        {
+            "name": "sisyphus.evolution_status",
+            "description": "Render the read-only status summary for a persisted evolution run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"run_id": {"type": "string"}},
+                "required": ["run_id"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "resource_uri": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+            },
+        },
+        {
+            "name": "sisyphus.evolution_report",
+            "description": "Render the read-only report for a persisted evolution run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"run_id": {"type": "string"}},
+                "required": ["run_id"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "resource_uri": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+            },
+        },
+        {
+            "name": "sisyphus.evolution_compare",
+            "description": "Render a read-only comparison across two persisted evolution runs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "left_run_id": {"type": "string"},
+                    "right_run_id": {"type": "string"},
+                },
+                "required": ["left_run_id", "right_run_id"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "left_run_id": {"type": "string"},
+                    "right_run_id": {"type": "string"},
+                    "resource_uri": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+            },
         },
         {
             "name": "sisyphus.record_merged_pr",
@@ -512,6 +638,10 @@ def mcp_resource_definitions() -> list[dict[str, object]]:
         {"uri": "repo://status/board", "description": "Operator-focused board with conformance summary and recent events."},
         {"uri": "repo://status/events", "description": "Recent event bus envelopes from the repository event log."},
         {"uri": "repo://schema/mcp", "description": "Human-readable MCP tool and resource schema for Sisyphus."},
+        {"uri": "evolution://<run-id>/run", "description": "Read-only overview for a persisted evolution run."},
+        {"uri": "evolution://<run-id>/status", "description": "Read-only status summary for a persisted evolution run."},
+        {"uri": "evolution://<run-id>/report", "description": "Read-only report for a persisted evolution run."},
+        {"uri": "evolution://compare/<left-run-id>/<right-run-id>", "description": "Read-only comparison across two persisted evolution runs."},
         {"uri": "task://<task-id>/record", "description": "Raw task record JSON."},
         {"uri": "task://<task-id>/conformance", "description": "Task-level conformance summary."},
         {"uri": "task://<task-id>/timeline", "description": "Task and subtask conformance/drift timeline."},
@@ -556,6 +686,45 @@ def _dict_list(value: object) -> list[dict[str, object]] | None:
             raise TypeError("expected changed_files entries to be objects")
         normalized.append({str(key): item[key] for key in item})
     return normalized
+
+
+def _evolution_run_uri(run_id: str, view: str) -> str:
+    return f"evolution://{run_id}/{view}"
+
+
+def _evolution_compare_uri(left_run_id: str, right_run_id: str) -> str:
+    return f"evolution://compare/{left_run_id}/{right_run_id}"
+
+
+def _read_evolution_resource(repo_root: Path, parsed) -> str:
+    if parsed.netloc == "compare":
+        left_run_id, right_run_id = _parse_compare_path(parsed.path)
+        left = load_evolution_run_artifacts(repo_root, left_run_id)
+        right = load_evolution_run_artifacts(repo_root, right_run_id)
+        comparison = compare_evolution_runs(left, right)
+        return render_evolution_run_compare(comparison)
+
+    run_id = parsed.netloc
+    resource_name = parsed.path.lstrip("/")
+    if not run_id:
+        raise ValueError("evolution resource must include a run id")
+    artifacts = load_evolution_run_artifacts(repo_root, run_id)
+    if resource_name == "run":
+        return render_evolution_run_overview(artifacts)
+    if resource_name == "status":
+        return render_evolution_run_status(artifacts)
+    if resource_name == "report":
+        return render_evolution_run_report(artifacts)
+    raise ValueError(f"unsupported evolution resource `{resource_name}`")
+
+
+def _parse_compare_path(path: str) -> tuple[str, str]:
+    parts = [part for part in path.split("/") if part]
+    if len(parts) != 2:
+        raise ValueError("evolution compare resource must include left and right run ids")
+    return parts[0], parts[1]
+
+
 def _task_status_projection(task: dict) -> dict[str, object]:
     conformance = summarize_task_conformance(task)
     return {
