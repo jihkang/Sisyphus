@@ -10,6 +10,10 @@ from .gitops import branch_name, worktree_path
 from .paths import task_dir
 
 
+DEFAULT_CHANGESET_PATH = "CHANGESET.md"
+DEFAULT_PROMOTION_RECEIPT_PATH = "artifacts/promotion/merge_receipt.json"
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -57,17 +61,7 @@ def build_task_record(
     verify_keys = config.verify.get(verify_profile, [])
     verify_commands = [config.commands[name] for name in verify_keys if name in config.commands]
 
-    docs = (
-        {"brief": "BRIEF.md", "plan": "PLAN.md", "verify": "VERIFY.md", "log": "LOG.md"}
-        if task_type == "feature"
-        else {
-            "brief": "BRIEF.md",
-            "repro": "REPRO.md",
-            "fix_plan": "FIX_PLAN.md",
-            "verify": "VERIFY.md",
-            "log": "LOG.md",
-        }
-    )
+    docs = _default_task_docs(task_type)
 
     return {
         "id": task_id,
@@ -194,7 +188,10 @@ def ensure_task_record_defaults(task: dict) -> dict:
     task.setdefault("subtasks", [])
     if not isinstance(task.get("conformance"), dict):
         task["conformance"] = default_task_conformance()
-    task.setdefault("docs", {})
+    if not isinstance(task.get("docs"), dict):
+        task["docs"] = {}
+    for key, value in _default_task_docs(task.get("type")).items():
+        task["docs"].setdefault(key, value)
     if not isinstance(task.get("meta"), dict):
         task["meta"] = {"sequence": None, "close_override_used": False}
     else:
@@ -225,3 +222,19 @@ def sync_task_support_files(task: dict) -> None:
         target_path = target_task_dir / relative_path
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def _default_task_docs(task_type: str | None) -> dict[str, str]:
+    docs = {
+        "brief": "BRIEF.md",
+        "verify": "VERIFY.md",
+        "log": "LOG.md",
+        "changeset": DEFAULT_CHANGESET_PATH,
+        "promotion": DEFAULT_PROMOTION_RECEIPT_PATH,
+    }
+    if task_type == "issue":
+        docs["repro"] = "REPRO.md"
+        docs["fix_plan"] = "FIX_PLAN.md"
+        return docs
+    docs["plan"] = "PLAN.md"
+    return docs

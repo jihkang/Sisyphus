@@ -14,6 +14,7 @@ from .agents import (
     update_agent,
 )
 from .api import queue_conversation, request_task
+from .api import queue_pull_request_merged as queue_pull_request_merged_api
 from .agent_runtime import run_tracked_agent
 from .audit import run_verify
 from .closeout import run_close
@@ -94,6 +95,8 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_subparsers = ingest_parser.add_subparsers(dest="ingest_command", required=True)
     ingest_conversation_parser = ingest_subparsers.add_parser("conversation")
     _add_conversation_arguments(ingest_conversation_parser)
+    ingest_pr_merged_parser = ingest_subparsers.add_parser("pr-merged")
+    _add_pull_request_merged_arguments(ingest_pr_merged_parser)
 
     daemon_parser = subparsers.add_parser("daemon")
     daemon_parser.add_argument("--once", action="store_true")
@@ -176,7 +179,23 @@ def _add_conversation_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--adopt-path", action="append", dest="adopt_paths")
     parser.add_argument("--no-run", action="store_true")
 
-
+def _add_pull_request_merged_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--task-id")
+    parser.add_argument("--branch")
+    parser.add_argument("--repo-full-name")
+    parser.add_argument("--pr-number", type=int, required=True)
+    parser.add_argument("--title", required=True)
+    parser.add_argument("--url")
+    parser.add_argument("--base-branch")
+    parser.add_argument("--head-branch")
+    parser.add_argument("--head-sha")
+    parser.add_argument("--merge-commit-sha")
+    parser.add_argument("--merged-at")
+    parser.add_argument("--merged-by")
+    parser.add_argument("--merge-method")
+    parser.add_argument("--additions", type=int)
+    parser.add_argument("--deletions", type=int)
+    parser.add_argument("--changed-file-json", action="append", dest="changed_file_json")
 def _resolve_repo_root(repo_root: str | Path | None) -> Path:
     if repo_root is None:
         return detect_repo_root(Path.cwd())
@@ -404,7 +423,59 @@ def handle_ingest_conversation(
     print(f"slug: {queued.event['payload']['slug']}")
     return 0
 
+def handle_ingest_pull_request_merged(
+    *,
+    task_id: str | None,
+    branch: str | None,
+    repo_full_name: str | None,
+    pr_number: int,
+    title: str,
+    url: str | None,
+    base_branch: str | None,
+    head_branch: str | None,
+    head_sha: str | None,
+    merge_commit_sha: str | None,
+    merged_at: str | None,
+    merged_by: str | None,
+    merge_method: str | None,
+    additions: int | None,
+    deletions: int | None,
+    changed_file_json: list[str] | None,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    try:
+        queued = queue_pull_request_merged_api(
+            repo_root=repo_root,
+            task_id=task_id,
+            branch=branch,
+            repo_full_name=repo_full_name,
+            pr_number=pr_number,
+            title=title,
+            url=url,
+            base_branch=base_branch,
+            head_branch=head_branch,
+            head_sha=head_sha,
+            merge_commit_sha=merge_commit_sha,
+            merged_at=merged_at,
+            merged_by=merged_by,
+            merge_method=merge_method,
+            additions=additions,
+            deletions=deletions,
+            changed_files=_parse_changed_file_json(changed_file_json),
+        )
+    except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
+    print(f"queued {queued.event_id}")
+    print(f"event_file: {queued.event_path}")
+    print(f"pr_number: {queued.event['payload']['pr_number']}")
+    if queued.event["payload"].get("task_id"):
+        print(f"task_id: {queued.event['payload']['task_id']}")
+    if queued.event["payload"].get("branch"):
+        print(f"branch: {queued.event['payload']['branch']}")
+    return 0
 def handle_request(
     message: str,
     title: str | None,
@@ -468,7 +539,16 @@ def handle_request(
     print(f"orchestrated: {result.orchestrated}")
     return 0
 
-
+def _parse_changed_file_json(entries: list[str] | None) -> list[dict[str, object]] | None:
+    if not entries:
+        return None
+    parsed: list[dict[str, object]] = []
+    for entry in entries:
+        value = json.loads(entry)
+        if not isinstance(value, dict):
+            raise ValueError("each --changed-file-json entry must decode to an object")
+        parsed.append({str(key): value[key] for key in value})
+    return parsed
 def handle_daemon(
     once: bool,
     poll_interval_seconds: int,
@@ -978,6 +1058,26 @@ def main() -> int:
                 adopt_current_changes=args.adopt_current_changes,
                 adopt_paths=args.adopt_paths,
                 no_run=args.no_run,
+                repo_root=args.repo_root,
+            )
+        if args.ingest_command == "pr-merged":
+            return handle_ingest_pull_request_merged(
+                task_id=args.task_id,
+                branch=args.branch,
+                repo_full_name=args.repo_full_name,
+                pr_number=args.pr_number,
+                title=args.title,
+                url=args.url,
+                base_branch=args.base_branch,
+                head_branch=args.head_branch,
+                head_sha=args.head_sha,
+                merge_commit_sha=args.merge_commit_sha,
+                merged_at=args.merged_at,
+                merged_by=args.merged_by,
+                merge_method=args.merge_method,
+                additions=args.additions,
+                deletions=args.deletions,
+                changed_file_json=args.changed_file_json,
                 repo_root=args.repo_root,
             )
     if args.command == "daemon":
