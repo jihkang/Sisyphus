@@ -43,6 +43,7 @@ class EvolutionTaskTrace:
     drift_count: int
     unresolved_warning_count: int
     conformance_history_count: int
+    verify_commands: tuple[str, ...]
     verify_results: tuple[EvolutionVerifyTrace, ...]
 
 
@@ -138,6 +139,9 @@ def _to_task_trace(task: dict) -> EvolutionTaskTrace:
     verify_results = task.get("last_verify_results", [])
     if not isinstance(verify_results, list):
         verify_results = []
+    verify_commands = task.get("verify_commands", [])
+    if not isinstance(verify_commands, list):
+        verify_commands = []
 
     return EvolutionTaskTrace(
         task_id=str(task.get("id") or ""),
@@ -155,6 +159,7 @@ def _to_task_trace(task: dict) -> EvolutionTaskTrace:
         drift_count=int(conformance.get("drift_count", 0)),
         unresolved_warning_count=int(conformance.get("unresolved_warning_count", 0)),
         conformance_history_count=len(history),
+        verify_commands=tuple(str(command) for command in verify_commands if str(command).strip()),
         verify_results=tuple(_to_verify_trace(result) for result in verify_results if isinstance(result, Mapping)),
     )
 

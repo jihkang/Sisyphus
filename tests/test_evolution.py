@@ -28,6 +28,7 @@ from sisyphus.evolution import (
     EVOLUTION_ARTIFACT_STATUS_PLANNED,
     EVOLUTION_DEFAULT_REVIEW_GATES,
     EVOLUTION_EVALUATION_EXECUTION_MODE_SISYPHUS_TASK,
+    EVOLUTION_EVALUATION_EXECUTION_MODE_WORKTREE_HARNESS,
     EVOLUTION_EVALUATION_STATUS_COMPLETED,
     EVOLUTION_EVALUATION_STATUS_FAILED,
     EVOLUTION_EVALUATION_STATUS_PLANNED,
@@ -48,6 +49,7 @@ from sisyphus.evolution import (
     EvolutionCandidateArtifact,
     EvolutionDatasetArtifact,
     EvolutionEvaluationArtifact,
+    EvolutionEvaluationExecutionError,
     EvolutionEvaluationOutcome,
     EvolutionEvidenceSummary,
     EvolutionFollowupRequest,
@@ -69,10 +71,12 @@ from sisyphus.evolution import (
     build_evolution_dataset,
     build_evolution_report,
     build_sisyphus_evaluation_request,
+    build_worktree_evaluation_command_plan,
     evaluate_evolution_constraints,
     evaluate_evolution_fitness,
     execute_evolution_harness,
     execute_sisyphus_evaluation,
+    execute_worktree_backed_evaluation,
     execute_evolution_run,
     get_evolution_stage_contract,
     get_evolution_target,
@@ -855,6 +859,136 @@ class EvolutionHarnessTests(unittest.TestCase):
             "must be resolved before continuing",
             (evaluation_worktree / "src/sisyphus/conformance.py").read_text(encoding="utf-8"),
         )
+
+    def test_build_worktree_evaluation_command_plan_normalizes_and_dedupes_commands(self) -> None:
+        task = self._new_task("worktree-command-plan")
+        task["last_verify_results"] = [
+            {
+                "command": f"cd {self.repo_root / '_worktrees' / 'old-task'} && {sys.executable} -c \"print('alpha')\"",
+                "status": "passed",
+                "exit_code": 0,
+            },
+            {
+                "command": f"cd {self.repo_root / '_worktrees' / 'old-task'} && {sys.executable} -c \"print('alpha')\"",
+                "status": "passed",
+                "exit_code": 0,
+            },
+        ]
+        save_task_record(self.repo_root / task["task_dir"] / "task.json", task)
+        run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+
+        commands = build_worktree_evaluation_command_plan(plan.baseline, dataset)
+
+        self.assertEqual(len(commands), 1)
+        self.assertEqual(commands[0].source_task_id, task["id"])
+        self.assertEqual(commands[0].source, "verify_result")
+        self.assertNotIn("cd ", commands[0].normalized_command)
+        self.assertIn("print('alpha')", commands[0].normalized_command)
+
+    def test_execute_worktree_backed_evaluation_persists_receipt_and_runtime_metrics(self) -> None:
+        self._seed_phase_1_sources()
+        task = self._new_task("worktree-executor")
+        task["verify_commands"] = [
+            f"cd {self.repo_root / '_worktrees' / 'stale'} && {sys.executable} -c \"from pathlib import Path; assert Path('src/sisyphus/conformance.py').is_file(); print('ok')\""
+        ]
+        save_task_record(self.repo_root / task["task_dir"] / "task.json", task)
+        run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+        task_id = "TF-eval-worktree-success"
+        evaluation_worktree = self.repo_root / "_worktrees" / task_id
+        evaluation_worktree.mkdir(parents=True, exist_ok=True)
+        self._seed_phase_1_sources(evaluation_worktree)
+        task_snapshot = self._build_evaluation_task(task_id, evaluation_worktree)
+        task_snapshots = {task_id: dict(task_snapshot)}
+
+        def fake_request_task(repo_root, *, config=None, **kwargs):
+            task_snapshots[task_id] = dict(task_snapshot)
+            return SimpleNamespace(ok=True, task_id=task_id, task=dict(task_snapshot), error=None)
+
+        def fake_approve_task_plan(repo_root, config, task_id, *, reviewer, notes):
+            task_snapshots[task_id]["plan_status"] = "approved"
+            return SimpleNamespace(plan_status="approved")
+
+        def fake_freeze_task_spec(repo_root, config, task_id, *, reviewer, notes):
+            task_snapshots[task_id]["spec_status"] = "frozen"
+            task_snapshots[task_id]["workflow_phase"] = "subtask_planning"
+            return SimpleNamespace(spec_status="frozen", workflow_phase="subtask_planning")
+
+        def fake_load_task_record(repo_root, task_dir_name, task_id):
+            return (
+                dict(task_snapshots[task_id]),
+                evaluation_worktree / ".planning" / "tasks" / task_id / "task.json",
+            )
+
+        with (
+            patch("sisyphus.api.request_task", side_effect=fake_request_task),
+            patch("sisyphus.planning.approve_task_plan", side_effect=fake_approve_task_plan),
+            patch("sisyphus.planning.freeze_task_spec", side_effect=fake_freeze_task_spec),
+            patch("sisyphus.state.load_task_record", side_effect=fake_load_task_record),
+        ):
+            outcome = execute_worktree_backed_evaluation(plan.candidate, dataset)
+
+        self.assertEqual(outcome.evidence.mode, EVOLUTION_EVALUATION_EXECUTION_MODE_WORKTREE_HARNESS)
+        self.assertEqual(outcome.evidence.command_count, 1)
+        self.assertEqual(outcome.evidence.passed_command_count, 1)
+        self.assertEqual(outcome.metrics.verify_pass_rate, 1.0)
+        self.assertGreater(outcome.metrics.runtime_ms or 0, 0)
+        self.assertTrue((evaluation_worktree / (outcome.evidence.execution_receipt_path or "")).is_file())
+
+    def test_execute_worktree_backed_evaluation_fails_with_receipt_on_command_error(self) -> None:
+        self._seed_phase_1_sources()
+        task = self._new_task("worktree-executor-failure")
+        task["verify_commands"] = [
+            f"{sys.executable} -c \"import sys; print('boom'); sys.exit(3)\""
+        ]
+        save_task_record(self.repo_root / task["task_dir"] / "task.json", task)
+        run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+        task_id = "TF-eval-worktree-failure"
+        evaluation_worktree = self.repo_root / "_worktrees" / task_id
+        evaluation_worktree.mkdir(parents=True, exist_ok=True)
+        self._seed_phase_1_sources(evaluation_worktree)
+        task_snapshot = self._build_evaluation_task(task_id, evaluation_worktree)
+        task_snapshots = {task_id: dict(task_snapshot)}
+
+        def fake_request_task(repo_root, *, config=None, **kwargs):
+            task_snapshots[task_id] = dict(task_snapshot)
+            return SimpleNamespace(ok=True, task_id=task_id, task=dict(task_snapshot), error=None)
+
+        def fake_approve_task_plan(repo_root, config, task_id, *, reviewer, notes):
+            task_snapshots[task_id]["plan_status"] = "approved"
+            return SimpleNamespace(plan_status="approved")
+
+        def fake_freeze_task_spec(repo_root, config, task_id, *, reviewer, notes):
+            task_snapshots[task_id]["spec_status"] = "frozen"
+            task_snapshots[task_id]["workflow_phase"] = "subtask_planning"
+            return SimpleNamespace(spec_status="frozen", workflow_phase="subtask_planning")
+
+        def fake_load_task_record(repo_root, task_dir_name, task_id):
+            return (
+                dict(task_snapshots[task_id]),
+                evaluation_worktree / ".planning" / "tasks" / task_id / "task.json",
+            )
+
+        with (
+            patch("sisyphus.api.request_task", side_effect=fake_request_task),
+            patch("sisyphus.planning.approve_task_plan", side_effect=fake_approve_task_plan),
+            patch("sisyphus.planning.freeze_task_spec", side_effect=fake_freeze_task_spec),
+            patch("sisyphus.state.load_task_record", side_effect=fake_load_task_record),
+        ):
+            with self.assertRaises(EvolutionEvaluationExecutionError) as excinfo:
+                execute_worktree_backed_evaluation(plan.candidate, dataset)
+
+        error = excinfo.exception
+        self.assertEqual(error.evidence.mode, EVOLUTION_EVALUATION_EXECUTION_MODE_WORKTREE_HARNESS)
+        self.assertEqual(error.evidence.command_count, 1)
+        self.assertEqual(error.evidence.passed_command_count, 0)
+        self.assertEqual(error.metrics.verify_pass_rate, 0.0)
+        self.assertTrue((evaluation_worktree / (error.evidence.execution_receipt_path or "")).is_file())
 
     def test_execute_harness_populates_default_metrics_without_repo_mutation(self) -> None:
         task_one = self._new_task("harness-exec-one")

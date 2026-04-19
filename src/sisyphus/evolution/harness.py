@@ -4,6 +4,8 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
+import json
+import subprocess
 from time import perf_counter
 
 from ..conformance import CONFORMANCE_GREEN, CONFORMANCE_RED, CONFORMANCE_YELLOW, normalize_conformance_status
@@ -26,6 +28,7 @@ EVOLUTION_EVALUATION_STATUS_FAILED = "failed"
 EVOLUTION_ISOLATION_MODE_TASK_WORKTREE_COPY = "task_worktree_copy"
 EVOLUTION_EVALUATION_EXECUTION_MODE_SUMMARY = "summary"
 EVOLUTION_EVALUATION_EXECUTION_MODE_SISYPHUS_TASK = "sisyphus_task"
+EVOLUTION_EVALUATION_EXECUTION_MODE_WORKTREE_HARNESS = "worktree_harness"
 EVOLUTION_OPERATOR_REVIEWABILITY_HIGH = "high"
 EVOLUTION_OPERATOR_REVIEWABILITY_MEDIUM = "medium"
 EVOLUTION_OPERATOR_REVIEWABILITY_LOW = "low"
@@ -66,6 +69,9 @@ class EvolutionEvaluationEvidence:
     materialization_snapshot_root: str | None = None
     materialized_target_ids: tuple[str, ...] = ()
     materialized_file_paths: tuple[str, ...] = ()
+    execution_receipt_path: str | None = None
+    command_count: int = 0
+    passed_command_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +111,28 @@ class EvolutionEvaluationPlan:
     metrics: EvolutionPlannedMetrics
     notes: str
     evidence: EvolutionEvaluationEvidence | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class EvolutionWorktreeCommand:
+    source_task_id: str
+    source: str
+    original_command: str
+    normalized_command: str
+
+
+@dataclass(frozen=True, slots=True)
+class EvolutionWorktreeCommandResult:
+    source_task_id: str
+    source: str
+    original_command: str
+    normalized_command: str
+    status: str
+    exit_code: int
+    runtime_ms: int
+    stdout_path: str
+    stderr_path: str
+    output_excerpt: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -487,6 +515,56 @@ def execute_sisyphus_evaluation(
     )
 
 
+def execute_worktree_backed_evaluation(
+    evaluation: EvolutionEvaluationPlan,
+    dataset: EvolutionDataset,
+    *,
+    request: EvolutionSisyphusEvaluationRequest | None = None,
+) -> EvolutionEvaluationOutcome:
+    context = _prepare_worktree_evaluation_context(
+        evaluation=evaluation,
+        dataset=dataset,
+        request=request,
+    )
+    commands = build_worktree_evaluation_command_plan(evaluation, dataset)
+    receipt_path, command_results = _run_worktree_evaluation_commands(
+        commands=commands,
+        worktree_root=Path(context.task["worktree_path"]),
+        artifact_root=_artifact_root_from_materialization(
+            worktree_root=Path(context.task["worktree_path"]),
+            materialization=context.materialization,
+        ),
+    )
+    metrics = _metrics_from_command_results(
+        base_metrics=context.metrics,
+        command_results=command_results,
+    )
+    passed_command_count = sum(1 for result in command_results if result.status == "passed")
+    evidence = _evaluation_evidence_from_task(
+        context.task,
+        context.request,
+        detail=(
+            f"executed {len(command_results)} worktree-backed harness command(s) for "
+            f"{context.task_id} with receipt {receipt_path}"
+        ),
+        plan_status=context.plan_status,
+        spec_status=context.spec_status,
+        workflow_phase=context.workflow_phase,
+        materialization=context.materialization,
+        mode=EVOLUTION_EVALUATION_EXECUTION_MODE_WORKTREE_HARNESS,
+        execution_receipt_path=receipt_path,
+        command_count=len(command_results),
+        passed_command_count=passed_command_count,
+    )
+    if any(result.status == "failed" for result in command_results):
+        raise EvolutionEvaluationExecutionError(
+            f"worktree-backed evaluation command failed for {context.task_id}",
+            metrics=metrics,
+            evidence=evidence,
+        )
+    return EvolutionEvaluationOutcome(metrics=metrics, evidence=evidence)
+
+
 def _validate_run_dataset_pair(run: EvolutionRun, dataset: EvolutionDataset) -> None:
     if run.repo_root != dataset.repo_root:
         raise ValueError(
@@ -662,9 +740,13 @@ def _evaluation_evidence_from_task(
     workflow_phase: str | None = None,
     materialization: EvolutionMaterialization | None = None,
     materialization_status: str | None = None,
+    mode: str = EVOLUTION_EVALUATION_EXECUTION_MODE_SISYPHUS_TASK,
+    execution_receipt_path: str | None = None,
+    command_count: int = 0,
+    passed_command_count: int = 0,
 ) -> EvolutionEvaluationEvidence:
     return EvolutionEvaluationEvidence(
-        mode=EVOLUTION_EVALUATION_EXECUTION_MODE_SISYPHUS_TASK,
+        mode=mode,
         detail=detail,
         task_id=optional_str(task.get("id")),
         branch=optional_str(task.get("branch")),
@@ -681,6 +763,9 @@ def _evaluation_evidence_from_task(
         materialization_snapshot_root=materialization.snapshot_root if materialization else None,
         materialized_target_ids=materialization.target_ids if materialization else (),
         materialized_file_paths=materialization.file_paths if materialization else (),
+        execution_receipt_path=execution_receipt_path,
+        command_count=command_count,
+        passed_command_count=passed_command_count,
     )
 
 
@@ -695,3 +780,293 @@ def _merge_owned_paths(*groups: Sequence[str]) -> tuple[str, ...]:
             seen.add(normalized)
             merged.append(normalized)
     return tuple(merged)
+
+
+@dataclass(frozen=True, slots=True)
+class _PreparedWorktreeEvaluationContext:
+    request: EvolutionSisyphusEvaluationRequest
+    task_id: str
+    task: dict
+    metrics: EvolutionPlannedMetrics
+    plan_status: str
+    spec_status: str
+    workflow_phase: str | None
+    materialization: EvolutionMaterialization
+
+
+def _prepare_worktree_evaluation_context(
+    *,
+    evaluation: EvolutionEvaluationPlan,
+    dataset: EvolutionDataset,
+    request: EvolutionSisyphusEvaluationRequest | None,
+) -> _PreparedWorktreeEvaluationContext:
+    from ..api import request_task
+    from ..config import load_config
+    from ..planning import approve_task_plan, freeze_task_spec
+    from ..state import load_task_record
+
+    metrics = summarize_dataset_evaluation(evaluation, dataset)
+    sisyphus_request = request or build_sisyphus_evaluation_request(evaluation, dataset)
+    repo_root = Path(dataset.repo_root)
+    config = load_config(repo_root)
+
+    request_outcome = request_task(
+        repo_root=repo_root,
+        config=config,
+        message=sisyphus_request.message,
+        title=sisyphus_request.title,
+        task_type=sisyphus_request.task_type,
+        slug=sisyphus_request.slug,
+        instruction=sisyphus_request.instruction,
+        agent_id=sisyphus_request.agent_id,
+        role=sisyphus_request.role,
+        provider=sisyphus_request.provider,
+        owned_paths=list(sisyphus_request.owned_paths),
+        provider_args=list(sisyphus_request.provider_args),
+        source_context=sisyphus_request.source_context,
+        auto_run=False,
+    )
+    if not request_outcome.ok or not request_outcome.task_id or request_outcome.task is None:
+        detail = request_outcome.error or "failed to create Sisyphus evaluation task"
+        raise EvolutionEvaluationExecutionError(
+            detail,
+            metrics=metrics,
+            evidence=EvolutionEvaluationEvidence(
+                mode=EVOLUTION_EVALUATION_EXECUTION_MODE_WORKTREE_HARNESS,
+                detail=detail,
+                provider=sisyphus_request.provider,
+                agent_id=sisyphus_request.agent_id,
+            ),
+        )
+
+    task_id = str(request_outcome.task_id)
+    task_snapshot = request_outcome.task
+    plan_outcome = approve_task_plan(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        reviewer=sisyphus_request.plan_reviewer,
+        notes=sisyphus_request.plan_review_notes or _default_plan_review_notes(evaluation),
+    )
+    if plan_outcome.plan_status != "approved":
+        detail = f"Sisyphus evaluation task {task_id} plan approval failed: {plan_outcome.plan_status}"
+        raise EvolutionEvaluationExecutionError(
+            detail,
+            metrics=metrics,
+            evidence=_evaluation_evidence_from_task(
+                task_snapshot,
+                sisyphus_request,
+                detail=detail,
+                plan_status=plan_outcome.plan_status,
+                mode=EVOLUTION_EVALUATION_EXECUTION_MODE_WORKTREE_HARNESS,
+            ),
+        )
+
+    spec_outcome = freeze_task_spec(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        reviewer=sisyphus_request.spec_reviewer,
+        notes=sisyphus_request.spec_review_notes or _default_spec_review_notes(evaluation),
+    )
+    if spec_outcome.spec_status != "frozen":
+        detail = f"Sisyphus evaluation task {task_id} spec freeze failed: {spec_outcome.spec_status}"
+        raise EvolutionEvaluationExecutionError(
+            detail,
+            metrics=metrics,
+            evidence=_evaluation_evidence_from_task(
+                task_snapshot,
+                sisyphus_request,
+                detail=detail,
+                plan_status=plan_outcome.plan_status,
+                spec_status=spec_outcome.spec_status,
+                workflow_phase=spec_outcome.workflow_phase,
+                mode=EVOLUTION_EVALUATION_EXECUTION_MODE_WORKTREE_HARNESS,
+            ),
+        )
+
+    latest_task, _ = load_task_record(
+        repo_root=repo_root,
+        task_dir_name=config.task_dir,
+        task_id=task_id,
+    )
+    try:
+        materialization = materialize_evolution_evaluation(evaluation, task=latest_task)
+    except EvolutionMaterializationError as exc:
+        detail = f"Sisyphus evaluation task {task_id} materialization failed: {exc}"
+        raise EvolutionEvaluationExecutionError(
+            detail,
+            metrics=metrics,
+            evidence=_evaluation_evidence_from_task(
+                latest_task,
+                sisyphus_request,
+                detail=detail,
+                plan_status=plan_outcome.plan_status,
+                spec_status=spec_outcome.spec_status,
+                workflow_phase=spec_outcome.workflow_phase,
+                materialization_status=EVOLUTION_MATERIALIZATION_STATUS_FAILED,
+                mode=EVOLUTION_EVALUATION_EXECUTION_MODE_WORKTREE_HARNESS,
+            ),
+        )
+    return _PreparedWorktreeEvaluationContext(
+        request=sisyphus_request,
+        task_id=task_id,
+        task=latest_task,
+        metrics=metrics,
+        plan_status=plan_outcome.plan_status,
+        spec_status=spec_outcome.spec_status,
+        workflow_phase=spec_outcome.workflow_phase,
+        materialization=materialization,
+    )
+
+
+def build_worktree_evaluation_command_plan(
+    evaluation: EvolutionEvaluationPlan,
+    dataset: EvolutionDataset,
+) -> tuple[EvolutionWorktreeCommand, ...]:
+    trace_by_id = {trace.task_id: trace for trace in dataset.task_traces}
+    commands: list[EvolutionWorktreeCommand] = []
+    seen: set[str] = set()
+    for task_id in evaluation.task_ids:
+        trace = trace_by_id.get(task_id)
+        if trace is None:
+            continue
+        command_inputs = [
+            ("verify_result", result.command)
+            for result in trace.verify_results
+            if result.command.strip()
+        ]
+        if not command_inputs:
+            command_inputs = [
+                ("verify_command", command)
+                for command in trace.verify_commands
+                if command.strip()
+            ]
+        for source, original_command in command_inputs:
+            normalized_command = _normalize_worktree_command(original_command)
+            if not normalized_command or normalized_command in seen:
+                continue
+            seen.add(normalized_command)
+            commands.append(
+                EvolutionWorktreeCommand(
+                    source_task_id=task_id,
+                    source=source,
+                    original_command=original_command,
+                    normalized_command=normalized_command,
+                )
+            )
+    if commands:
+        return tuple(commands)
+    raise EvolutionEvaluationExecutionError(
+        f"no executable verify/test commands are available for evaluation {evaluation.evaluation_id}",
+        metrics=EvolutionPlannedMetrics(operator_reviewability=EVOLUTION_OPERATOR_REVIEWABILITY_BLOCKED),
+    )
+
+
+def _normalize_worktree_command(command: str) -> str:
+    normalized = str(command).strip()
+    if not normalized:
+        return ""
+    if normalized.startswith("cd ") and "&&" in normalized:
+        prefix, remainder = normalized.split("&&", 1)
+        if prefix.strip().startswith("cd "):
+            normalized = remainder.strip()
+    return normalized
+
+
+def _run_worktree_evaluation_commands(
+    *,
+    commands: Sequence[EvolutionWorktreeCommand],
+    worktree_root: Path,
+    artifact_root: Path,
+) -> tuple[str, tuple[EvolutionWorktreeCommandResult, ...]]:
+    execution_root = artifact_root / "execution"
+    execution_root.mkdir(parents=True, exist_ok=True)
+    results: list[EvolutionWorktreeCommandResult] = []
+    for index, command in enumerate(commands, start=1):
+        started = perf_counter()
+        completed = subprocess.run(
+            command.normalized_command,
+            cwd=worktree_root,
+            shell=True,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        runtime_ms = _elapsed_ms(started)
+        stdout_path = execution_root / f"command-{index:03d}.stdout.txt"
+        stderr_path = execution_root / f"command-{index:03d}.stderr.txt"
+        stdout_path.write_text(completed.stdout or "", encoding="utf-8")
+        stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+        output_excerpt = (completed.stdout or completed.stderr or "").strip().splitlines()
+        results.append(
+            EvolutionWorktreeCommandResult(
+                source_task_id=command.source_task_id,
+                source=command.source,
+                original_command=command.original_command,
+                normalized_command=command.normalized_command,
+                status="passed" if completed.returncode == 0 else "failed",
+                exit_code=completed.returncode,
+                runtime_ms=runtime_ms,
+                stdout_path=stdout_path.relative_to(worktree_root).as_posix(),
+                stderr_path=stderr_path.relative_to(worktree_root).as_posix(),
+                output_excerpt=output_excerpt[-1][:200] if output_excerpt else None,
+            )
+        )
+    receipt_path = execution_root / "execution_receipt.json"
+    receipt_path.write_text(
+        json.dumps(
+            {
+                "command_count": len(results),
+                "passed_command_count": sum(1 for result in results if result.status == "passed"),
+                "results": [
+                    {
+                        "source_task_id": result.source_task_id,
+                        "source": result.source,
+                        "original_command": result.original_command,
+                        "normalized_command": result.normalized_command,
+                        "status": result.status,
+                        "exit_code": result.exit_code,
+                        "runtime_ms": result.runtime_ms,
+                        "stdout_path": result.stdout_path,
+                        "stderr_path": result.stderr_path,
+                        "output_excerpt": result.output_excerpt,
+                    }
+                    for result in results
+                ],
+                "recorded_at": utc_now(),
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return receipt_path.relative_to(worktree_root).as_posix(), tuple(results)
+
+
+def _metrics_from_command_results(
+    *,
+    base_metrics: EvolutionPlannedMetrics,
+    command_results: Sequence[EvolutionWorktreeCommandResult],
+) -> EvolutionPlannedMetrics:
+    command_count = len(command_results)
+    passed_command_count = sum(1 for result in command_results if result.status == "passed")
+    verify_pass_rate = passed_command_count / command_count if command_count else None
+    return replace(
+        base_metrics,
+        verify_pass_rate=verify_pass_rate,
+        runtime_ms=sum(result.runtime_ms for result in command_results),
+        operator_reviewability=_derive_reviewability(
+            verify_pass_rate=verify_pass_rate,
+            conformance_status=base_metrics.conformance_status,
+            unresolved_warning_count=base_metrics.unresolved_warning_count or 0,
+        ),
+    )
+
+
+def _artifact_root_from_materialization(
+    *,
+    worktree_root: Path,
+    materialization: EvolutionMaterialization,
+) -> Path:
+    return worktree_root / Path(materialization.manifest_path).parent
