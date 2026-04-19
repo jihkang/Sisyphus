@@ -2,11 +2,179 @@
 
 This document describes the current architecture of Sisyphus as of 2026-04-14.
 
-Sisyphus is a Python task orchestration system that runs inside a target Git repository and manages repository-local task state, task documents, worktrees, agent execution, verification, and closeout.
+Sisyphus is a graph-native work system that runs inside a target Git repository and manages repository-local work state, task documents, worktrees, execution, verification, and closeout.
+
+Its center is not an agent, a chat session, or a flat task list. The center is a controlled work world composed of specs, artifacts, typed relations, verification evidence, promotion state, invalidation state, and execution receipts. Intelligence is allowed to act on that world, but it is not allowed to become the authority over that world.
+
+## Core Purpose
+
+Sisyphus should be understood as:
+
+> a graph-native work system centered on a controllable work world, with intelligence gradually internalized as operations over that world
+
+This means:
+
+- the authoritative state lives in durable, reviewable repository artifacts
+- runtime intelligence is an operator over that state rather than the source of truth
+- reconstructability matters as much as execution convenience
+
+The current task runtime is still task-shaped, but the long-term architectural direction is artifact-centric.
+
+## Hard State And Soft Cognition
+
+The architecture separates two categories of system responsibility.
+
+### Hard State
+
+Hard state is the durable truth the system must be able to recover, validate, diff, and promote.
+
+- spec artifacts
+- produced artifacts
+- typed edges and slot bindings
+- verification claims and evidence
+- promotion decisions
+- invalidation state
+- execution receipts
+
+### Soft Cognition
+
+Soft cognition improves throughput and adaptability, but it must not replace durable state.
+
+- planning
+- decomposition
+- scheduling
+- impact analysis
+- retry and recovery strategy
+- replanning
+- semantic review
+- context condensation
+
+The governing rule is:
+
+> intelligence may be internalized, but it must not overwrite or bypass hard-state authority
+
+## Task And Artifact Model
+
+Tasks are still first-class, but they are not the primary durable object. Artifacts carry durable state. Tasks are operators that produce, transform, or compose artifacts.
+
+The intended model is:
+
+- `TaskSpec`: the planned operation
+- `TaskRun`: the executed operation and its receipt
+- `Artifact`: a durable state object
+- `CompositeArtifact`: a higher-order artifact whose validity depends on typed relationships among child artifacts
+- `VerificationArtifact`: evidence for a specific claim
+- `PromotionDecision`: the recorded decision that an artifact obligation is closed
+
+This implies two important boundaries:
+
+- `TaskSpec` and `TaskRun` must remain distinct
+- higher-order results are not loose bundles; they are contract-bearing composite objects
+
+## Composite Artifacts And Reconstruction
+
+A higher-order artifact exists only when the system can recover:
+
+- which child artifacts participated
+- which task specs and task runs produced them
+- which typed edges and slot bindings connected them
+- which composition rule made the result valid
+- which verification claims supported the result
+- which promotion state the result currently holds
+
+For that reason, a final artifact should be understood as having two layers:
+
+- `payload`: the usable result
+- `envelope`: the reconstructable composition record explaining why the result is valid
+
+This reconstructability requirement is stronger than simple lineage tracking. It is a design constraint for persistence, verification, invalidation, and promotion.
+
+## Verification, Promotion, And Invalidation
+
+Verification is not a generic boolean. It is proof for a claim over a scope with explicit dependencies and evidence.
+
+The system should reason about verification in three layers:
+
+- `local`: an artifact is internally valid
+- `cross`: relationships between artifacts are valid
+- `composite`: a higher-order artifact satisfies its intended obligation
+
+Higher-layer verification is not implied by lower-layer verification.
+
+Promotion is likewise not task completion. Promotion is obligation closure for an artifact. A promoted artifact should have:
+
+- required slots filled
+- invariants satisfied
+- required verification claims passed
+- no stale dependencies
+- no unresolved conflicts
+- required approvals or evidence recorded
+
+Invalidation must precede operational change requests. When an input changes, the system first computes which composites or verification claims are stale, and only then decides whether to reverify, reassemble, replan, or issue a new change request.
+
+## Authority Boundary For Intelligence
+
+Hermes-like agent runtimes remain useful, but they must stay outside the authoritative state boundary.
+
+Those runtimes usually carry hidden state through:
+
+- session accumulation
+- memory injection
+- summarization or compression
+- fallback and retry policy
+- autonomous loop decisions
+
+That is useful for general-purpose agent behavior, but it introduces drift if treated as the runtime authority.
+
+The architectural rule is therefore:
+
+- Sisyphus owns the authoritative runtime contract
+- external or embedded agent intelligence remains an optional cognition module
+- hard-state persistence, receipts, verification, promotion, and invalidation stay inside Sisyphus
+
+## Next Design Lock
+
+The most productive next step is not a universal composition engine. It is a concrete protocol for one representative composite artifact type.
+
+That design pass should lock:
+
+1. the artifact type and its named or collection slots
+2. the key invariants across those slots
+3. the verification obligations at `local`, `cross`, and `composite` layers
+4. the promotion gate
+5. the invalidation matrix for changed inputs
+6. the reconstruction envelope fields
+
+Once one representative protocol is fixed, common composition kernels and reusable graph machinery can be extracted from it.
+
+### Recommended First Protocol
+
+The best first protocol to lock is a repository-change composite for feature delivery.
+
+The concrete definition now lives in [docs/feature-change-artifact.md](./feature-change-artifact.md).
+
+One practical shape is:
+
+- `FeatureChangeArtifact`
+  - `spec` slot
+  - `implementation_candidates[]` collection slot
+  - `selected_implementation` slot
+  - `tests[]` collection slot
+  - `verification_claims[]` collection slot
+  - optional `approvals[]` collection slot
+
+This is the right first candidate because it matches the repository's current workflow shape while still forcing the system to define:
+
+- role-based slots and collection slots
+- cross-artifact invariants such as spec or implementation compatibility
+- layered verification from local checks to composite acceptance
+- promotion rules for when a change is actually ready
+- invalidation behavior when spec, implementation, or tests move independently
+- a reconstructable envelope that can later map to branch, PR, and merge decisions
 
 ## System Shape
 
-At a high level, the system is organized as a layered orchestration stack:
+At a high level, the current implementation is organized as a layered orchestration stack:
 
 ```text
 +------------------------------------------------------------------+
@@ -375,6 +543,21 @@ This layer stores state and provisions task workspaces.
 - `creation.py` combines task record creation, worktree setup, and rollback behavior.
 
 This is a file-first architecture. The source of truth is repository-local state, not an external database.
+
+### Task Worktree Baseline Rule
+
+Task worktrees are provisioned from the configured `base_branch`, not from the current root worktree's dirty state.
+
+- `creation.py` calls `gitops.create_task_branch_and_worktree()`.
+- `gitops.create_task_branch_and_worktree()` runs `git worktree add -b <branch> <target> <base_ref>`.
+- `base_ref` is resolved from `config.base_branch` by `gitops.resolve_base_ref()`.
+
+That means an in-progress root worktree migration or refactor is not automatically present in a newly created task worktree. The only supported escape hatch is direct-change adoption:
+
+- `daemon.py` can apply `adopt_current_changes` during task creation.
+- adoption copies the current root dirty paths into the new task worktree and records the overlay in `task.json -> meta.adopted_changes`.
+
+Operationally, when the root worktree becomes the authoritative source of truth, ongoing implementation should move to a freshly adopted task baseline. Older task worktrees should be treated as stale references until their scope is replayed or the tasks are closed.
 
 ### 6. Verification and Closeout
 

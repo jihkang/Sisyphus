@@ -1,0 +1,145 @@
+{
+  "id": "TF-20260418-feature-complete-runtime-migration-to-sisyphus",
+  "type": "feature",
+  "slug": "complete-runtime-migration-to-sisyphus",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-18T11:26:36Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "The staged runtime migration is complete and the umbrella task now reflects the three closed implementation slices.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "The staged runtime migration is complete and the umbrella task now reflects the three closed implementation slices.",
+      "timestamp": "2026-04-18T11:26:36Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-18T11:26:36Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze the umbrella migration record before final verification.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-18T11:03:19Z",
+  "updated_at": "2026-04-18T11:26:48Z",
+  "closed_at": "2026-04-18T11:26:48Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260418-feature-complete-runtime-migration-to-sisyphus",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260418-feature-complete-runtime-migration-to-sisyphus",
+  "branch": "feat/complete-runtime-migration-to-sisyphus",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/Sisyphus && env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -c \"import importlib; print(importlib.import_module('taskflow.cli') is importlib.import_module('sisyphus.cli')); print(importlib.import_module('taskflow.mcp_server') is importlib.import_module('sisyphus.mcp_server')); print(importlib.import_module('taskflow.evolution.constraints') is importlib.import_module('sisyphus.evolution.constraints')); print(importlib.import_module('taskflow.api') is importlib.import_module('sisyphus.api'))\"",
+    "cd /Users/jihokang/Documents/Sisyphus && env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -m unittest tests.test_taskflow tests.test_mcp_core tests.test_mcp_adapter tests.test_mcp_server tests.test_evolution tests.test_event_bus tests.test_golden -v"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-18T11:26:43Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -c \"import importlib; print(importlib.import_module('taskflow.cli') is importlib.import_module('sisyphus.cli')); print(importlib.import_module('taskflow.mcp_server') is importlib.import_module('sisyphus.mcp_server')); print(importlib.import_module('taskflow.evolution.constraints') is importlib.import_module('sisyphus.evolution.constraints')); print(importlib.import_module('taskflow.api') is importlib.import_module('sisyphus.api'))\"",
+      "command": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -c \"import importlib; print(importlib.import_module('taskflow.cli') is importlib.import_module('sisyphus.cli')); print(importlib.import_module('taskflow.mcp_server') is importlib.import_module('sisyphus.mcp_server')); print(importlib.import_module('taskflow.evolution.constraints') is importlib.import_module('sisyphus.evolution.constraints')); print(importlib.import_module('taskflow.api') is importlib.import_module('sisyphus.api'))\"",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-18T11:26:39Z",
+      "finished_at": "2026-04-18T11:26:39Z",
+      "duration_ms": null,
+      "output_excerpt": "False"
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -m unittest tests.test_taskflow tests.test_mcp_core tests.test_mcp_adapter tests.test_mcp_server tests.test_evolution tests.test_event_bus tests.test_golden -v",
+      "command": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -m unittest tests.test_taskflow tests.test_mcp_core tests.test_mcp_adapter tests.test_mcp_server tests.test_evolution tests.test_event_bus tests.test_golden -v",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-18T11:26:39Z",
+      "finished_at": "2026-04-18T11:26:43Z",
+      "duration_ms": null,
+      "output_excerpt": "workflow_phase: execution"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Canonical `sisyphus` imports own the core runtime, MCP, evolution, and CLI surfaces.",
+        "checked": true
+      },
+      {
+        "name": "Legacy `taskflow` imports continue to resolve to the same runtime implementations used by `sisyphus`.",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Template resources, MCP schema/resources, and evolution helpers remain available after the ownership move.",
+        "checked": true
+      },
+      {
+        "name": "Legacy `.taskflow.toml` fallback and compatibility-sensitive protocol identifiers remain intentionally unchanged.",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Focused regressions across taskflow compatibility, MCP, evolution, event bus, and golden fixtures catch remaining package-boundary drift.",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Canonical and legacy module paths resolve to the same final runtime boundary",
+        "method": "env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -c \"import importlib; print(importlib.import_module('taskflow.cli') is importlib.import_module('sisyphus.cli')); print(importlib.import_module('taskflow.mcp_server') is importlib.import_module('sisyphus.mcp_server')); print(importlib.import_module('taskflow.evolution.constraints') is importlib.import_module('sisyphus.evolution.constraints')); print(importlib.import_module('taskflow.api') is importlib.import_module('sisyphus.api'))\""
+      },
+      {
+        "target": "Focused regression coverage stays green after the full staged migration",
+        "method": "env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -m unittest tests.test_taskflow tests.test_mcp_core tests.test_mcp_adapter tests.test_mcp_server tests.test_evolution tests.test_event_bus tests.test_golden -v"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-9fdfe2edbd24",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "complete-runtime-migration-to-sisyphus"
+  }
+}

@@ -1,0 +1,190 @@
+{
+  "id": "TF-20260416-feature-document-weekly-main-summary-for-linkedin",
+  "type": "feature",
+  "slug": "document-weekly-main-summary-for-linkedin",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-16T17:24:36Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the scope: add a repository doc and README pointer that summarize the last-week mainline changes for LinkedIn, using exact dates, commit anchors, and bilingual draft text.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised this documentation task to produce a LinkedIn-ready weekly summary of origin/main from 2026-04-10 to 2026-04-17, anchored to concrete commit history and diff statistics, with README linking to the new doc.",
+      "timestamp": "2026-04-16T17:24:36Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the scope: add a repository doc and README pointer that summarize the last-week mainline changes for LinkedIn, using exact dates, commit anchors, and bilingual draft text.",
+      "timestamp": "2026-04-16T17:24:36Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-16T17:24:36Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to documentation only: gather origin/main evidence, write the weekly LinkedIn summary doc, add a README link, and verify via git-based checks.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-16T17:20:42Z",
+  "updated_at": "2026-04-16T17:24:54Z",
+  "closed_at": "2026-04-16T17:24:54Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260416-feature-document-weekly-main-summary-for-linkedin",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260416-feature-document-weekly-main-summary-for-linkedin",
+  "branch": "feat/document-weekly-main-summary-for-linkedin",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd ../../.. && git log --first-parent --date=short --pretty=format:'%h %ad %s' --since='2026-04-10 00:00:00 +0900' origin/main",
+    "cd ../../.. && git diff --shortstat fbe20750afae96d6b83696cc3f892ffffc368aed..origin/main",
+    "cd ../../.. && rg -n \"linkedin-weekly-main-summary-2026-04-17\" README.md",
+    "cd ../../.. && rg -n \"LinkedIn Draft: English|LinkedIn Draft: Korean|Source Commits|2026-04-10|2026-04-17\" docs/linkedin-weekly-main-summary-2026-04-17.md"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-16T17:24:46Z",
+  "last_verify_results": [
+    {
+      "name": "cd ../../.. && git log --first-parent --date=short --pretty=format:'%h %ad %s' --since='2026-04-10 00:00:00 +0900' origin/main",
+      "command": "cd ../../.. && git log --first-parent --date=short --pretty=format:'%h %ad %s' --since='2026-04-10 00:00:00 +0900' origin/main",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-16T17:24:46Z",
+      "finished_at": "2026-04-16T17:24:46Z",
+      "duration_ms": null,
+      "output_excerpt": "eeb81ff 2026-04-13 Merge pull request #5 from jihkang/feat/direct-change-adoption"
+    },
+    {
+      "name": "cd ../../.. && git diff --shortstat fbe20750afae96d6b83696cc3f892ffffc368aed..origin/main",
+      "command": "cd ../../.. && git diff --shortstat fbe20750afae96d6b83696cc3f892ffffc368aed..origin/main",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-16T17:24:46Z",
+      "finished_at": "2026-04-16T17:24:46Z",
+      "duration_ms": null,
+      "output_excerpt": "104 files changed, 9228 insertions(+), 370 deletions(-)"
+    },
+    {
+      "name": "cd ../../.. && rg -n \"linkedin-weekly-main-summary-2026-04-17\" README.md",
+      "command": "cd ../../.. && rg -n \"linkedin-weekly-main-summary-2026-04-17\" README.md",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-16T17:24:46Z",
+      "finished_at": "2026-04-16T17:24:46Z",
+      "duration_ms": null,
+      "output_excerpt": "294:- LinkedIn weekly summary example: see `docs/linkedin-weekly-main-summary-2026-04-17.md`."
+    },
+    {
+      "name": "cd ../../.. && rg -n \"LinkedIn Draft: English|LinkedIn Draft: Korean|Source Commits|2026-04-10|2026-04-17\" docs/linkedin-weekly-main-summary-2026-04-17.md",
+      "command": "cd ../../.. && rg -n \"LinkedIn Draft: English|LinkedIn Draft: Korean|Source Commits|2026-04-10|2026-04-17\" docs/linkedin-weekly-main-summary-2026-04-17.md",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-16T17:24:46Z",
+      "finished_at": "2026-04-16T17:24:46Z",
+      "duration_ms": null,
+      "output_excerpt": "206:- `48d9ee4` on `2026-04-17` \u2014 mainline head including naming unification work"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "The doc accurately states the time window and commit anchors for the summary.",
+        "checked": false
+      },
+      {
+        "name": "The doc captures the main architectural changes that landed on `origin/main`.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "The doc distinguishes baseline state from the current `main` state clearly enough for an external audience.",
+        "checked": false
+      },
+      {
+        "name": "The write-up remains useful even if a reader does not know the internal module names.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "The summary does not accidentally describe local branch or unmerged work.",
+        "checked": false
+      },
+      {
+        "name": "The LinkedIn copy remains grounded in real landed changes rather than aspirational roadmap items.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "The doc accurately states the time window and commit anchors for the summary.",
+        "method": "git log --first-parent --date=short --pretty=format:'%h %ad %s' --since='2026-04-10 00:00:00 +0900' origin/main"
+      },
+      {
+        "target": "The doc captures the landed mainline work and summary size correctly.",
+        "method": "git diff --shortstat <baseline>..origin/main"
+      },
+      {
+        "target": "README points readers to the summary.",
+        "method": "rg -n \"linkedin-weekly-main-summary-2026-04-17\" README.md"
+      },
+      {
+        "target": "The doc includes LinkedIn-ready sections and source commit anchors.",
+        "method": "rg -n \"LinkedIn Draft: English|LinkedIn Draft: Korean|Source Commits|2026-04-10|2026-04-17\" docs/linkedin-weekly-main-summary-2026-04-17.md"
+      },
+      {
+        "target": "The summary stays anchored to origin/main rather than local work.",
+        "method": "manual review of docs/linkedin-weekly-main-summary-2026-04-17.md"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-a8105618511b",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "document-weekly-main-summary-for-linkedin"
+  }
+}

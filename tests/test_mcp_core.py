@@ -215,3 +215,13 @@ class McpCoreTests(unittest.TestCase):
         self.assertIsNotNone(payload["receipt_path"])
         self.assertIsNotNone(payload["changeset_path"])
         self.assertIsNone(payload["error"])
+
+    def test_request_task_tool_rejects_non_list_owned_paths(self) -> None:
+        with self.assertRaisesRegex(TypeError, "expected list value, got: str"):
+            self.core.call_tool(
+                "sisyphus.request_task",
+                {
+                    "message": "create a task",
+                    "owned_paths": "src/sisyphus",
+                },
+            )

@@ -1,0 +1,270 @@
+{
+  "id": "TF-20260416-feature-implement-slot-binding-and-verification-claims",
+  "type": "feature",
+  "slug": "implement-slot-binding-and-verification-claims",
+  "status": "blocked",
+  "stage": "audit",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-19T09:25:45Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Reviewed the revised slot-binding/claim plan. The schema boundary is now explicit enough to implement without leaking runtime projection or promotion logic into this slice.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Expanded the task docs into a slot-binding and verification-claim-specific spec. Locked scope to named and collection slot bindings, verification-claim schema, claim scope, dependency refs, evidence refs, and focused tests while keeping runtime projection and promotion policy out of scope.",
+      "timestamp": "2026-04-19T09:25:41Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Reviewed the revised slot-binding/claim plan. The schema boundary is now explicit enough to implement without leaking runtime projection or promotion logic into this slice.",
+      "timestamp": "2026-04-19T09:25:45Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-19T09:25:45Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to slot-binding and verification-claim models layered on top of the artifact record foundation, plus focused regression tests.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-16T17:14:29Z",
+  "updated_at": "2026-04-19T09:33:54Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260416-feature-implement-slot-binding-and-verification-claims",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260416-feature-implement-slot-binding-and-verification-claims",
+  "branch": "feat/implement-slot-binding-and-verification-claims",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-19T09:33:31Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "A `FeatureChangeArtifact`-style binding set can round-trip named slots and collection slots with deterministic ordering.",
+        "checked": false
+      },
+      {
+        "name": "A verification claim can round-trip claim text, scope, dependency refs, and evidence refs on top of the artifact foundation.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Empty collection slots remain stable and serializable without collapsing into malformed null-heavy payloads.",
+        "checked": false
+      },
+      {
+        "name": "Mixed named-slot and collection-slot bindings preserve declared order for collection entries and claim dependencies.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Missing required slot metadata or malformed verification-claim payloads fail with actionable validation errors.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "A FeatureChangeArtifact-style binding set can round-trip named slots and collection slots with deterministic ordering.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_artifacts"
+      },
+      {
+        "target": "A verification claim can round-trip claim text, scope, dependency refs, and evidence refs on top of the artifact foundation.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_artifacts"
+      },
+      {
+        "target": "Empty collection slots remain stable and serializable without collapsing into malformed null-heavy payloads.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_artifacts"
+      },
+      {
+        "target": "Missing required slot metadata or malformed verification-claim payloads fail with actionable validation errors.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_artifacts"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [
+    {
+      "code": "DIRTY_WORKTREE",
+      "message": "working tree is dirty",
+      "blocking": true,
+      "source": "close",
+      "created_at": "2026-04-19T09:33:54Z"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "A `FeatureChangeArtifact`-style binding set can round-trip named slots and collection slots with deterministic ordering.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-002",
+      "title": "A verification claim can round-trip claim text, scope, dependency refs, and evidence refs on top of the artifact foundation.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-003",
+      "title": "Empty collection slots remain stable and serializable without collapsing into malformed null-heavy payloads.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-004",
+      "title": "Mixed named-slot and collection-slot bindings preserve declared order for collection entries and claim dependencies.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-005",
+      "title": "Missing required slot metadata or malformed verification-claim payloads fail with actionable validation errors.",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    }
+  ],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "source_event_id": "evt-139b50b38d87",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "implement-slot-binding-and-verification-claims"
+  }
+}

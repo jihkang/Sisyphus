@@ -1,0 +1,153 @@
+{
+  "id": "TF-20260415-feature-implement-internal-sisyphus-package-and-symbol-rename",
+  "type": "feature",
+  "slug": "implement-internal-sisyphus-package-and-symbol-rename",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-15T10:29:06Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the internal naming slice: canonical sisyphus submodule imports and internal symbol renames with compatibility aliases preserved, while keeping persisted/protocol identifiers out of scope.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised this task to the concrete internal naming slice: add canonical sisyphus submodule aliases, introduce SisyphusConfig as the canonical internal config type with TaskflowConfig as a compatibility alias, rename obvious internal helpers and test classes, and move tests/wrappers toward canonical sisyphus imports while preserving taskflow compatibility.",
+      "timestamp": "2026-04-15T10:29:06Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the internal naming slice: canonical sisyphus submodule imports and internal symbol renames with compatibility aliases preserved, while keeping persisted/protocol identifiers out of scope.",
+      "timestamp": "2026-04-15T10:29:06Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-15T10:29:06Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to sisyphus submodule aliasing, SisyphusConfig canonical naming, helper/docstring/test renames, and wrapper/test import updates. Do not rename taskflow.event.v1, TF task ids, or remove taskflow compatibility imports in this task.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-15T10:26:04Z",
+  "updated_at": "2026-04-15T10:36:55Z",
+  "closed_at": "2026-04-15T10:36:55Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260415-feature-implement-internal-sisyphus-package-and-symbol-rename",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260415-feature-implement-internal-sisyphus-package-and-symbol-rename",
+  "branch": "feat/implement-internal-sisyphus-package-and-symbol-rename",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd ../../.. && env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -m unittest tests.test_taskflow tests.test_mcp_server tests.test_event_bus tests.test_evolution tests.test_golden tests.test_mcp_adapter tests.test_mcp_core -v"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-15T10:36:48Z",
+  "last_verify_results": [
+    {
+      "name": "cd ../../.. && env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -m unittest tests.test_taskflow tests.test_mcp_server tests.test_event_bus tests.test_evolution tests.test_golden tests.test_mcp_adapter tests.test_mcp_core -v",
+      "command": "cd ../../.. && env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -m unittest tests.test_taskflow tests.test_mcp_server tests.test_event_bus tests.test_evolution tests.test_golden tests.test_mcp_adapter tests.test_mcp_core -v",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-15T10:36:44Z",
+      "finished_at": "2026-04-15T10:36:48Z",
+      "duration_ms": null,
+      "output_excerpt": "workflow_phase: execution"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Canonical `sisyphus` submodule imports work for the main runtime modules and evolution package.",
+        "checked": false
+      },
+      {
+        "name": "Internal config typing and helper names use canonical `Sisyphus` naming without breaking behavior.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Legacy `taskflow` imports continue to work after canonical aliasing is added.",
+        "checked": false
+      },
+      {
+        "name": "Evolution imports work from the canonical `sisyphus.evolution` surface, not only from `taskflow.evolution`.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Persisted/protocol identifiers such as `taskflow.event.v1` and `TF-...` are not accidentally renamed.",
+        "checked": false
+      },
+      {
+        "name": "Compatibility strings that must stay legacy are not broken while canonical names are introduced.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Canonical sisyphus submodule imports work for the main runtime modules and evolution package.",
+        "method": "python -m unittest tests.test_taskflow tests.test_mcp_server tests.test_evolution -v"
+      },
+      {
+        "target": "Internal config typing and helper names use canonical Sisyphus naming without breaking behavior.",
+        "method": "python -m unittest tests.test_taskflow tests.test_event_bus -v"
+      },
+      {
+        "target": "Legacy taskflow imports continue to work and persisted identifiers remain unchanged.",
+        "method": "python -m unittest tests.test_golden tests.test_mcp_adapter tests.test_mcp_core -v"
+      },
+      {
+        "target": "Compatibility and persisted identifiers are not renamed accidentally.",
+        "method": "manual review of diff"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-d74650e68dcb",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "implement-internal-sisyphus-package-and-symbol-rename"
+  }
+}

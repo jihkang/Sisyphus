@@ -1,0 +1,140 @@
+{
+  "id": "TF-20260415-feature-plan-naming-unification-to-sisyphus",
+  "type": "feature",
+  "slug": "plan-naming-unification-to-sisyphus",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-15T09:51:56Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the safe surface-cleanup slice: prefer sisyphus in CLI/help and generated guidance, clarify taskflow.mcp_server as a compatibility launcher path, and keep high-risk identifiers out of scope.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised the task from planning-only into the first implementation slice of the naming migration: update user-facing CLI/help text, generated verification mappings, and documentation around compatibility launcher paths while explicitly leaving package/config/protocol identifiers unchanged.",
+      "timestamp": "2026-04-15T09:51:54Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the safe surface-cleanup slice: prefer sisyphus in CLI/help and generated guidance, clarify taskflow.mcp_server as a compatibility launcher path, and keep high-risk identifiers out of scope.",
+      "timestamp": "2026-04-15T09:51:56Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-15T09:51:56Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze the implementation scope to safe user-facing naming cleanup only: CLI prog string, generated task-doc wording, and compatibility-path documentation. Do not rename src/taskflow, .taskflow.toml, taskflow.event.v1, or TF task ids in this task.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-15T09:45:19Z",
+  "updated_at": "2026-04-15T09:54:02Z",
+  "closed_at": "2026-04-15T09:54:02Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260415-feature-plan-naming-unification-to-sisyphus",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260415-feature-plan-naming-unification-to-sisyphus",
+  "branch": "feat/plan-naming-unification-to-sisyphus",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-15T09:53:41Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "CLI help surfaces `sisyphus` as the program name.",
+        "checked": false
+      },
+      {
+        "name": "Generated feature and issue plan text uses `sisyphus verify`.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "`taskflow` remains a working runtime alias even though the help and generated guidance prefer `sisyphus`.",
+        "checked": false
+      },
+      {
+        "name": "MCP docs remain technically accurate by describing `taskflow.mcp_server` as a compatibility path rather than renaming it prematurely.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "This slice does not accidentally rename high-risk identifiers such as `.taskflow.toml`, `taskflow.event.v1`, or `src/taskflow/`.",
+        "checked": false
+      },
+      {
+        "name": "No docs instruct users to run commands that do not exist in the current codebase.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "CLI help surfaces sisyphus as the program name.",
+        "method": "python -m unittest tests.test_taskflow -v"
+      },
+      {
+        "target": "Generated feature and issue plan text uses sisyphus verify.",
+        "method": "python -m unittest tests.test_taskflow -v"
+      },
+      {
+        "target": "taskflow remains a working runtime alias and MCP docs stay accurate.",
+        "method": "manual review of updated docs and unchanged compatibility entry points"
+      },
+      {
+        "target": "High-risk identifiers are not renamed accidentally.",
+        "method": "manual review of diff for config, event schema, and package paths"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-41fa71105c65",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "plan-naming-unification-to-sisyphus"
+  }
+}

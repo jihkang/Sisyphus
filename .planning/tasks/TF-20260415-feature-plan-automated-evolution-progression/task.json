@@ -1,0 +1,228 @@
+{
+  "id": "TF-20260415-feature-plan-automated-evolution-progression",
+  "type": "feature",
+  "slug": "plan-automated-evolution-progression",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-15T10:29:31Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved updated scope: guarded post-evaluation execution should route through Sisyphus-managed isolated execution rather than a generic callback, with explicit opt-in policy and preserved isolation guarantees.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Expanded the plan into a concrete automation slice: promote runner.py into a stage-aware orchestrator that composes dataset build, harness execution, constraints, fitness, and report generation in one read-only operator-invoked flow.",
+      "timestamp": "2026-04-15T09:56:56Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "User requested execution. Approving the automation slice: implement a read-only stage-aware evolution runner that composes dataset, harness, constraints, fitness, and report generation.",
+      "timestamp": "2026-04-15T09:57:37Z"
+    },
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Broaden the automation slice to include a post-evaluation stage-gated executor hook. The runner should compose dataset build, harness execution, constraints, fitness, and report generation, then optionally invoke a follow-up executor only when guards and promotion eligibility pass.",
+      "timestamp": "2026-04-15T10:05:55Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved broadened scope: add a guarded post-evaluation executor hook to the evolution runner while keeping mutation/promotion policy explicit and opt-in.",
+      "timestamp": "2026-04-15T10:05:59Z"
+    },
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Broaden the execution slice from a generic post-evaluation callback to Sisyphus-managed self-hosted execution. After dataset build, harness execution, constraint evaluation, fitness evaluation, and report generation, the runner may optionally request guarded follow-up execution via Sisyphus in an isolated task/worktree only when guardrails pass. Keep policy explicit and injectable; do not mutate the current repo worktree directly.",
+      "timestamp": "2026-04-15T10:29:31Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved updated scope: guarded post-evaluation execution should route through Sisyphus-managed isolated execution rather than a generic callback, with explicit opt-in policy and preserved isolation guarantees.",
+      "timestamp": "2026-04-15T10:29:31Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-15T10:29:31Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze updated scope to a stage-aware evolution runner plus an opt-in Sisyphus-managed follow-up execution request. The runner may automatically trigger isolated self-hosted execution only after constraints pass and promotion eligibility is satisfied. Exclude silent live-worktree mutation and keep guard/promotion policy explicit.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-15T09:55:25Z",
+  "updated_at": "2026-04-15T10:37:17Z",
+  "closed_at": "2026-04-15T10:37:17Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260415-feature-plan-automated-evolution-progression",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260415-feature-plan-automated-evolution-progression",
+  "branch": "feat/plan-automated-evolution-progression",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-15T10:37:13Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "An automated evolution run can progress from run planning through report generation and guarded Sisyphus follow-up launch in one call.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Narrowed task or target scope still produces a stable reported result when follow-up execution is not requested.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "A stage failure returns actionable failure metadata without mutating the live repository worktree.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "An automated evolution run can progress from run planning through report generation and guarded Sisyphus follow-up launch in one call.",
+        "method": "uv run python -m unittest tests.test_evolution -v"
+      },
+      {
+        "target": "Narrowed task or target scope still produces a stable reported result when follow-up execution is not requested.",
+        "method": "targeted regression test"
+      },
+      {
+        "target": "A stage failure returns actionable failure metadata without mutating the live repository worktree.",
+        "method": "targeted regression test"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "An automated evolution run can progress from run planning through report generation in one call.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-002",
+      "title": "Narrowed task or target scope still produces a stable reported result.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-003",
+      "title": "A stage failure returns actionable failure metadata without mutating repository files.",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    }
+  ],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-0316412608b5",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "plan-automated-evolution-progression"
+  }
+}

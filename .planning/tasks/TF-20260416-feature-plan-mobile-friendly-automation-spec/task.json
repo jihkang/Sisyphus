@@ -1,0 +1,175 @@
+{
+  "id": "TF-20260416-feature-plan-mobile-friendly-automation-spec",
+  "type": "feature",
+  "slug": "plan-mobile-friendly-automation-spec",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-16T16:13:32Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the planning scope: produce a repository automation spec that defines triggers, actions, safety limits, mobile operator flows, and phased implementation for phone-first operation.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised this planning task to a concrete deliverable: document a phone-first automation model for Sisyphus, anchored to current discord/service/workflow/api seams, with Discord as the MVP mobile surface and the bundled remote session bridge as an optional drill-down path.",
+      "timestamp": "2026-04-16T16:13:32Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the planning scope: produce a repository automation spec that defines triggers, actions, safety limits, mobile operator flows, and phased implementation for phone-first operation.",
+      "timestamp": "2026-04-16T16:13:32Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-16T16:13:32Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to the planning deliverable only: add the phone-first automation spec doc, link it from README, and align task docs/verification with that repository planning output.",
+  "audit_attempts": 2,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-16T16:10:29Z",
+  "updated_at": "2026-04-16T16:14:10Z",
+  "closed_at": "2026-04-16T16:14:10Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260416-feature-plan-mobile-friendly-automation-spec",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260416-feature-plan-mobile-friendly-automation-spec",
+  "branch": "feat/plan-mobile-friendly-automation-spec",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd ../../.. && rg -n \"mobile-automation-spec\" README.md docs",
+    "cd ../../.. && rg -n \"def run_discord_bot|def run_service_step|def request_task|def run_workflow_cycle\" src/taskflow/discord_bot.py src/taskflow/service.py src/taskflow/api.py src/taskflow/workflow.py",
+    "cd ../../.. && rg -n \"remoteSessionUrl|Remote session|task_notification|task_started\" cc/commands/session/session.tsx cc/hooks/useRemoteSession.ts"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-16T16:13:58Z",
+  "last_verify_results": [
+    {
+      "name": "cd ../../.. && rg -n \"mobile-automation-spec\" README.md docs",
+      "command": "cd ../../.. && rg -n \"mobile-automation-spec\" README.md docs",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-16T16:13:58Z",
+      "finished_at": "2026-04-16T16:13:58Z",
+      "duration_ms": null,
+      "output_excerpt": "README.md:294:- Phone-first automation proposal: see `docs/mobile-automation-spec.md`."
+    },
+    {
+      "name": "cd ../../.. && rg -n \"def run_discord_bot|def run_service_step|def request_task|def run_workflow_cycle\" src/taskflow/discord_bot.py src/taskflow/service.py src/taskflow/api.py src/taskflow/workflow.py",
+      "command": "cd ../../.. && rg -n \"def run_discord_bot|def run_service_step|def request_task|def run_workflow_cycle\" src/taskflow/discord_bot.py src/taskflow/service.py src/taskflow/api.py src/taskflow/workflow.py",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-16T16:13:58Z",
+      "finished_at": "2026-04-16T16:13:58Z",
+      "duration_ms": null,
+      "output_excerpt": "src/taskflow/api.py:77:def request_task("
+    },
+    {
+      "name": "cd ../../.. && rg -n \"remoteSessionUrl|Remote session|task_notification|task_started\" cc/commands/session/session.tsx cc/hooks/useRemoteSession.ts",
+      "command": "cd ../../.. && rg -n \"remoteSessionUrl|Remote session|task_notification|task_started\" cc/commands/session/session.tsx cc/hooks/useRemoteSession.ts",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-16T16:13:58Z",
+      "finished_at": "2026-04-16T16:13:58Z",
+      "duration_ms": null,
+      "output_excerpt": "cc/commands/session/session.tsx:135:  return s.remoteSessionUrl;"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "The spec clearly describes the phone-first operator loop and names the primary mobile surface.",
+        "checked": false
+      },
+      {
+        "name": "The spec defines a practical MVP that can be built on the current codebase.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "The spec explains how deep drill-down works without making it mandatory for routine monitoring.",
+        "checked": false
+      },
+      {
+        "name": "The spec distinguishes read-only notifications from write-capable automation actions.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "The spec explicitly excludes unsafe or out-of-scope automation behavior.",
+        "checked": false
+      },
+      {
+        "name": "The spec does not assume a hosted database or brand-new native app for MVP.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "The spec clearly describes the phone-first operator loop and names the primary mobile surface.",
+        "method": "manual review of docs/mobile-automation-spec.md"
+      },
+      {
+        "target": "The spec defines a practical MVP that can be built on the current codebase.",
+        "method": "manual review against src/taskflow/discord_bot.py, src/taskflow/service.py, src/taskflow/workflow.py, src/taskflow/api.py"
+      },
+      {
+        "target": "The spec explains drill-down, safety scope, and out-of-scope behavior correctly.",
+        "method": "manual review against cc/commands/session/session.tsx and cc/hooks/useRemoteSession.ts"
+      },
+      {
+        "target": "The repository points readers to the new spec.",
+        "method": "rg -n \"mobile-automation-spec\" README.md docs"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-83ad22bcd754",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "plan-mobile-friendly-automation-spec"
+  }
+}

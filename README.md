@@ -289,3 +289,5 @@ uv run python -m unittest discover -s tests -v
 - The direct MCP launcher is `python -m sisyphus.mcp_server`.
 - The package name is currently `taskflow-kit`.
 - Project philosophy: see `docs/philosophy.md`.
+- LinkedIn weekly summary example: see `docs/linkedin-weekly-main-summary-2026-04-17.md`.
+- Phone-first automation proposal: see `docs/mobile-automation-spec.md`.

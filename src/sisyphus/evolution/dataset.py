@@ -9,6 +9,7 @@ from ..bus_jsonl import read_jsonl_events, resolve_event_bus_path
 from ..config import load_config
 from ..conformance import summarize_task_conformance
 from ..state import list_task_records
+from ..utils import optional_str
 
 
 def utc_now() -> str:
@@ -143,12 +144,12 @@ def _to_task_trace(task: dict) -> EvolutionTaskTrace:
         slug=str(task.get("slug") or ""),
         task_type=str(task.get("type") or ""),
         status=str(task.get("status") or ""),
-        workflow_phase=_optional_str(task.get("workflow_phase")),
-        plan_status=_optional_str(task.get("plan_status")),
-        spec_status=_optional_str(task.get("spec_status")),
-        verify_status=_optional_str(task.get("verify_status")),
-        updated_at=_optional_str(task.get("updated_at")),
-        last_verified_at=_optional_str(task.get("last_verified_at")),
+        workflow_phase=optional_str(task.get("workflow_phase")),
+        plan_status=optional_str(task.get("plan_status")),
+        spec_status=optional_str(task.get("spec_status")),
+        verify_status=optional_str(task.get("verify_status")),
+        updated_at=optional_str(task.get("updated_at")),
+        last_verified_at=optional_str(task.get("last_verified_at")),
         subtask_count=len(subtasks),
         conformance_status=str(conformance.get("status") or ""),
         drift_count=int(conformance.get("drift_count", 0)),
@@ -164,9 +165,9 @@ def _to_verify_trace(result: Mapping[str, object]) -> EvolutionVerifyTrace:
         command=str(result.get("command") or result.get("name") or ""),
         status=str(result.get("status") or ""),
         exit_code=int(exit_code) if isinstance(exit_code, int) else None,
-        output_excerpt=_optional_str(result.get("output_excerpt")),
-        started_at=_optional_str(result.get("started_at")),
-        finished_at=_optional_str(result.get("finished_at")),
+        output_excerpt=optional_str(result.get("output_excerpt")),
+        started_at=optional_str(result.get("started_at")),
+        finished_at=optional_str(result.get("finished_at")),
     )
 
 
@@ -174,36 +175,30 @@ def _to_event_trace(event: Mapping[str, object]) -> EvolutionEventTrace:
     source = event.get("source", {})
     source_module = None
     if isinstance(source, Mapping):
-        source_module = _optional_str(source.get("module"))
+        source_module = optional_str(source.get("module"))
 
     return EvolutionEventTrace(
-        event_id=_optional_str(event.get("event_id")),
-        event_type=_optional_str(event.get("event_type")),
-        timestamp=_optional_str(event.get("timestamp")),
-        status=_optional_str(event.get("status")),
+        event_id=optional_str(event.get("event_id")),
+        event_type=optional_str(event.get("event_type")),
+        timestamp=optional_str(event.get("timestamp")),
+        status=optional_str(event.get("status")),
         task_id=_event_task_id(event),
         source_module=source_module,
-        message=_optional_str(event.get("message")),
+        message=optional_str(event.get("message")),
     )
 
 
 def _event_task_id(event: Mapping[str, object]) -> str | None:
     data = event.get("data", {})
     if isinstance(data, Mapping):
-        task_id = _optional_str(data.get("task_id"))
+        task_id = optional_str(data.get("task_id"))
         if task_id:
             return task_id
 
     result = event.get("result", {})
     if isinstance(result, Mapping):
-        task_id = _optional_str(result.get("task_id"))
+        task_id = optional_str(result.get("task_id"))
         if task_id:
             return task_id
 
     return None
-
-
-def _optional_str(value: object) -> str | None:
-    if value in (None, ""):
-        return None
-    return str(value)

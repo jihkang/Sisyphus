@@ -1,0 +1,201 @@
+{
+  "id": "TF-20260415-issue-investigate-missing-evolve-executor",
+  "type": "issue",
+  "slug": "investigate-missing-evolve-executor",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-15T09:33:05Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved revised scope: implement an actual evolution harness executor, keep execution isolated from live task state, and cover it with regression tests.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Investigated origin/main evolution modules. The harness currently stops at planning and does not execute baseline/candidate evaluations. Revising scope to add a real harness execution path that runs both evaluation slots against the same dataset, captures comparable metrics, and provides inputs for constraints/fitness without mutating live task state.",
+      "timestamp": "2026-04-15T09:33:04Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved revised scope: implement an actual evolution harness executor, keep execution isolated from live task state, and cover it with regression tests.",
+      "timestamp": "2026-04-15T09:33:05Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-15T09:33:40Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to evolution harness execution only: add executor/result modeling and tests, but do not add candidate mutation, branch materialization, or MCP evolution tools/resources yet.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-15T09:30:15Z",
+  "updated_at": "2026-04-15T09:52:56Z",
+  "closed_at": "2026-04-15T09:52:56Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260415-issue-investigate-missing-evolve-executor",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260415-issue-investigate-missing-evolve-executor",
+  "branch": "fix/investigate-missing-evolve-executor",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-15T09:52:45Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Regression scenario now passes",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Neighboring behavior remains stable",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Invalid or missing input still fails safely",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Regression scenario now passes",
+        "method": "taskflow verify"
+      },
+      {
+        "target": "Neighboring behavior remains stable",
+        "method": "targeted regression test"
+      },
+      {
+        "target": "Invalid or missing input still fails safely",
+        "method": "manual review"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "Regression scenario now passes",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-002",
+      "title": "Neighboring behavior remains stable",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-003",
+      "title": "Invalid or missing input still fails safely",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    }
+  ],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "repro": "REPRO.md",
+    "fix_plan": "FIX_PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-2f58ed1b89c6",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": true,
+    "requested_slug": "investigate-missing-evolve-executor"
+  }
+}

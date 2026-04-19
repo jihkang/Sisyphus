@@ -20,6 +20,7 @@ from .planning import (
     revise_task_plan,
 )
 from .state import load_task_record
+from .utils import optional_str, optional_str_list
 
 
 class SisyphusMcpCoreService:
@@ -48,15 +49,15 @@ class SisyphusMcpCoreService:
                 repo_root=self.repo_root,
                 config=config,
                 message=str(args["message"]),
-                title=_optional_str(args.get("title")),
+                title=optional_str(args.get("title")),
                 task_type=str(args.get("task_type", "feature")),
-                slug=_optional_str(args.get("slug")),
-                instruction=_optional_str(args.get("instruction")),
+                slug=optional_str(args.get("slug")),
+                instruction=optional_str(args.get("instruction")),
                 agent_id=str(args.get("agent_id", "worker-1")),
                 role=str(args.get("role", "worker")),
                 provider=str(args.get("provider", "codex")),
-                owned_paths=_str_list(args.get("owned_paths")),
-                provider_args=_str_list(args.get("provider_args")),
+                owned_paths=optional_str_list(args.get("owned_paths")),
+                provider_args=optional_str_list(args.get("provider_args")),
                 auto_run=bool(args.get("auto_run", True)),
             )
             return {
@@ -79,19 +80,19 @@ class SisyphusMcpCoreService:
             result = record_merged_pull_request(
                 repo_root=self.repo_root,
                 config=config,
-                task_id=_optional_str(args.get("task_id")),
-                branch=_optional_str(args.get("branch")),
-                repo_full_name=_optional_str(args.get("repo_full_name")),
+                task_id=optional_str(args.get("task_id")),
+                branch=optional_str(args.get("branch")),
+                repo_full_name=optional_str(args.get("repo_full_name")),
                 pr_number=int(args["pr_number"]),
                 title=str(args["title"]),
-                url=_optional_str(args.get("url")),
-                base_branch=_optional_str(args.get("base_branch")),
-                head_branch=_optional_str(args.get("head_branch")),
-                head_sha=_optional_str(args.get("head_sha")),
-                merge_commit_sha=_optional_str(args.get("merge_commit_sha")),
-                merged_at=_optional_str(args.get("merged_at")),
-                merged_by=_optional_str(args.get("merged_by")),
-                merge_method=_optional_str(args.get("merge_method")),
+                url=optional_str(args.get("url")),
+                base_branch=optional_str(args.get("base_branch")),
+                head_branch=optional_str(args.get("head_branch")),
+                head_sha=optional_str(args.get("head_sha")),
+                merge_commit_sha=optional_str(args.get("merge_commit_sha")),
+                merged_at=optional_str(args.get("merged_at")),
+                merged_by=optional_str(args.get("merged_by")),
+                merge_method=optional_str(args.get("merge_method")),
                 additions=int(args["additions"]) if args.get("additions") is not None else None,
                 deletions=int(args["deletions"]) if args.get("deletions") is not None else None,
                 changed_files=_dict_list(args.get("changed_files")),
@@ -113,7 +114,7 @@ class SisyphusMcpCoreService:
                 config=config,
                 task_id=str(args["task_id"]),
                 reviewer=str(args.get("reviewer", "operator")),
-                notes=_optional_str(args.get("notes")),
+                notes=optional_str(args.get("notes")),
             )
             return {"task_id": outcome.task_id, "plan_status": outcome.plan_status, "task_status": outcome.task_status, "gates": outcome.gates}
 
@@ -123,7 +124,7 @@ class SisyphusMcpCoreService:
                 config=config,
                 task_id=str(args["task_id"]),
                 reviewer=str(args.get("reviewer", "operator")),
-                notes=_optional_str(args.get("notes")),
+                notes=optional_str(args.get("notes")),
             )
             return {"task_id": outcome.task_id, "plan_status": outcome.plan_status, "task_status": outcome.task_status, "gates": outcome.gates}
 
@@ -133,7 +134,7 @@ class SisyphusMcpCoreService:
                 config=config,
                 task_id=str(args["task_id"]),
                 author=str(args.get("author", "operator")),
-                notes=_optional_str(args.get("notes")),
+                notes=optional_str(args.get("notes")),
             )
             return {"task_id": outcome.task_id, "plan_status": outcome.plan_status, "task_status": outcome.task_status, "gates": outcome.gates}
 
@@ -143,7 +144,7 @@ class SisyphusMcpCoreService:
                 config=config,
                 task_id=str(args["task_id"]),
                 reviewer=str(args.get("reviewer", "operator")),
-                notes=_optional_str(args.get("notes")),
+                notes=optional_str(args.get("notes")),
             )
             return {
                 "task_id": outcome.task_id,
@@ -182,7 +183,7 @@ class SisyphusMcpCoreService:
             }
 
         if tool_name == "sisyphus.list_agents":
-            task_id = _optional_str(args.get("task_id"))
+            task_id = optional_str(args.get("task_id"))
             stale_after_seconds = int(args.get("stale_after_seconds", 900))
             return {
                 "agents": list_agents(
@@ -536,21 +537,6 @@ def _resource_doc_key(resource_name: str, task: dict) -> str | None:
         return "repro"
     return None
 
-
-def _optional_str(value: object) -> str | None:
-    if value in (None, ""):
-        return None
-    return str(value)
-
-
-def _str_list(value: object) -> list[str] | None:
-    if value is None:
-        return None
-    if not isinstance(value, list):
-        raise TypeError(f"expected list value, got: {type(value).__name__}")
-    return [str(item) for item in value]
-
-
 def _dict_list(value: object) -> list[dict[str, object]] | None:
     if value is None:
         return None
@@ -562,8 +548,6 @@ def _dict_list(value: object) -> list[dict[str, object]] | None:
             raise TypeError("expected changed_files entries to be objects")
         normalized.append({str(key): item[key] for key in item})
     return normalized
-
-
 def _task_status_projection(task: dict) -> dict[str, object]:
     conformance = summarize_task_conformance(task)
     return {

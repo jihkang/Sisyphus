@@ -1,0 +1,208 @@
+{
+  "id": "TF-20260418-feature-define-evolution-stage-transition-and-failure-contract",
+  "type": "feature",
+  "slug": "define-evolution-stage-transition-and-failure-contract",
+  "status": "blocked",
+  "stage": "audit",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-19T07:36:54Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Reviewed the expanded task-specific plan. The stage/failure contract is now explicit enough for later orchestration work and preserves future stages as future work. Approving for spec freeze.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Expanded BRIEF and PLAN from template text into a task-specific spec. Added concrete stage/failure acceptance criteria plus hard risks, safety invariants, out-of-scope limits, evidence requirements, and failure/recovery notes so the state machine can be reviewed before orchestration is implemented.",
+      "timestamp": "2026-04-19T07:35:16Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Reviewed the expanded task-specific plan. The stage/failure contract is now explicit enough for later orchestration work and preserves future stages as future work. Approving for spec freeze.",
+      "timestamp": "2026-04-19T07:36:54Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-19T07:37:04Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze the initial read-only stage machine and stage-aware failure contract for evolution runs. Later bridge and promotion stages remain documented future work only.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-18T15:08:11Z",
+  "updated_at": "2026-04-19T08:16:16Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260418-feature-define-evolution-stage-transition-and-failure-contract",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260418-feature-define-evolution-stage-transition-and-failure-contract",
+  "branch": "feat/define-evolution-stage-transition-and-failure-contract",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-19T08:16:10Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "The initial read-only stage sequence matches the current evolution flow and can be referenced by the orchestrator task.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Future extension stages remain documented as future work rather than current runtime obligations.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Failures preserve stage identity and partial-result context instead of collapsing into opaque exceptions.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "The initial read-only stage sequence matches the current evolution flow and can be referenced by the orchestrator task.",
+        "method": "targeted unit test in tests.test_evolution"
+      },
+      {
+        "target": "Future extension stages remain documented as future work rather than current runtime obligations.",
+        "method": "manual review of docs and type definitions"
+      },
+      {
+        "target": "Failures preserve stage identity and partial-result context instead of collapsing into opaque exceptions.",
+        "method": "targeted unit test in tests.test_evolution"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [
+    {
+      "code": "DIRTY_WORKTREE",
+      "message": "working tree is dirty",
+      "blocking": true,
+      "source": "close",
+      "created_at": "2026-04-19T08:16:16Z"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "The initial read-only stage sequence matches the current evolution flow and can be referenced by the orchestrator task.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-002",
+      "title": "Future extension stages remain documented as future work rather than current runtime obligations.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-003",
+      "title": "Failures preserve stage identity and partial-result context instead of collapsing into opaque exceptions.",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    }
+  ],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "source_event_id": "evt-6bdc69dbfd42",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "define-evolution-stage-transition-and-failure-contract"
+  }
+}

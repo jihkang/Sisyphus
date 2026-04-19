@@ -1,0 +1,208 @@
+{
+  "id": "TF-20260418-feature-freeze-evolution-authority-boundary-and-safety-rules",
+  "type": "feature",
+  "slug": "freeze-evolution-authority-boundary-and-safety-rules",
+  "status": "blocked",
+  "stage": "audit",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-19T07:36:51Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Reviewed the expanded task-specific plan. The authority-boundary task now has explicit acceptance criteria, hard risks, safety invariants, out-of-scope limits, evidence requirements, and failure/recovery notes. Approving for spec freeze.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Expanded BRIEF and PLAN from template text into a task-specific spec. Added concrete acceptance criteria plus hard risks, safety invariants, out-of-scope limits, evidence requirements, and failure/recovery notes so the authority-boundary task can be reviewed against explicit safety rules.",
+      "timestamp": "2026-04-19T07:35:13Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Reviewed the expanded task-specific plan. The authority-boundary task now has explicit acceptance criteria, hard risks, safety invariants, out-of-scope limits, evidence requirements, and failure/recovery notes. Approving for spec freeze.",
+      "timestamp": "2026-04-19T07:36:51Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-19T07:37:04Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze the authority-boundary task with explicit soft-cognition vs hard-state ownership, evaluation-only harness rules, no self-approval, and append-only run-artifact boundaries.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-18T15:07:46Z",
+  "updated_at": "2026-04-19T07:47:40Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260418-feature-freeze-evolution-authority-boundary-and-safety-rules",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260418-feature-freeze-evolution-authority-boundary-and-safety-rules",
+  "branch": "feat/freeze-evolution-authority-boundary-and-safety-rules",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-19T07:47:26Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "The docs present one consistent authority model for `evolution`, the harness executor, and Sisyphus.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Read-only orchestration is defined precisely enough to allow append-only run artifacts without permitting live-state mutation.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "No sentence in the docs allows evolution to approve, freeze, or promote its own follow-up work.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "The docs present one consistent authority model for evolution, the harness executor, and Sisyphus.",
+        "method": "manual review of docs/architecture.md and docs/self-evolution-mcp-plan.md"
+      },
+      {
+        "target": "Read-only orchestration is defined precisely enough to allow append-only run artifacts without permitting live-state mutation.",
+        "method": "manual review of updated boundary language"
+      },
+      {
+        "target": "No sentence in the docs allows evolution to approve, freeze, or promote its own follow-up work.",
+        "method": "manual review of updated boundary language"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [
+    {
+      "code": "DIRTY_WORKTREE",
+      "message": "working tree is dirty",
+      "blocking": true,
+      "source": "close",
+      "created_at": "2026-04-19T07:47:40Z"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "The docs present one consistent authority model for `evolution`, the harness executor, and Sisyphus.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-002",
+      "title": "Read-only orchestration is defined precisely enough to allow append-only run artifacts without permitting live-state mutation.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-003",
+      "title": "No sentence in the docs allows evolution to approve, freeze, or promote its own follow-up work.",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    }
+  ],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "source_event_id": "evt-6d5fc9b96afd",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "freeze-evolution-authority-boundary-and-safety-rules"
+  }
+}

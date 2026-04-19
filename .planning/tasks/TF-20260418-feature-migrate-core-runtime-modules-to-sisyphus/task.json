@@ -1,0 +1,138 @@
+{
+  "id": "TF-20260418-feature-migrate-core-runtime-modules-to-sisyphus",
+  "type": "feature",
+  "slug": "migrate-core-runtime-modules-to-sisyphus",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-18T11:17:50Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Core runtime migration scope is documented and implemented for the non-evolution package slice.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Core runtime migration scope is documented and implemented for the non-evolution package slice.",
+      "timestamp": "2026-04-18T11:17:50Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-18T11:17:50Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze the documented scope for the core runtime move before verification.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-18T11:04:06Z",
+  "updated_at": "2026-04-18T11:18:00Z",
+  "closed_at": "2026-04-18T11:18:00Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260418-feature-migrate-core-runtime-modules-to-sisyphus",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260418-feature-migrate-core-runtime-modules-to-sisyphus",
+  "branch": "feat/migrate-core-runtime-modules-to-sisyphus",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/Sisyphus && env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -m unittest tests.test_taskflow tests.test_event_bus tests.test_mcp_server tests.test_golden -v"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-18T11:17:57Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -m unittest tests.test_taskflow tests.test_event_bus tests.test_mcp_server tests.test_golden -v",
+      "command": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -m unittest tests.test_taskflow tests.test_event_bus tests.test_mcp_server tests.test_golden -v",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-18T11:17:53Z",
+      "finished_at": "2026-04-18T11:17:57Z",
+      "duration_ms": null,
+      "output_excerpt": "workflow_phase: execution"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "`import sisyphus` exposes the library API from local `sisyphus` implementations.",
+        "checked": true
+      },
+      {
+        "name": "Legacy imports for moved core modules such as `taskflow.api`, `taskflow.agents`, `taskflow.workflow`, and `taskflow.templates` resolve to `sisyphus` implementations.",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Template resource lookup succeeds from canonical `sisyphus` package data after the module move.",
+        "checked": true
+      },
+      {
+        "name": "Compatibility-sensitive names remain unchanged where persistence depends on them, including `.taskflow.toml` fallback handling and `taskflow.event.v1`.",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Focused regressions across taskflow, event bus, MCP, and golden fixtures catch import or packaging breakage before the next migration slice lands.",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Canonical sisyphus library imports succeed",
+        "method": "env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -c \"import sisyphus, taskflow, sisyphus.templates, taskflow.agents, taskflow.api; print(sisyphus.__version__); print(taskflow.request_task is sisyphus.request_task); print(taskflow.agents.__name__); print(taskflow.api.__name__); print(sisyphus.templates.template_root().name)\""
+      },
+      {
+        "target": "Legacy taskflow core imports resolve to sisyphus implementations",
+        "method": "env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -m unittest tests.test_taskflow -v"
+      },
+      {
+        "target": "Event bus, MCP surface, and golden fixtures still pass after the package inversion",
+        "method": "env PYTHONPYCACHEPREFIX=/tmp/pycache ./.venv/bin/python -m unittest tests.test_event_bus tests.test_mcp_server tests.test_golden -v"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "plan": "PLAN.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-7d3be0cd79ba",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "migrate-core-runtime-modules-to-sisyphus"
+  }
+}

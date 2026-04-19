@@ -179,7 +179,6 @@ def _add_conversation_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--adopt-path", action="append", dest="adopt_paths")
     parser.add_argument("--no-run", action="store_true")
 
-
 def _add_pull_request_merged_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--task-id")
     parser.add_argument("--branch")
@@ -197,8 +196,6 @@ def _add_pull_request_merged_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--additions", type=int)
     parser.add_argument("--deletions", type=int)
     parser.add_argument("--changed-file-json", action="append", dest="changed_file_json")
-
-
 def _resolve_repo_root(repo_root: str | Path | None) -> Path:
     if repo_root is None:
         return detect_repo_root(Path.cwd())
@@ -426,7 +423,6 @@ def handle_ingest_conversation(
     print(f"slug: {queued.event['payload']['slug']}")
     return 0
 
-
 def handle_ingest_pull_request_merged(
     *,
     task_id: str | None,
@@ -480,8 +476,6 @@ def handle_ingest_pull_request_merged(
     if queued.event["payload"].get("branch"):
         print(f"branch: {queued.event['payload']['branch']}")
     return 0
-
-
 def handle_request(
     message: str,
     title: str | None,
@@ -545,7 +539,6 @@ def handle_request(
     print(f"orchestrated: {result.orchestrated}")
     return 0
 
-
 def _parse_changed_file_json(entries: list[str] | None) -> list[dict[str, object]] | None:
     if not entries:
         return None
@@ -556,8 +549,6 @@ def _parse_changed_file_json(entries: list[str] | None) -> list[dict[str, object
             raise ValueError("each --changed-file-json entry must decode to an object")
         parsed.append({str(key): value[key] for key in value})
     return parsed
-
-
 def handle_daemon(
     once: bool,
     poll_interval_seconds: int,
