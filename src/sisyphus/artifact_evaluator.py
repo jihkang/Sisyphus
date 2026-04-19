@@ -242,6 +242,15 @@ def evaluate_feature_change_artifact(
         if claim.status == VERIFICATION_CLAIM_STATUS_FAILED:
             blocking_reasons.append(f"verification_claim_failed:{claim.claim_id}")
         elif claim.status == VERIFICATION_CLAIM_STATUS_PASSED:
+            if not _claim_binds_current_inputs(
+                claim,
+                spec_ref=spec_ref,
+                selected_ref=selected_ref,
+                test_refs=test_refs,
+            ):
+                blocking_reasons.append(f"verification_claim_dependency_mismatch:{claim.claim_id}")
+                required_actions.append("reverify_required_claims")
+                continue
             passed_scopes.add(claim.scope)
 
     required_scopes = set(resolved_policy.required_verification_scopes)
@@ -399,6 +408,7 @@ def _iter_referenced_artifacts(
         slot_bindings.spec.artifact,
         *slot_bindings.implementation_candidates.artifacts,
         *slot_bindings.tests.artifacts,
+        *slot_bindings.approvals.artifacts,
         *slot_bindings.execution_receipts.artifacts,
         *feature_change_artifact.evidence_refs,
     ]
@@ -423,6 +433,26 @@ def _lineage_mismatch(feature_change_artifact: CompositeArtifactRecord, artifact
         if feature_change_artifact.lineage.base_ref != artifact.lineage.base_ref:
             return True
     return False
+
+
+def _claim_binds_current_inputs(
+    claim: VerificationClaimRecord,
+    *,
+    spec_ref: ArtifactRef,
+    selected_ref: ArtifactRef | None,
+    test_refs: Sequence[ArtifactRef],
+) -> bool:
+    dependency_keys = {
+        (ref.artifact_id, ref.artifact_type)
+        for ref in claim.dependency_refs
+    }
+    required_keys = {
+        (spec_ref.artifact_id, spec_ref.artifact_type),
+    }
+    if selected_ref is not None:
+        required_keys.add((selected_ref.artifact_id, selected_ref.artifact_type))
+    required_keys.update((ref.artifact_id, ref.artifact_type) for ref in test_refs)
+    return required_keys.issubset(dependency_keys)
 
 
 def _normalize_string_tuple(values: Sequence[str], field_name: str) -> tuple[str, ...]:
