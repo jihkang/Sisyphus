@@ -55,8 +55,9 @@ The repository now includes the first read-only evolution foundation:
 - `constraints.py` and `fitness.py` for hard guards and weighted scoring
 - `report.py` for stable review/report projection
 - `orchestrator.py` for `execute_evolution_run(...)` and append-only run artifact persistence
+- `surface.py` and the new `evolution` CLI group for read-only run/status/report/compare views
 
-The remaining major gaps are MCP/CLI evolution ingress, review-gated Sisyphus follow-up execution, and promotion/invalidation recording.
+The remaining major gaps are MCP evolution ingress, review-gated Sisyphus follow-up execution, and promotion/invalidation recording.
 
 ### Implemented Evaluation Loop
 

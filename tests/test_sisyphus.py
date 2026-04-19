@@ -2039,6 +2039,32 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(discord_args.channel_ids, [12345])
         self.assertEqual(discord_args.poll_interval_seconds, 9)
 
+    def test_parser_accepts_evolution_read_only_surface(self) -> None:
+        parser = build_parser()
+
+        run_args = parser.parse_args(["--repo", str(self.repo_root), "evolution", "run", "EVR-demo"])
+        status_args = parser.parse_args(["--repo", str(self.repo_root), "evolution", "status", "EVR-demo"])
+        report_args = parser.parse_args(["--repo", str(self.repo_root), "evolution", "report", "EVR-demo"])
+        compare_args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "evolution",
+                "compare",
+                "EVR-left",
+                "EVR-right",
+            ]
+        )
+
+        self.assertEqual(run_args.command, "evolution")
+        self.assertEqual(run_args.evolution_command, "run")
+        self.assertEqual(run_args.run_id, "EVR-demo")
+        self.assertEqual(status_args.evolution_command, "status")
+        self.assertEqual(report_args.evolution_command, "report")
+        self.assertEqual(compare_args.evolution_command, "compare")
+        self.assertEqual(compare_args.left_run_id, "EVR-left")
+        self.assertEqual(compare_args.right_run_id, "EVR-right")
+
     def test_sisyphus_package_reexports_library_api(self) -> None:
         self.assertIs(sisyphus.request_task, request_task)
         self.assertIs(sisyphus.queue_conversation, queue_conversation)

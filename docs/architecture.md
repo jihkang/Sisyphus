@@ -285,6 +285,7 @@ The current implemented slices are:
 - hard-guard evaluation and weighted scoring in `constraints.py` and `fitness.py`
 - stable reporting projection in `report.py`
 - read-only orchestration and append-only run persistence in `orchestrator.py`
+- read-only CLI views in `cli.py` backed by `evolution/surface.py`
 
 The following pieces are still future work:
 

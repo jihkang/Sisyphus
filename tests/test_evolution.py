@@ -87,6 +87,14 @@ from sisyphus.evolution import (
     plan_evolution_harness,
     plan_evolution_run,
 )
+from sisyphus.evolution.surface import (
+    compare_evolution_runs,
+    load_evolution_run_artifacts,
+    render_evolution_run_compare,
+    render_evolution_run_overview,
+    render_evolution_run_report,
+    render_evolution_run_status,
+)
 from sisyphus.config import load_config
 from sisyphus.conformance import append_conformance_log
 from sisyphus.state import create_task_record, save_task_record
@@ -1629,6 +1637,219 @@ class EvolutionOrchestratorTests(unittest.TestCase):
         self.assertIn("fitness.json", failure_payload["partial_artifacts"])
         self.assertEqual(failure_payload["error_type"], "RuntimeError")
 
+
+class EvolutionSurfaceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.repo_root = Path(self.tempdir.name)
+        self.runs_root = self.repo_root / ".planning" / "evolution" / "runs"
+        self.runs_root.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def _write_run(
+        self,
+        run_id: str,
+        *,
+        target_ids: tuple[str, ...],
+        selection_mode: str = "explicit",
+        task_count: int = 2,
+        event_count: int = 3,
+        constraint_status: str = "accepted",
+        accepted: bool = True,
+        fitness_status: str = "scored",
+        score_delta: float | None = 0.25,
+        report_markdown: str | None = None,
+        failure_payload: dict[str, object] | None = None,
+    ) -> Path:
+        artifact_dir = self.runs_root / run_id
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "run.json").write_text(
+            json.dumps(
+                {
+                    "run": {
+                        "run_id": run_id,
+                        "repo_root": str(self.repo_root),
+                        "target_ids": list(target_ids),
+                        "selection_mode": selection_mode,
+                        "status": "planned",
+                        "stage": "planned",
+                    },
+                    "artifact_dir": str(artifact_dir),
+                    "entrypoint": "execute_evolution_run",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "dataset.json").write_text(
+            json.dumps(
+                {
+                    "repo_root": str(self.repo_root),
+                    "generated_at": "2026-04-20T00:00:00Z",
+                    "event_log_path": str(self.repo_root / ".planning" / "events.jsonl"),
+                    "selected_task_ids": [f"{run_id}-task-1", f"{run_id}-task-2"],
+                    "task_traces": [],
+                    "event_traces": [],
+                    "task_count": task_count,
+                    "event_count": event_count,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "harness_plan.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "repo_root": str(self.repo_root),
+                    "created_at": "2026-04-20T00:00:00Z",
+                    "isolation_mode": "task_worktree_copy",
+                    "mutates_live_task_state": False,
+                    "requires_branch_snapshot": True,
+                    "requires_task_worktree_copy": True,
+                    "requires_result_capture": True,
+                    "dataset_task_ids": [f"{run_id}-task-1", f"{run_id}-task-2"],
+                    "dataset_event_count": event_count,
+                    "baseline": {
+                        "evaluation_id": f"{run_id}:baseline",
+                        "role": "baseline",
+                        "label": "baseline",
+                        "target_ids": list(target_ids),
+                        "task_ids": [f"{run_id}-task-1", f"{run_id}-task-2"],
+                        "status": "completed",
+                        "metrics": {
+                            "verify_pass_rate": 1.0,
+                            "conformance_status": "green",
+                            "drift_count": 0,
+                            "unresolved_warning_count": 0,
+                            "runtime_ms": 10,
+                            "token_estimate": 50,
+                            "operator_reviewability": "high",
+                        },
+                        "notes": "baseline",
+                    },
+                    "candidate": {
+                        "evaluation_id": f"{run_id}:candidate",
+                        "role": "candidate",
+                        "label": "candidate",
+                        "target_ids": list(target_ids),
+                        "task_ids": [f"{run_id}-task-1", f"{run_id}-task-2"],
+                        "status": "completed",
+                        "metrics": {
+                            "verify_pass_rate": 1.0,
+                            "conformance_status": "green",
+                            "drift_count": 0,
+                            "unresolved_warning_count": 0,
+                            "runtime_ms": 12,
+                            "token_estimate": 48,
+                            "operator_reviewability": "high",
+                        },
+                        "notes": "candidate",
+                    },
+                    "notes": "harness",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "constraints.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "evaluated_at": "2026-04-20T00:00:00Z",
+                    "status": constraint_status,
+                    "accepted": accepted,
+                    "warning_increase_threshold": 0,
+                    "baseline_evaluation_id": f"{run_id}:baseline",
+                    "candidate_evaluation_id": f"{run_id}:candidate",
+                    "blocking_failure_count": 0 if accepted else 1,
+                    "pending_guard_count": 0,
+                    "checks": [],
+                    "notes": "constraints",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "fitness.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "evaluated_at": "2026-04-20T00:00:00Z",
+                    "status": fitness_status,
+                    "eligible_for_promotion": accepted,
+                    "comparable_metric_count": 2,
+                    "baseline_score": 0.62,
+                    "candidate_score": 0.87,
+                    "score_delta": score_delta,
+                    "comparisons": [],
+                    "notes": "fitness",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        if report_markdown is None:
+            report_markdown = (
+                "# Evolution Report\n\n"
+                f"- Run ID: `{run_id}`\n"
+                "- Status: `ready_for_review`\n"
+                "- Recommendation: `review_candidate`\n"
+            )
+        (artifact_dir / "report.md").write_text(report_markdown, encoding="utf-8")
+        if failure_payload is not None:
+            (artifact_dir / "failure.json").write_text(json.dumps(failure_payload, indent=2) + "\n", encoding="utf-8")
+        return artifact_dir
+
+    def test_load_and_render_evolution_run_surface(self) -> None:
+        self._write_run(
+            "EVR-surface-alpha",
+            target_ids=("execution-contract-wording",),
+        )
+
+        artifacts = load_evolution_run_artifacts(self.repo_root, "EVR-surface-alpha")
+
+        self.assertEqual(artifacts.final_stage, "report_built")
+        self.assertEqual(artifacts.report_status, "ready_for_review")
+        self.assertEqual(artifacts.recommendation, "review_candidate")
+        self.assertIn("run.json", artifacts.available_artifacts)
+        self.assertIn("report.md", artifacts.available_artifacts)
+        self.assertIn("Run ID: EVR-surface-alpha", render_evolution_run_status(artifacts))
+        self.assertIn("final_stage: report_built", render_evolution_run_overview(artifacts))
+        self.assertIn("# Evolution Report", render_evolution_run_report(artifacts))
+
+    def test_compare_evolution_runs_summarizes_differences(self) -> None:
+        self._write_run(
+            "EVR-surface-left",
+            target_ids=("execution-contract-wording",),
+            task_count=2,
+            event_count=3,
+            score_delta=0.10,
+        )
+        self._write_run(
+            "EVR-surface-right",
+            target_ids=("mcp-tool-descriptions", "execution-contract-wording"),
+            task_count=4,
+            event_count=7,
+            score_delta=0.30,
+        )
+
+        left = load_evolution_run_artifacts(self.repo_root, "EVR-surface-left")
+        right = load_evolution_run_artifacts(self.repo_root, "EVR-surface-right")
+        comparison = compare_evolution_runs(left, right)
+
+        self.assertEqual(comparison.left_run_id, "EVR-surface-left")
+        self.assertEqual(comparison.right_run_id, "EVR-surface-right")
+        self.assertIn("EVR-surface-left", render_evolution_run_compare(comparison))
+        self.assertIn("Dataset Tasks: 2 -> 4", comparison.lines)
+        self.assertIn("Fitness Score Delta: +0.10 -> +0.30", comparison.lines)
 
 if __name__ == "__main__":
     unittest.main()
