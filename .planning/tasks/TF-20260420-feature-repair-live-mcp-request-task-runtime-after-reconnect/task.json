@@ -1,0 +1,131 @@
+{
+  "id": "TF-20260420-feature-repair-live-mcp-request-task-runtime-after-reconnect",
+  "type": "feature",
+  "slug": "repair-live-mcp-request-task-runtime-after-reconnect",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-20T11:24:13Z",
+  "plan_reviewed_by": "Codex",
+  "plan_review_notes": "Plan narrowed to the live MCP bootstrap/import-resolution bug. Acceptance now requires direct MCP request_task recovery and regression coverage for stale taskflow template resolution.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "Codex",
+      "notes": "Plan narrowed to the live MCP bootstrap/import-resolution bug. Acceptance now requires direct MCP request_task recovery and regression coverage for stale taskflow template resolution.",
+      "timestamp": "2026-04-20T11:24:13Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-20T11:24:13Z",
+  "spec_reviewed_by": "Codex",
+  "spec_review_notes": "Spec frozen for MCP runtime/bootstrap repair only. Scope excludes task-creation semantics changes beyond canonical sisyphus template resolution after reconnect.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-20T11:17:51Z",
+  "updated_at": "2026-04-20T11:38:06Z",
+  "closed_at": "2026-04-20T11:38:06Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260420-feature-repair-live-mcp-request-task-runtime-after-reconnect",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260420-feature-repair-live-mcp-request-task-runtime-after-reconnect",
+  "branch": "feat/repair-live-mcp-request-task-runtime-after-reconnect",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-20T11:38:02Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Live MCP `sisyphus.request_task` succeeds in the root repository after reconnect.",
+        "checked": false
+      },
+      {
+        "name": "CLI fallback task creation still works after the bootstrap change.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "MCP startup still prefers repo `src/` over stale installed packages when both exist.",
+        "checked": false
+      },
+      {
+        "name": "Reconnect path keeps using `sisyphus/templates_data` without requiring `taskflow` compatibility aliases.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Startup failures surface an actionable runtime/bootstrap error instead of a misleading missing-template path.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Live MCP sisyphus.request_task succeeds in the root repository after reconnect.",
+        "method": "direct MCP request_task probe"
+      },
+      {
+        "target": "CLI fallback task creation still works after the bootstrap change.",
+        "method": "targeted CLI request smoke test"
+      },
+      {
+        "target": "MCP startup still prefers repo src/ over stale installed packages when both exist.",
+        "method": "targeted regression test"
+      },
+      {
+        "target": "Startup failures surface an actionable runtime/bootstrap error instead of a misleading missing-template path.",
+        "method": "targeted regression test"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-b9886c2b14c3",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "repair-live-mcp-request-task-runtime-after-reconnect"
+  }
+}

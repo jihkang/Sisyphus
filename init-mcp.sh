@@ -62,6 +62,10 @@ repo_pythonpath() {
   printf '%s' "$repo_src"
 }
 
+repo_bootstrap_script() {
+  printf '%s' "$REPO_ROOT/scripts/run_sisyphus_mcp_server.py"
+}
+
 resolve_repo_root() {
   if [[ ! -d "$REPO_ROOT" ]]; then
     echo "Repository root does not exist: $REPO_ROOT" >&2
@@ -77,6 +81,56 @@ resolve_python_bin() {
     exit 1
   fi
   printf '%s' "$candidate"
+}
+
+validate_python_bin() {
+  local python_bin="$1"
+  local bootstrap_script
+  bootstrap_script="$(repo_bootstrap_script)"
+  SISYPHUS_REPO_ROOT="$REPO_ROOT" SISYPHUS_MCP_BOOTSTRAP_INSPECT=1 "$python_bin" "$bootstrap_script" >/dev/null 2>&1
+}
+
+repair_repo_python() {
+  local uv_bin
+  local backup_dir
+  uv_bin="${UV_BIN:-/opt/homebrew/bin/uv}"
+  if [[ ! -x "$uv_bin" ]] && ! command -v uv >/dev/null 2>&1; then
+    echo "Unable to repair MCP runtime automatically: uv is not available." >&2
+    exit 1
+  fi
+  if [[ ! -x "$uv_bin" ]]; then
+    uv_bin="$(command -v uv)"
+  fi
+  echo "Detected an unhealthy repo virtualenv; attempting repair via uv sync..." >&2
+  if UV_PROJECT_ENVIRONMENT="$ROOT_DIR/.venv" "$uv_bin" sync; then
+    return 0
+  fi
+  backup_dir="$ROOT_DIR/.venv.broken.$(date +%Y%m%d%H%M%S)"
+  echo "In-place uv sync failed; moving broken virtualenv to $backup_dir and rebuilding..." >&2
+  mv "$ROOT_DIR/.venv" "$backup_dir"
+  if UV_PROJECT_ENVIRONMENT="$ROOT_DIR/.venv" "$uv_bin" sync; then
+    echo "Rebuilt repo virtualenv; previous environment preserved at $backup_dir" >&2
+    return 0
+  fi
+  echo "Failed to rebuild repo virtualenv; previous environment is preserved at $backup_dir" >&2
+  exit 1
+}
+
+ensure_python_bin() {
+  local python_bin
+  python_bin="$(resolve_python_bin)"
+  if validate_python_bin "$python_bin"; then
+    printf '%s' "$python_bin"
+    return 0
+  fi
+  repair_repo_python
+  python_bin="$(resolve_python_bin)"
+  if validate_python_bin "$python_bin"; then
+    printf '%s' "$python_bin"
+    return 0
+  fi
+  echo "Python interpreter is still unable to execute the Sisyphus MCP bootstrap: $python_bin" >&2
+  exit 1
 }
 
 resolve_codex_bin() {
@@ -100,7 +154,9 @@ register_codex() {
   local codex_bin="$1"
   local python_bin="$2"
   local pythonpath_value
+  local bootstrap_script
   pythonpath_value="$(repo_pythonpath)"
+  bootstrap_script="$(repo_bootstrap_script)"
   if [[ "$DRY_RUN" -eq 1 ]]; then
     print_command "$codex_bin" mcp remove "$SERVER_NAME"
     print_command \
@@ -109,7 +165,7 @@ register_codex() {
       --env "SISYPHUS_MCP_DEBUG_LOG=$MCP_DEBUG_LOG" \
       --env "PYTHONPATH=$pythonpath_value" \
       -- \
-      "$python_bin" -m sisyphus.mcp_server
+      "$python_bin" "$bootstrap_script"
     return 0
   fi
 
@@ -119,7 +175,7 @@ register_codex() {
     --env "SISYPHUS_MCP_DEBUG_LOG=$MCP_DEBUG_LOG" \
     --env "PYTHONPATH=$pythonpath_value" \
     -- \
-    "$python_bin" -m sisyphus.mcp_server
+    "$python_bin" "$bootstrap_script"
 }
 
 print_claude_project_config() {
@@ -243,7 +299,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 resolve_repo_root
-PYTHON_BIN="$(resolve_python_bin)"
+PYTHON_BIN="$(ensure_python_bin)"
 
 if [[ "$ENABLE_CODEX" -eq 1 ]]; then
   if CODEX_BIN_RESOLVED="$(resolve_codex_bin)"; then

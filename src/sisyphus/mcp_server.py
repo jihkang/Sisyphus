@@ -85,7 +85,7 @@ async def run_stdio_server(repo_root: Path | None = None) -> None:
 
 
 def main() -> int:
-    _debug_log("main_start")
+    _debug_log(f"main_start module_file={Path(__file__).resolve()}")
     try:
         anyio.run(run_stdio_server)
     except Exception as exc:

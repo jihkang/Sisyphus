@@ -3,8 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 
+BOOTSTRAP_SCRIPT = Path("scripts") / "run_sisyphus_mcp_server.py"
+
+
 def repo_src_path(repo_root: str | Path) -> str:
     return str(Path(repo_root).resolve() / "src")
+
+
+def bootstrap_script_path(repo_root: str | Path) -> str:
+    return str(Path(repo_root).resolve() / BOOTSTRAP_SCRIPT)
 
 
 def build_mcp_server_env(
@@ -35,7 +42,7 @@ def build_stdio_server_config(
 ) -> dict[str, object]:
     return {
         "command": command,
-        "args": ["-m", "sisyphus.mcp_server"],
+        "args": [bootstrap_script_path(repo_root)],
         "env": build_mcp_server_env(
             repo_root,
             debug_log,
@@ -45,6 +52,7 @@ def build_stdio_server_config(
 
 
 __all__ = [
+    "bootstrap_script_path",
     "build_mcp_server_env",
     "build_stdio_server_config",
     "repo_src_path",
