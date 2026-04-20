@@ -236,6 +236,9 @@ class McpCoreTests(unittest.TestCase):
 
         self.assertIn("sisyphus.request_task", tool_names)
         self.assertIn("sisyphus.record_merged_pr", tool_names)
+        self.assertIn("sisyphus.evolution_execute", tool_names)
+        self.assertIn("sisyphus.evolution_followup_request", tool_names)
+        self.assertIn("sisyphus.evolution_decide", tool_names)
         self.assertIn("sisyphus.evolution_run", tool_names)
         self.assertIn("sisyphus.evolution_status", tool_names)
         self.assertIn("sisyphus.evolution_report", tool_names)
@@ -414,6 +417,111 @@ class McpCoreTests(unittest.TestCase):
         self.assertIn("Run ID: EVR-mcp-alpha", status_resource)
         self.assertIn("# Evolution Report", report_resource)
         self.assertIn("Dataset Tasks: 2 -> 4", compare_resource)
+
+    def test_calls_evolution_execute_tool(self) -> None:
+        with mock.patch(
+            "sisyphus.mcp_core.execute_evolution_surface",
+            return_value=mock.Mock(
+                ok=True,
+                run_id="EVR-mcp-execute",
+                resource_uri="evolution://EVR-mcp-execute/run",
+                artifact_dir=str(self.repo_root / ".planning" / "evolution" / "runs" / "EVR-mcp-execute"),
+                final_stage="report_built",
+                failure_stage=None,
+                content="evolution run EVR-mcp-execute\n",
+                error=None,
+                error_type=None,
+            ),
+        ) as mocked_execute:
+            payload = self.core.call_tool(
+                "sisyphus.evolution_execute",
+                {
+                    "run_id": "EVR-mcp-execute",
+                    "target_ids": ["execution-contract-wording"],
+                    "task_ids": ["TF-1"],
+                    "max_events": 7,
+                },
+            )
+
+        mocked_execute.assert_called_once()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["run_id"], "EVR-mcp-execute")
+        self.assertEqual(payload["resource_uri"], "evolution://EVR-mcp-execute/run")
+        self.assertEqual(payload["final_stage"], "report_built")
+        self.assertIn("evolution run EVR-mcp-execute", payload["content"])
+
+    def test_calls_evolution_followup_request_tool(self) -> None:
+        with mock.patch(
+            "sisyphus.mcp_core.request_evolution_followup",
+            return_value=mock.Mock(
+                task_id="TF-followup",
+                task_uri="task://TF-followup/record",
+                run_id="EVR-followup",
+                candidate_id="candidate-001",
+                requested_targets=("execution-contract-wording",),
+                required_review_gates=("plan_review", "verify"),
+                content="evolution followup request EVR-followup candidate-001\n",
+            ),
+        ) as mocked_request:
+            payload = self.core.call_tool(
+                "sisyphus.evolution_followup_request",
+                {
+                    "run_id": "EVR-followup",
+                    "candidate_id": "candidate-001",
+                    "title": "Request follow-up",
+                    "summary": "Create a review-gated task.",
+                    "requested_task_type": "feature",
+                    "target_ids": ["execution-contract-wording"],
+                    "owned_paths": ["docs/architecture.md"],
+                    "review_gates": ["plan_review"],
+                    "verification_obligations": [
+                        {
+                            "claim": "preserves intent",
+                            "method": "sisyphus verify",
+                            "required": True,
+                        }
+                    ],
+                    "evidence_summary": [
+                        {
+                            "kind": "report",
+                            "summary": "from evolution report",
+                            "locator": "report.md",
+                        }
+                    ],
+                },
+            )
+
+        mocked_request.assert_called_once()
+        self.assertEqual(payload["task_id"], "TF-followup")
+        self.assertEqual(payload["task_uri"], "task://TF-followup/record")
+        self.assertEqual(payload["requested_targets"], ["execution-contract-wording"])
+        self.assertEqual(payload["required_review_gates"], ["plan_review", "verify"])
+
+    def test_calls_evolution_decide_tool(self) -> None:
+        with mock.patch(
+            "sisyphus.mcp_core.evaluate_evolution_followup_decision",
+            return_value=mock.Mock(
+                task_id="TF-followup",
+                task_uri="task://TF-followup/record",
+                run_id="EVR-followup",
+                candidate_id="candidate-001",
+                gate_status="eligible_for_promotion",
+                envelope_status="promotion",
+                content="evolution decision TF-followup\n",
+            ),
+        ) as mocked_decide:
+            payload = self.core.call_tool(
+                "sisyphus.evolution_decide",
+                {
+                    "task_id": "TF-followup",
+                    "claim": "candidate remains eligible",
+                },
+            )
+
+        mocked_decide.assert_called_once()
+        self.assertEqual(payload["task_id"], "TF-followup")
+        self.assertEqual(payload["gate_status"], "eligible_for_promotion")
+        self.assertEqual(payload["envelope_status"], "promotion")
 
     def test_missing_evolution_run_raises_clear_error(self) -> None:
         with self.assertRaises(FileNotFoundError):

@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 import sys
+from unittest import mock
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -231,6 +232,9 @@ class McpAdapterTests(unittest.TestCase):
 
         self.assertIn("sisyphus.request_task", tool_names)
         self.assertIn("sisyphus.verify_task", tool_names)
+        self.assertIn("sisyphus.evolution_execute", tool_names)
+        self.assertIn("sisyphus.evolution_followup_request", tool_names)
+        self.assertIn("sisyphus.evolution_decide", tool_names)
         self.assertIn("sisyphus.evolution_run", tool_names)
         self.assertIn("sisyphus.evolution_compare", tool_names)
         self.assertIn("repo://status/tasks", resource_uris)
@@ -332,6 +336,51 @@ class McpAdapterTests(unittest.TestCase):
         self.assertIn("Dataset Tasks: 2 -> 4", compare_payload["content"])
         self.assertIn("Run ID: EVR-adapter-left", status_resource)
         self.assertIn("Fitness Score Delta: +0.25 -> +0.35", compare_resource)
+
+    def test_call_evolution_followup_and_decide_tools(self) -> None:
+        with mock.patch(
+            "sisyphus.mcp_core.request_evolution_followup",
+            return_value=mock.Mock(
+                task_id="TF-followup",
+                task_uri="task://TF-followup/record",
+                run_id="EVR-followup",
+                candidate_id="candidate-001",
+                requested_targets=("execution-contract-wording",),
+                required_review_gates=("plan_review", "verify"),
+                content="evolution followup request EVR-followup candidate-001\n",
+            ),
+        ) as mocked_request, mock.patch(
+            "sisyphus.mcp_core.evaluate_evolution_followup_decision",
+            return_value=mock.Mock(
+                task_id="TF-followup",
+                task_uri="task://TF-followup/record",
+                run_id="EVR-followup",
+                candidate_id="candidate-001",
+                gate_status="eligible_for_promotion",
+                envelope_status="promotion",
+                content="evolution decision TF-followup\n",
+            ),
+        ) as mocked_decide:
+            followup_payload = call_mcp_tool(
+                self.repo_root,
+                "sisyphus.evolution_followup_request",
+                {
+                    "run_id": "EVR-followup",
+                    "candidate_id": "candidate-001",
+                    "title": "Request follow-up",
+                    "summary": "Create a review-gated task.",
+                },
+            )
+            decision_payload = call_mcp_tool(
+                self.repo_root,
+                "sisyphus.evolution_decide",
+                {"task_id": "TF-followup"},
+            )
+
+        mocked_request.assert_called_once()
+        mocked_decide.assert_called_once()
+        self.assertEqual(followup_payload["task_id"], "TF-followup")
+        self.assertEqual(decision_payload["envelope_status"], "promotion")
 
     def test_missing_evolution_run_raises_not_found(self) -> None:
         with self.assertRaises(FileNotFoundError):

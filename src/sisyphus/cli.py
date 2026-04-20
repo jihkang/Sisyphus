@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 import json
 from pathlib import Path
 import sys
@@ -22,8 +23,11 @@ from .config import load_config
 from .creation import TaskCreationError, create_task_workspace
 from .daemon import run_daemon
 from .discovery import detect_repo_root
+from .evolution.handoff import EvolutionEvidenceSummary, EvolutionVerificationObligation
+from .evolution.operator import evaluate_evolution_followup_decision, request_evolution_followup
 from .evolution.surface import (
     compare_evolution_runs,
+    execute_evolution_surface,
     load_evolution_run_artifacts,
     render_evolution_run_compare,
     render_evolution_run_overview,
@@ -128,6 +132,39 @@ def build_parser() -> argparse.ArgumentParser:
 
     evolution_parser = subparsers.add_parser("evolution")
     evolution_subparsers = evolution_parser.add_subparsers(dest="evolution_command", required=True)
+    evolution_execute_parser = evolution_subparsers.add_parser("execute")
+    evolution_execute_parser.add_argument("--run-id")
+    evolution_execute_parser.add_argument("--target-id", action="append", dest="target_ids")
+    evolution_execute_parser.add_argument("--task-id", action="append", dest="task_ids")
+    evolution_execute_parser.add_argument("--max-events", type=int, default=50)
+    evolution_followup_parser = evolution_subparsers.add_parser("request-followup")
+    evolution_followup_parser.add_argument("run_id")
+    evolution_followup_parser.add_argument("--candidate-id", required=True)
+    evolution_followup_parser.add_argument("--title", required=True)
+    evolution_followup_parser.add_argument("--summary", required=True)
+    evolution_followup_parser.add_argument(
+        "--task-type",
+        dest="requested_task_type",
+        choices=["feature", "issue"],
+        default="feature",
+    )
+    evolution_followup_parser.add_argument("--slug")
+    evolution_followup_parser.add_argument("--target-id", action="append", dest="target_ids")
+    evolution_followup_parser.add_argument("--owned-path", action="append", dest="owned_paths")
+    evolution_followup_parser.add_argument("--review-gate", action="append", dest="review_gates")
+    evolution_followup_parser.add_argument(
+        "--verification-obligation-json",
+        action="append",
+        dest="verification_obligation_json",
+    )
+    evolution_followup_parser.add_argument(
+        "--evidence-summary-json",
+        action="append",
+        dest="evidence_summary_json",
+    )
+    evolution_decide_parser = evolution_subparsers.add_parser("decide")
+    evolution_decide_parser.add_argument("task_id")
+    evolution_decide_parser.add_argument("--claim")
     evolution_run_parser = evolution_subparsers.add_parser("run")
     evolution_run_parser.add_argument("run_id")
     evolution_status_parser = evolution_subparsers.add_parser("status")
@@ -569,6 +606,61 @@ def _parse_changed_file_json(entries: list[str] | None) -> list[dict[str, object
             raise ValueError("each --changed-file-json entry must decode to an object")
         parsed.append({str(key): value[key] for key in value})
     return parsed
+
+
+def _parse_verification_obligation_json(
+    entries: list[str] | None,
+) -> tuple[EvolutionVerificationObligation, ...] | None:
+    if entries is None:
+        return None
+    obligations: list[EvolutionVerificationObligation] = []
+    for index, entry in enumerate(entries, start=1):
+        value = json.loads(entry)
+        if not isinstance(value, dict):
+            raise ValueError(f"verification obligation entry {index} must decode to an object")
+        claim = str(value.get("claim", "")).strip()
+        method = str(value.get("method", "")).strip()
+        if not claim or not method:
+            raise ValueError(
+                f"verification obligation entry {index} requires non-empty `claim` and `method`"
+            )
+        obligations.append(
+            EvolutionVerificationObligation(
+                claim=claim,
+                method=method,
+                required=bool(value.get("required", True)),
+            )
+        )
+    return tuple(obligations)
+
+
+def _parse_evidence_summary_json(
+    entries: list[str] | None,
+) -> tuple[EvolutionEvidenceSummary, ...] | None:
+    if entries is None:
+        return None
+    evidence: list[EvolutionEvidenceSummary] = []
+    for index, entry in enumerate(entries, start=1):
+        value = json.loads(entry)
+        if not isinstance(value, dict):
+            raise ValueError(f"evidence summary entry {index} must decode to an object")
+        kind = str(value.get("kind", "")).strip()
+        summary = str(value.get("summary", "")).strip()
+        if not kind or not summary:
+            raise ValueError(
+                f"evidence summary entry {index} requires non-empty `kind` and `summary`"
+            )
+        locator = value.get("locator")
+        evidence.append(
+            EvolutionEvidenceSummary(
+                kind=kind,
+                summary=summary,
+                locator=str(locator).strip() if locator not in (None, "") else None,
+            )
+        )
+    return tuple(evidence)
+
+
 def handle_daemon(
     once: bool,
     poll_interval_seconds: int,
@@ -955,6 +1047,101 @@ def handle_evolution_run(run_id: str, repo_root: str | Path | None = None) -> in
     return 0
 
 
+def handle_evolution_execute(
+    *,
+    run_id: str | None,
+    target_ids: Sequence[str] | None,
+    task_ids: Sequence[str] | None,
+    max_events: int,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    result = execute_evolution_surface(
+        repo_root,
+        run_id=run_id,
+        target_ids=target_ids,
+        task_ids=task_ids,
+        max_events=max_events,
+        config=config,
+    )
+    if result.ok:
+        print(result.content, end="" if result.content.endswith("\n") else "\n")
+        return 0
+    print(f"error: {result.error or 'evolution execute failed'}", file=sys.stderr)
+    if result.run_id:
+        print(f"run_id: {result.run_id}", file=sys.stderr)
+    if result.artifact_dir:
+        print(f"artifact_dir: {result.artifact_dir}", file=sys.stderr)
+    if result.failure_stage:
+        print(f"failure_stage: {result.failure_stage}", file=sys.stderr)
+    if result.error_type:
+        print(f"error_type: {result.error_type}", file=sys.stderr)
+    return 1
+
+
+def handle_evolution_request_followup(
+    *,
+    run_id: str,
+    candidate_id: str,
+    title: str,
+    summary: str,
+    requested_task_type: str,
+    slug: str | None,
+    target_ids: Sequence[str] | None,
+    owned_paths: Sequence[str] | None,
+    review_gates: Sequence[str] | None,
+    verification_obligation_json: list[str] | None,
+    evidence_summary_json: list[str] | None,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    try:
+        result = request_evolution_followup(
+            repo_root,
+            run_id=run_id,
+            candidate_id=candidate_id,
+            title=title,
+            summary=summary,
+            requested_task_type=requested_task_type,
+            slug=slug,
+            target_ids=target_ids,
+            owned_paths=owned_paths,
+            review_gates=review_gates,
+            verification_obligations=_parse_verification_obligation_json(verification_obligation_json),
+            evidence_summary=_parse_evidence_summary_json(evidence_summary_json),
+            config=config,
+        )
+    except (FileNotFoundError, RuntimeError, TypeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(result.content, end="" if result.content.endswith("\n") else "\n")
+    return 0
+
+
+def handle_evolution_decide(
+    *,
+    task_id: str,
+    claim: str | None,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    try:
+        result = evaluate_evolution_followup_decision(
+            repo_root,
+            task_id=task_id,
+            claim=claim,
+            config=config,
+        )
+    except (FileNotFoundError, RuntimeError, TypeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(result.content, end="" if result.content.endswith("\n") else "\n")
+    return 0
+
+
 def handle_evolution_status(run_id: str, repo_root: str | Path | None = None) -> int:
     repo_root = _resolve_repo_root(repo_root)
     try:
@@ -1170,6 +1357,35 @@ def main() -> int:
             repo_root=args.repo_root,
         )
     if args.command == "evolution":
+        if args.evolution_command == "execute":
+            return handle_evolution_execute(
+                run_id=args.run_id,
+                target_ids=args.target_ids,
+                task_ids=args.task_ids,
+                max_events=args.max_events,
+                repo_root=args.repo_root,
+            )
+        if args.evolution_command == "request-followup":
+            return handle_evolution_request_followup(
+                run_id=args.run_id,
+                candidate_id=args.candidate_id,
+                title=args.title,
+                summary=args.summary,
+                requested_task_type=args.requested_task_type,
+                slug=args.slug,
+                target_ids=args.target_ids,
+                owned_paths=args.owned_paths,
+                review_gates=args.review_gates,
+                verification_obligation_json=args.verification_obligation_json,
+                evidence_summary_json=args.evidence_summary_json,
+                repo_root=args.repo_root,
+            )
+        if args.evolution_command == "decide":
+            return handle_evolution_decide(
+                task_id=args.task_id,
+                claim=args.claim,
+                repo_root=args.repo_root,
+            )
         if args.evolution_command == "run":
             return handle_evolution_run(run_id=args.run_id, repo_root=args.repo_root)
         if args.evolution_command == "status":

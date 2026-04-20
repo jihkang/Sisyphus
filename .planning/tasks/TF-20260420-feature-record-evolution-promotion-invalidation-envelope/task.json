@@ -1,0 +1,163 @@
+{
+  "id": "TF-20260420-feature-record-evolution-promotion-invalidation-envelope",
+  "type": "feature",
+  "slug": "record-evolution-promotion-invalidation-envelope",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-20T10:18:11Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved the envelope-recording slice. The scope is narrow and sequenced correctly after the gate evaluator: record current decision state from existing hard-state inputs without adding policy derivation or surface integrations.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised the generic scaffold into a concrete envelope-recording slice: convert promotion-gate results plus follow-up request, receipt, and verification artifacts into reconstructable promotion or invalidation records. Preserve decision status, blocker detail, evidence refs, and follow-up task linkage, but keep event-bus publication and invalidation-policy derivation out of scope.",
+      "timestamp": "2026-04-20T10:18:06Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved the envelope-recording slice. The scope is narrow and sequenced correctly after the gate evaluator: record current decision state from existing hard-state inputs without adding policy derivation or surface integrations.",
+      "timestamp": "2026-04-20T10:18:11Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-20T10:18:11Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to promotion/invalidation envelope recording only. The implementation may extend current record types enough to preserve candidate identity, blocker detail, evidence refs, and follow-up task linkage. It must not add event-bus publication, invalidation-matrix logic, or new CLI/MCP surfaces.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-20T09:04:09Z",
+  "updated_at": "2026-04-20T10:20:25Z",
+  "closed_at": "2026-04-20T10:20:25Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260420-feature-record-evolution-promotion-invalidation-envelope",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260420-feature-record-evolution-promotion-invalidation-envelope",
+  "branch": "feat/record-evolution-promotion-invalidation-envelope",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-20T10:20:19Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "command": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-20T10:20:19Z",
+      "finished_at": "2026-04-20T10:20:19Z",
+      "duration_ms": null,
+      "output_excerpt": "OK"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "A promotion-eligible gate result records a stable promotion decision artifact with decision metadata, claim, evidence refs, and follow-up task linkage.",
+        "checked": false
+      },
+      {
+        "name": "A blocked gate result records a stable invalidation-style record that preserves blocker detail and the affected artifacts.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Evidence refs from follow-up request, execution receipts, and verification artifacts remain deduped and stable in the recorded envelope.",
+        "checked": false
+      },
+      {
+        "name": "Recorded envelopes keep the original evolution run and candidate identity even when multiple blocker conditions are present.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Missing gate outputs or missing follow-up lineage fails loudly instead of writing a partial or misleading decision envelope.",
+        "checked": false
+      },
+      {
+        "name": "Unsupported decision status fails with an actionable error instead of silently coercing to promotion or invalidation.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "A promotion-eligible gate result records a stable promotion decision artifact with decision metadata, claim, evidence refs, and follow-up task linkage.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "A blocked gate result records a stable invalidation-style record that preserves blocker detail and the affected artifacts.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Evidence refs from follow-up request, execution receipts, and verification artifacts remain deduped and stable in the recorded envelope.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Recorded envelopes keep the original evolution run and candidate identity even when multiple blocker conditions are present.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Missing gate outputs or missing follow-up lineage fails loudly instead of writing a partial or misleading decision envelope.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Unsupported decision status fails with an actionable error instead of silently coercing to promotion or invalidation.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-95d336e47c0f",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "record-evolution-promotion-invalidation-envelope"
+  }
+}

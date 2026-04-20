@@ -1,0 +1,127 @@
+{
+  "id": "TF-20260420-feature-add-evolution-execution-ingress-surface",
+  "type": "feature",
+  "slug": "add-evolution-execution-ingress-surface",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-20T10:51:36Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the bounded ingress slice: expose a new read-only evolution execution entrypoint over CLI and MCP by calling the existing orchestrator, while keeping persisted-run inspection commands unchanged and excluding follow-up approval, provider execution, and promotion/invalidation mutation.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the bounded ingress slice: expose a new read-only evolution execution entrypoint over CLI and MCP by calling the existing orchestrator, while keeping persisted-run inspection commands unchanged and excluding follow-up approval, provider execution, and promotion/invalidation mutation.",
+      "timestamp": "2026-04-20T10:51:36Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-20T10:51:36Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to operator-facing evolution execution ingress only. The implementation may add a shared helper plus CLI/MCP entrypoints that invoke execute_evolution_run and render reviewable results. It must not create follow-up tasks, auto-approve plans/specs, call provider execution for production changes, or mutate live repo/task state beyond append-only run artifacts.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-20T10:50:37Z",
+  "updated_at": "2026-04-20T10:58:41Z",
+  "closed_at": "2026-04-20T10:58:41Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260420-feature-add-evolution-execution-ingress-surface",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260420-feature-add-evolution-execution-ingress-surface",
+  "branch": "feat/add-evolution-execution-ingress-surface",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-20T10:58:33Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "CLI and MCP can start a read-only evolution run and return reviewable metadata for the created run.",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Explicit `target_ids`, `task_ids`, and `max_events` inputs flow through to the orchestrator without widening scope.",
+        "checked": true
+      },
+      {
+        "name": "Existing `evolution run/status/report/compare` inspection commands remain unchanged for persisted runs.",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Orchestrator failures surface actionable run and artifact context instead of a generic failure.",
+        "checked": true
+      },
+      {
+        "name": "Duplicate or invalid run creation input fails without mutating live task state or creating follow-up execution side effects.",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "CLI and MCP can start a read-only evolution run and return reviewable metadata for the created run.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_sisyphus tests.test_mcp_core tests.test_evolution"
+      },
+      {
+        "target": "Explicit target_ids, task_ids, and max_events inputs flow through to the orchestrator without widening scope.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_sisyphus tests.test_mcp_core"
+      },
+      {
+        "target": "Orchestrator failures surface actionable run and artifact context instead of a generic failure.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_sisyphus tests.test_mcp_core"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-f808da48b721",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "add-evolution-execution-ingress-surface"
+  }
+}

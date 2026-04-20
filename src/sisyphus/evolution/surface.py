@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 
+from ..config import SisyphusConfig
 from ..utils import optional_str
+from .orchestrator import EvolutionRunExecutionError, execute_evolution_run
 
 
 EVOLUTION_RUNS_DIR_NAME = "runs"
@@ -150,6 +152,71 @@ class EvolutionRunComparison:
     left_run_id: str
     right_run_id: str
     lines: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EvolutionExecutionSurfaceResult:
+    ok: bool
+    run_id: str | None
+    artifact_dir: str | None
+    resource_uri: str | None
+    final_stage: str | None
+    content: str
+    error: str | None = None
+    error_type: str | None = None
+    failure_stage: str | None = None
+
+
+def execute_evolution_surface(
+    repo_root: Path,
+    *,
+    target_ids: Sequence[str] | None = None,
+    task_ids: Sequence[str] | None = None,
+    max_events: int = 50,
+    run_id: str | None = None,
+    config: SisyphusConfig | None = None,
+) -> EvolutionExecutionSurfaceResult:
+    resolved_repo_root = repo_root.resolve()
+    try:
+        executed = execute_evolution_run(
+            resolved_repo_root,
+            target_ids=target_ids,
+            task_ids=task_ids,
+            max_events=max_events,
+            run_id=run_id,
+            config=config,
+        )
+    except EvolutionRunExecutionError as exc:
+        return _build_execute_failure_result(
+            resolved_repo_root,
+            run_id=exc.result.run.run_id,
+            artifact_dir=exc.result.artifact_dir,
+            final_stage=exc.result.final_stage,
+            error=exc.result.failure.message,
+            error_type=exc.result.failure.error_type,
+            failure_stage=exc.result.failure.stage,
+        )
+    except Exception as exc:
+        artifact_dir = _existing_artifact_dir(resolved_repo_root, run_id)
+        return _build_execute_failure_result(
+            resolved_repo_root,
+            run_id=run_id,
+            artifact_dir=str(artifact_dir) if artifact_dir is not None else None,
+            final_stage="failed",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            failure_stage=None,
+        )
+
+    artifacts = load_evolution_run_artifacts(resolved_repo_root, executed.run.run_id)
+    return EvolutionExecutionSurfaceResult(
+        ok=True,
+        run_id=executed.run.run_id,
+        artifact_dir=executed.artifact_dir,
+        resource_uri=_evolution_run_uri(executed.run.run_id, "run"),
+        final_stage=executed.final_stage,
+        content=render_evolution_run_overview(artifacts),
+    )
 
 
 def load_evolution_run_artifacts(repo_root: Path, run_id: str) -> EvolutionRunArtifacts:
@@ -314,6 +381,83 @@ def render_evolution_run_compare(comparison: EvolutionRunComparison) -> str:
             *comparison.lines,
         ]
     ) + "\n"
+
+
+def _build_execute_failure_result(
+    repo_root: Path,
+    *,
+    run_id: str | None,
+    artifact_dir: str | None,
+    final_stage: str | None,
+    error: str,
+    error_type: str,
+    failure_stage: str | None,
+) -> EvolutionExecutionSurfaceResult:
+    content = _render_execute_failure_content(
+        repo_root,
+        run_id=run_id,
+        artifact_dir=artifact_dir,
+        final_stage=final_stage,
+        error=error,
+        error_type=error_type,
+        failure_stage=failure_stage,
+    )
+    return EvolutionExecutionSurfaceResult(
+        ok=False,
+        run_id=run_id,
+        artifact_dir=artifact_dir,
+        resource_uri=_evolution_run_uri(run_id, "run") if run_id else None,
+        final_stage=final_stage,
+        content=content,
+        error=error,
+        error_type=error_type,
+        failure_stage=failure_stage,
+    )
+
+
+def _render_execute_failure_content(
+    repo_root: Path,
+    *,
+    run_id: str | None,
+    artifact_dir: str | None,
+    final_stage: str | None,
+    error: str,
+    error_type: str,
+    failure_stage: str | None,
+) -> str:
+    if run_id:
+        try:
+            artifacts = load_evolution_run_artifacts(repo_root, run_id)
+        except (FileNotFoundError, ValueError, json.JSONDecodeError):
+            pass
+        else:
+            return render_evolution_run_overview(artifacts)
+
+    lines = ["evolution execute failed"]
+    if run_id:
+        lines.append(f"run_id: {run_id}")
+    if artifact_dir:
+        lines.append(f"artifact_dir: {artifact_dir}")
+    if final_stage:
+        lines.append(f"final_stage: {final_stage}")
+    if failure_stage:
+        lines.append(f"failure_stage: {failure_stage}")
+    lines.append(f"error_type: {error_type}")
+    lines.append(f"error: {error}")
+    return "\n".join(lines) + "\n"
+
+
+def _evolution_run_uri(run_id: str, view: str) -> str:
+    return f"evolution://{run_id}/{view}"
+
+
+def _existing_artifact_dir(repo_root: Path, run_id: str | None) -> Path | None:
+    if not run_id:
+        return None
+    artifact_dir = repo_root / ".planning" / "evolution" / EVOLUTION_RUNS_DIR_NAME / run_id
+    if artifact_dir.exists():
+        return artifact_dir
+    return None
 
 
 def _load_json(path: Path) -> Mapping[str, object]:

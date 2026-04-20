@@ -67,9 +67,14 @@ class EvolutionPromotionCandidate:
 
 @dataclass(frozen=True, slots=True)
 class EvolutionInvalidationRecord:
+    record_id: str
     run_id: str
+    candidate_id: str
     reason: str
     affected_artifacts: tuple[EvolutionArtifactRef, ...] = ()
+    evidence_refs: tuple[EvolutionArtifactRef, ...] = ()
+    blocker_details: tuple[str, ...] = ()
+    followup_task_id: str | None = None
     status: str = "planned_only"
 
 

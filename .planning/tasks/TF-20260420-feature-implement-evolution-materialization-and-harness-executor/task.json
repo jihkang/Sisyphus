@@ -1,0 +1,155 @@
+{
+  "id": "TF-20260420-feature-implement-evolution-materialization-and-harness-executor",
+  "type": "feature",
+  "slug": "implement-evolution-materialization-and-harness-executor",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-20T05:28:39Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved as a verification-and-close task. The requested materialization and harness executor slice is already present on main, and the task scope is to prove that with targeted evolution tests rather than duplicate code changes.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised the task docs to reflect actual repository state. This task is no longer an implementation task; it is a verify-and-close pass confirming that the isolated materialization, worktree-backed harness execution, and read-only run orchestration slice is already implemented on main.",
+      "timestamp": "2026-04-20T05:28:30Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved as a verification-and-close task. The requested materialization and harness executor slice is already present on main, and the task scope is to prove that with targeted evolution tests rather than duplicate code changes.",
+      "timestamp": "2026-04-20T05:28:39Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-20T05:28:43Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to auditing existing mainline behavior only: isolated baseline/candidate materialization, worktree-backed harness command execution, execution receipt persistence, and read-only run artifact persistence. Follow-up bridging, promotion/invalidation writes, and CLI/MCP surface changes remain out of scope.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-20T05:24:38Z",
+  "updated_at": "2026-04-20T05:28:58Z",
+  "closed_at": "2026-04-20T05:28:58Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260420-feature-implement-evolution-materialization-and-harness-executor",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260420-feature-implement-evolution-materialization-and-harness-executor",
+  "branch": "feat/implement-evolution-materialization-and-harness-executor",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-20T05:28:53Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "command": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-20T05:28:52Z",
+      "finished_at": "2026-04-20T05:28:53Z",
+      "duration_ms": null,
+      "output_excerpt": "OK"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "`execute_worktree_backed_evaluation` materializes candidate state into an isolated evaluation worktree, executes normalized verify commands, and persists execution receipts plus evidence paths.",
+        "checked": false
+      },
+      {
+        "name": "`execute_evolution_run` persists `run.json`, `dataset.json`, `harness_plan.json`, `constraints.json`, `fitness.json`, and `report.md` under `.planning/evolution/runs/<run_id>/`.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Worktree command planning strips stale `cd <old worktree> && ...` prefixes and dedupes repeated inherited verify commands before execution.",
+        "checked": false
+      },
+      {
+        "name": "Read-only orchestration preserves the live repo snapshot while writing only append-only run artifacts under `.planning/evolution/runs/<run_id>/`.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Missing rewrite anchors or command failures raise `EvolutionEvaluationExecutionError` with actionable evidence, including materialization status or execution receipt paths.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "execute_worktree_backed_evaluation materializes candidate state into an isolated evaluation worktree, executes normalized verify commands, and persists execution receipts plus evidence paths.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "execute_evolution_run persists run.json, dataset.json, harness_plan.json, constraints.json, fitness.json, and report.md under .planning/evolution/runs/<run_id>/.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Worktree command planning strips stale cd <old worktree> && ... prefixes and dedupes repeated inherited verify commands before execution.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Read-only orchestration preserves the live repo snapshot while writing only append-only run artifacts under .planning/evolution/runs/<run_id>/.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Missing rewrite anchors or command failures raise EvolutionEvaluationExecutionError with actionable evidence, including materialization status or execution receipt paths.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-2e1b96be3b42",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "implement-evolution-materialization-and-harness-executor"
+  }
+}

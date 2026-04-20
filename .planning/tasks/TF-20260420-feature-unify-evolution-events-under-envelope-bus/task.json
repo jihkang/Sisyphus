@@ -1,0 +1,155 @@
+{
+  "id": "TF-20260420-feature-unify-evolution-events-under-envelope-bus",
+  "type": "feature",
+  "slug": "unify-evolution-events-under-envelope-bus",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-20T10:32:23Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved the event-bus slice. The scope is narrow and sequenced correctly after the current evolution hard-state work: publish evolution-scoped envelope events from existing repo-aware entry points and keep orchestration/surface changes out of scope.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised the generic scaffold into a concrete event-bus slice: publish evolution-scoped envelope events from read-only run orchestration, follow-up bridge, receipt projection, verification projection, and decision-envelope recording. Keep scope out of CLI/MCP surface additions and orchestration loops.",
+      "timestamp": "2026-04-20T10:32:17Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved the event-bus slice. The scope is narrow and sequenced correctly after the current evolution hard-state work: publish evolution-scoped envelope events from existing repo-aware entry points and keep orchestration/surface changes out of scope.",
+      "timestamp": "2026-04-20T10:32:23Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-20T10:32:23Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to evolution event-envelope emission only. The implementation may add a shared evolution event helper and emit events from run orchestration, follow-up bridge, receipt projection, verification projection, and decision-envelope recording. It must not add new CLI/MCP commands, orchestration loops, or promotion policy derivation.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-20T10:29:40Z",
+  "updated_at": "2026-04-20T10:36:14Z",
+  "closed_at": "2026-04-20T10:36:14Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260420-feature-unify-evolution-events-under-envelope-bus",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260420-feature-unify-evolution-events-under-envelope-bus",
+  "branch": "feat/unify-evolution-events-under-envelope-bus",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-20T10:36:10Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "command": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-20T10:36:10Z",
+      "finished_at": "2026-04-20T10:36:10Z",
+      "duration_ms": null,
+      "output_excerpt": "OK"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "`execute_evolution_run` writes `evolution.run.recorded` for a successful read-only run.",
+        "checked": false
+      },
+      {
+        "name": "`bridge_evolution_followup_request` writes `evolution.followup.requested` with run/candidate/task lineage.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "`project_followup_execution` and `project_followup_verification` write projection events with receipt/verification counts and stable lineage.",
+        "checked": false
+      },
+      {
+        "name": "`record_evolution_decision_envelope` writes `evolution.decision.recorded` with promotion vs invalidation status preserved in the event payload.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "A failing `execute_evolution_run` writes `evolution.run.failed` with failure stage and persisted artifact context.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "execute_evolution_run writes evolution.run.recorded for a successful read-only run.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "bridge_evolution_followup_request writes evolution.followup.requested with run/candidate/task lineage.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "project_followup_execution and project_followup_verification write projection events with stable lineage.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "record_evolution_decision_envelope writes evolution.decision.recorded with promotion vs invalidation preserved.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "A failing execute_evolution_run writes evolution.run.failed with failure context.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-18acb5610b57",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "unify-evolution-events-under-envelope-bus"
+  }
+}

@@ -5,8 +5,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 import json
 
+from ..config import SisyphusConfig
 from .constraints import EvolutionConstraintResult, evaluate_evolution_constraints
 from .dataset import EvolutionDataset, build_evolution_dataset
+from .event_bus import (
+    EVOLUTION_EVENT_RUN_FAILED,
+    EVOLUTION_EVENT_RUN_RECORDED,
+    publish_evolution_event,
+)
 from .fitness import EvolutionFitnessResult, evaluate_evolution_fitness
 from .harness import EvolutionHarnessPlan, plan_evolution_harness
 from .report import EvolutionReport, build_evolution_report
@@ -44,6 +50,7 @@ def execute_evolution_run(
     max_events: int = 50,
     run_id: str | None = None,
     created_at: str | None = None,
+    config: SisyphusConfig | None = None,
     dataset_builder: Callable[..., EvolutionDataset] = build_evolution_dataset,
     harness_planner: Callable[..., EvolutionHarnessPlan] = plan_evolution_harness,
     constraints_evaluator: Callable[..., EvolutionConstraintResult] = evaluate_evolution_constraints,
@@ -109,7 +116,7 @@ def execute_evolution_run(
         (run_dir / "report.md").write_text(_render_report_markdown(report), encoding="utf-8")
         persisted_artifacts.append("report.md")
 
-        return EvolutionExecutedRun(
+        result = EvolutionExecutedRun(
             run=run,
             artifact_dir=str(run_dir),
             final_stage=EVOLUTION_STAGE_REPORT_BUILT,
@@ -119,6 +126,21 @@ def execute_evolution_run(
             fitness_result=fitness_result,
             report=report,
         )
+        publish_evolution_event(
+            Path(run.repo_root),
+            config=config,
+            event_type=EVOLUTION_EVENT_RUN_RECORDED,
+            source_module="evolution.orchestrator",
+            data={
+                "run_id": run.run_id,
+                "final_stage": result.final_stage,
+                "artifact_dir": result.artifact_dir,
+                "selection_mode": run.selection_mode,
+                "target_ids": list(run.target_ids),
+                "persisted_artifacts": list(persisted_artifacts),
+            },
+        )
+        return result
     except Exception as exc:
         failure_stage = _infer_failure_stage(dataset, harness, constraint_result, fitness_result)
         failure = EvolutionRunFailure(
@@ -129,6 +151,21 @@ def execute_evolution_run(
             partial_artifacts=tuple(persisted_artifacts),
         )
         _write_json(run_dir / "failure.json", asdict(failure))
+        publish_evolution_event(
+            Path(run.repo_root),
+            config=config,
+            event_type=EVOLUTION_EVENT_RUN_FAILED,
+            source_module="evolution.orchestrator",
+            data={
+                "run_id": run.run_id,
+                "final_stage": EVOLUTION_STAGE_FAILED,
+                "artifact_dir": str(run_dir),
+                "failure_stage": failure.stage,
+                "error_type": failure.error_type,
+                "message": failure.message,
+                "persisted_artifacts": list(failure.partial_artifacts),
+            },
+        )
         raise EvolutionRunExecutionError(
             run=run,
             artifact_dir=str(run_dir),

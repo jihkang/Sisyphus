@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import ClassVar, Literal, TypeAlias
 
@@ -32,6 +33,20 @@ class EvolutionArtifactRef:
     kind: str
     owner: EvolutionArtifactOwner
     notes: str = ""
+
+
+def dedupe_artifact_refs(
+    refs: Iterable[EvolutionArtifactRef],
+) -> tuple[EvolutionArtifactRef, ...]:
+    deduped: list[EvolutionArtifactRef] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for ref in refs:
+        key = (ref.artifact_id, ref.kind, ref.owner, ref.notes)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(ref)
+    return tuple(deduped)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -120,10 +135,13 @@ class EvolutionFollowupRequestArtifact(_EvolutionArtifact):
     owner: ClassVar[EvolutionArtifactOwner] = EVOLUTION_ARTIFACT_OWNER_EVOLUTION
 
     run_id: str
+    candidate_id: str
     title: str
     summary: str
     requested_task_type: str
     requested_targets: tuple[str, ...]
+    required_review_gates: tuple[str, ...]
+    followup_task_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +162,7 @@ class VerificationArtifact(_EvolutionArtifact):
 
     run_id: str
     claim: str
+    verification_method: str
     verification_scope: str
     result: str
 
@@ -154,6 +173,8 @@ class PromotionDecisionArtifact(_EvolutionArtifact):
     owner: ClassVar[EvolutionArtifactOwner] = EVOLUTION_ARTIFACT_OWNER_SISYPHUS
 
     run_id: str
+    candidate_id: str
     decision: str
     claim: str
     followup_task_id: str | None = None
+    blocker_details: tuple[str, ...] = ()
