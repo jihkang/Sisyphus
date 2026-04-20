@@ -70,6 +70,8 @@ def request_evolution_followup(
     evidence_summary: Sequence[EvolutionEvidenceSummary] | None = None,
     config: SisyphusConfig | None = None,
 ) -> EvolutionFollowupSurfaceResult:
+    """Bridge an evolution recommendation into a normal review-gated Sisyphus task."""
+
     resolved_repo_root = repo_root.resolve()
     resolved_config = config or load_config(resolved_repo_root)
     artifacts = load_evolution_run_artifacts(resolved_repo_root, run_id)
@@ -123,6 +125,8 @@ def evaluate_evolution_followup_decision(
     claim: str | None = None,
     config: SisyphusConfig | None = None,
 ) -> EvolutionDecisionSurfaceResult:
+    """Derive the current decision envelope for a follow-up task through normal lifecycle state."""
+
     resolved_repo_root = repo_root.resolve()
     resolved_config = config or load_config(resolved_repo_root)
     task, _ = load_task_record(

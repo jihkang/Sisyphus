@@ -1,24 +1,39 @@
 # Sisyphus Architecture
 
-This document describes the current architecture of Sisyphus as of 2026-04-14.
+This document describes the current architecture of Sisyphus as of 2026-04-20.
 
-Sisyphus is a graph-native work system that runs inside a target Git repository and manages repository-local work state, task documents, worktrees, execution, verification, and closeout.
+Sisyphus today is a repository-local task orchestration system that runs inside a target Git repository and manages task state, task documents, worktrees, execution, verification, and closeout.
 
-Its center is not an agent, a chat session, or a flat task list. The center is a controlled work world composed of specs, artifacts, typed relations, verification evidence, promotion state, invalidation state, and execution receipts. Intelligence is allowed to act on that world, but it is not allowed to become the authority over that world.
+The artifact-centric graph model described in this document is currently a design direction plus a partial derived surface. The authoritative runtime today is still task-shaped. Intelligence is allowed to act on that runtime, but it is not allowed to become the authority over it.
 
 ## Core Purpose
 
-Sisyphus should be understood as:
+Sisyphus should be understood long-term as:
 
 > a graph-native work system centered on a controllable work world, with intelligence gradually internalized as operations over that world
 
 This means:
 
-- the authoritative state lives in durable, reviewable repository artifacts
+- the authoritative state lives in durable, reviewable repository records
 - runtime intelligence is an operator over that state rather than the source of truth
 - reconstructability matters as much as execution convenience
 
 The current task runtime is still task-shaped, but the long-term architectural direction is artifact-centric.
+
+## Current Runtime Reality
+
+The currently authoritative runtime is:
+
+- `task.json`, task docs, verify receipts, agent records, and repository event logs
+- workflow gates and lifecycle transitions implemented over that task state
+- MCP task resources that expose task state directly
+
+The currently derived artifact layer is:
+
+- feature-task projection and evaluation surfaced through `task://<task-id>/artifact-graph` and related resources
+- derived promotion and invalidation summaries computed from feature-task projections
+
+This means the repository does not yet run a general artifact graph store or a graph-native invalidation engine as its source of truth.
 
 ## Hard State And Soft Cognition
 
@@ -55,9 +70,15 @@ The governing rule is:
 
 ## Task And Artifact Model
 
-Tasks are still first-class, but they are not the primary durable object. Artifacts carry durable state. Tasks are operators that produce, transform, or compose artifacts.
+Tasks are still first-class and currently remain the primary persisted runtime object. Artifacts exist today as a partial derived model over feature tasks, while the long-term direction is for tasks to become operators that produce, transform, or compose more explicit artifact state.
 
-The intended model is:
+The current implemented model is:
+
+- task record plus task docs as the authoritative spec and lifecycle envelope
+- verify results and execution receipts as the authoritative evidence path
+- feature-task artifact projection as a read-only derived view
+
+The intended target model is:
 
 - `TaskSpec`: the planned operation
 - `TaskRun`: the executed operation and its receipt
@@ -101,6 +122,8 @@ The system should reason about verification in three layers:
 
 Higher-layer verification is not implied by lower-layer verification.
 
+Today the implemented feature-task projection only emits `composite` verification claims derived from verify receipts. `local` and `cross` remain protocol targets until the task runtime records those claims explicitly.
+
 Promotion is likewise not task completion. Promotion is obligation closure for an artifact. A promoted artifact should have:
 
 - required slots filled
@@ -109,6 +132,8 @@ Promotion is likewise not task completion. Promotion is obligation closure for a
 - no stale dependencies
 - no unresolved conflicts
 - required approvals or evidence recorded
+
+In the current feature-task evaluator, the derived states are `draft`, `candidate`, `verified`, `promotable`, `invalid`, and `stale`. `promoted` remains reserved until promotion is backed by authoritative persisted state rather than a derived evaluator result.
 
 Invalidation must precede operational change requests. When an input changes, the system first computes which composites or verification claims are stale, and only then decides whether to reverify, reassemble, replan, or issue a new change request.
 
@@ -272,7 +297,7 @@ The intended responsibilities are:
 
 ## Evolution Control Plane
 
-The repository now also contains a separate read-only evolution control plane in [`src/sisyphus/evolution/`](../src/sisyphus/evolution/). This subsystem is intentionally adjacent to the live orchestration workflow rather than embedded inside it.
+The repository now also contains a primarily read-only evolution control plane in [`src/sisyphus/evolution/`](../src/sisyphus/evolution/). This subsystem is intentionally adjacent to the live orchestration workflow rather than embedded inside it.
 
 The current implemented slices are:
 
@@ -286,12 +311,14 @@ The current implemented slices are:
 - stable reporting projection in `report.py`
 - read-only orchestration and append-only run persistence in `orchestrator.py`
 - read-only CLI views in `cli.py` backed by `evolution/surface.py`
+- review-gated follow-up request bridging and decision evaluation in `bridge.py` and `operator.py`
+- MCP evolution tools/resources in `mcp_core.py`
 
 The following pieces are still future work:
 
-- follow-up task handoff into the Sisyphus lifecycle
-- MCP evolution tools/resources
-- promotion and invalidation envelopes backed by receipts
+- promotion and invalidation persistence backed by authoritative merge and lifecycle receipts
+- artifact-store-backed evolution handoff state instead of task-projection-derived envelopes
+- a cleaner product/document split between core task orchestration and adjacent evolution experimentation
 
 ### Evolution Authority Boundary
 
@@ -299,7 +326,8 @@ The control-plane boundary is strict:
 
 - evolution owns planning, candidate comparison, guard evaluation, fitness scoring, and report generation
 - evolution may write append-only run artifacts under `.planning/evolution/runs/<run_id>/`
-- evolution must not mutate live repository state, live task state, approval state, or promotion state
+- narrow bridge surfaces may request a normal Sisyphus follow-up task or derive a decision envelope from existing task state, but they must route through standard Sisyphus lifecycle gates
+- evolution must not directly approve, freeze, verify, or promote live repository changes
 - Sisyphus owns task creation, plan review, spec freeze, provider execution, verification, receipts, promotion, and invalidation
 
 In practical terms, an evolution run may recommend or request a follow-up task, but it may not approve, freeze, verify, or promote its own result.

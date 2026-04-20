@@ -1,5 +1,14 @@
 from __future__ import annotations
 
+"""Derived feature-task artifact projection over the task runtime.
+
+The authoritative runtime today is still task-shaped: `task.json`, task docs,
+verify receipts, and related repository-local state remain the source of truth.
+This module builds a read-only artifact-shaped projection over that state so
+MCP clients and evaluators can inspect an emerging artifact contract without
+pretending that Sisyphus already persists an artifact graph directly.
+"""
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +37,8 @@ from .strategy import sync_test_strategy_from_docs
 
 @dataclass(frozen=True, slots=True)
 class FeatureTaskArtifactProjection:
+    """Read-only feature-change projection derived from a feature task record."""
+
     task_id: str
     feature_id: str
     feature_change_artifact: CompositeArtifactRecord

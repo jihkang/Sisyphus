@@ -280,6 +280,8 @@ class McpAdapterTests(unittest.TestCase):
         payload = read_mcp_resource(self.repo_root, f"task://{task['id']}/artifact-graph")
 
         self.assertEqual(payload["task_id"], task["id"])
+        self.assertEqual(payload["projection"]["projection_status"], "partial_runtime_support")
+        self.assertEqual(payload["projection"]["supported_verification_scopes"], ["composite"])
         self.assertEqual(payload["evaluation"]["derived_state"], "promotable")
 
     def test_call_get_task_and_list_tasks_tools(self) -> None:

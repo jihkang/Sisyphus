@@ -105,6 +105,14 @@ If you need to manage a different repository from the current shell location, us
 sisyphus --repo /path/to/my-product request "Build a voice meeting assistant"
 ```
 
+## Current Runtime Reality
+
+Sisyphus today should be understood first as a repo-local task orchestration kernel. The authoritative runtime state lives in task records, task docs, verify receipts, agent records, and event logs.
+
+The artifact-shaped surfaces exposed through MCP for feature tasks are currently derived read-only projections over that task runtime. They are useful inspection and evaluation views, but they do not yet replace the task runtime with an authoritative artifact graph.
+
+The long-term design direction is still artifact-centric. The current product surface, however, is task-first orchestration with artifact-shaped inspection overlays.
+
 ## Core Commands
 
 Create and run a task:
@@ -241,6 +249,12 @@ That script registers Sisyphus in Codex and writes a Claude Code project `.mcp.j
 
 Client setup examples for Codex and Claude are documented in [docs/mcp-clients.md](docs/mcp-clients.md).
 Repo-level agent guidance for preferring Sisyphus MCP tools and resources lives in [AGENTS.md](AGENTS.md).
+
+## Evolution Surface
+
+The `evolution` commands expose an adjacent evaluation/control plane. `evolution execute`, `run`, `status`, `report`, and `compare` remain read-only apart from append-only run artifacts under `.planning/evolution/runs/`.
+
+`evolution request-followup` and `evolution decide` are narrow review-gated bridges back into the normal Sisyphus lifecycle. They may request a follow-up task or derive a decision envelope from existing task state, but they do not allow evolution to approve, freeze, verify, or promote its own work.
 
 ## Configuration
 

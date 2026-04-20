@@ -9,6 +9,7 @@ from .artifacts import (
     ARTIFACT_STATE_DRAFT,
     ARTIFACT_STATE_INVALID,
     ARTIFACT_STATE_PROMOTABLE,
+    ARTIFACT_STATE_PROMOTED,
     ARTIFACT_STATE_STALE,
     ARTIFACT_STATE_VERIFIED,
     INVARIANT_STATUS_FAILED,
@@ -28,10 +29,28 @@ INVALIDATION_STATUS_INVALID = "invalid"
 
 _DEFAULT_REQUIRED_TEST_CATEGORIES = ("normal", "edge", "exception")
 _DEFAULT_REQUIRED_VERIFICATION_SCOPES = ("composite",)
+CURRENT_FEATURE_CHANGE_VERIFICATION_SCOPES = _DEFAULT_REQUIRED_VERIFICATION_SCOPES
+CURRENT_FEATURE_CHANGE_DERIVED_STATES = (
+    ARTIFACT_STATE_DRAFT,
+    ARTIFACT_STATE_CANDIDATE,
+    ARTIFACT_STATE_VERIFIED,
+    ARTIFACT_STATE_PROMOTABLE,
+    ARTIFACT_STATE_INVALID,
+    ARTIFACT_STATE_STALE,
+)
+CURRENT_FEATURE_CHANGE_RESERVED_STATES = (ARTIFACT_STATE_PROMOTED,)
 
 
 @dataclass(frozen=True, slots=True)
 class FeatureChangePolicy:
+    """Policy for the current derived feature-change evaluator.
+
+    The protocol documents `local`, `cross`, and `composite` verification
+    layers, but the current runtime only emits composite claims from verify
+    receipts. Lower-layer scopes remain a design target until the task runtime
+    records them explicitly.
+    """
+
     required_test_categories: tuple[str, ...] = _DEFAULT_REQUIRED_TEST_CATEGORIES
     required_verification_scopes: tuple[str, ...] = _DEFAULT_REQUIRED_VERIFICATION_SCOPES
     require_approvals: bool = False
@@ -498,6 +517,9 @@ def _require_string(value: str, field_name: str) -> str:
 
 
 __all__ = [
+    "CURRENT_FEATURE_CHANGE_DERIVED_STATES",
+    "CURRENT_FEATURE_CHANGE_RESERVED_STATES",
+    "CURRENT_FEATURE_CHANGE_VERIFICATION_SCOPES",
     "FeatureChangeEvaluation",
     "FeatureChangePolicy",
     "INVALIDATION_STATUS_FRESH",

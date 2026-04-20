@@ -46,6 +46,13 @@ def bridge_evolution_followup_request(
     config: SisyphusConfig | None = None,
     slug: str | None = None,
 ) -> EvolutionBridgedFollowupTask:
+    """Create a review-gated Sisyphus task from an evolution follow-up request.
+
+    This is the narrow write bridge out of the evolution evaluation plane. It
+    may request a normal task, but it must not bypass the standard Sisyphus
+    plan/spec/verify/promotion lifecycle.
+    """
+
     _validate_followup_request(followup_request)
 
     normalized_owned_paths = _dedupe_strings(followup_request.owned_paths)
