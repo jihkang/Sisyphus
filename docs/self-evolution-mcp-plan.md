@@ -55,9 +55,9 @@ The repository now includes the first read-only evolution foundation:
 - `constraints.py` and `fitness.py` for hard guards and weighted scoring
 - `report.py` for stable review/report projection
 - `orchestrator.py` for `execute_evolution_run(...)` and append-only run artifact persistence
-- `surface.py` and the new `evolution` CLI group for read-only run/status/report/compare views
+- `surface.py` and the `evolution` CLI group for starting read-only execution plus run/status/report/compare views
 
-The remaining major gaps are MCP evolution ingress, review-gated Sisyphus follow-up execution, and promotion/invalidation recording.
+The remaining major gaps are review-gated Sisyphus follow-up execution and promotion/invalidation policy closure on top of the recorded evidence graph.
 
 ### Implemented Evaluation Loop
 
@@ -211,10 +211,12 @@ Use:
 
 ## Current Read-Only MCP Surface
 
-The current implementation exposes persisted evolution runs through MCP as a read-only surface only. It does not start new runs, materialize candidates, approve follow-up work, or mutate live task state.
+The current implementation exposes a bounded operator-facing MCP surface for read-only evolution execution and persisted-run inspection. It can start a new read-only evolution run, persist append-only run artifacts, and render those artifacts back through MCP. It still does not approve follow-up work or mutate live task state.
 
 ### Tools
 
+- `sisyphus.evolution_execute`
+  - start a new read-only evolution run and return reviewable metadata for the created run
 - `sisyphus.evolution_run`
   - render the read-only overview for a persisted run
 - `sisyphus.evolution_status`
@@ -224,7 +226,7 @@ The current implementation exposes persisted evolution runs through MCP as a rea
 - `sisyphus.evolution_compare`
   - compare two persisted runs without mutating them
 
-The system does not expose approval, branch-materialization, follow-up execution, or promotion tools here. Those remain deferred until receipts, promotion envelopes, and the Sisyphus handoff contract are complete.
+The system does not expose approval, follow-up execution, or promotion tools here. Those remain deferred until the Sisyphus handoff contract and promotion policy are fully closed.
 
 ### Resources
 
@@ -241,11 +243,8 @@ The system does not expose approval, branch-materialization, follow-up execution
 
 The following MCP capabilities are still intentionally out of scope.
 
-- start a new evolution run
-- isolated candidate materialization and harness execution
 - follow-up task creation or approval
-- promotion or invalidation write-back
-- event-bus mutation for evolution decisions
+- promotion or invalidation policy mutation
 
 ## Next-Run MCP Workflow
 

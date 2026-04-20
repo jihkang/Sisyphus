@@ -1,0 +1,163 @@
+{
+  "id": "TF-20260420-feature-define-promotion-gate-for-evolution-candidates",
+  "type": "feature",
+  "slug": "define-promotion-gate-for-evolution-candidates",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-20T08:51:51Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved the promotion-gate slice. The scope is bounded and sequenced correctly: promote the follow-up request artifact into a usable hard-state input, then evaluate blocker-driven gate states before adding any final promotion or invalidation envelope recording.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised the generic scaffold into a concrete promotion-gate slice: preserve candidate lineage and review gates on the follow-up request artifact, then add a narrow evaluator that combines follow-up request data, constraints/fitness acceptance, optional execution receipts, and optional verification artifacts into explicit gate states and blocker codes. Final promotion/invalidation recording remains out of scope.",
+      "timestamp": "2026-04-20T08:51:40Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved the promotion-gate slice. The scope is bounded and sequenced correctly: promote the follow-up request artifact into a usable hard-state input, then evaluate blocker-driven gate states before adding any final promotion or invalidation envelope recording.",
+      "timestamp": "2026-04-20T08:51:51Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-20T08:51:51Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to a promotion-gate evaluator only. The implementation may extend the follow-up request artifact with the minimum lineage and review-gate fields needed for gate evaluation, and it may evaluate constraints, fitness, execution receipts, and verification artifacts. It must not persist promotion/invalidation envelopes or add new CLI/MCP surfaces.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-20T08:49:00Z",
+  "updated_at": "2026-04-20T09:03:51Z",
+  "closed_at": "2026-04-20T09:03:51Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260420-feature-define-promotion-gate-for-evolution-candidates",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260420-feature-define-promotion-gate-for-evolution-candidates",
+  "branch": "feat/define-promotion-gate-for-evolution-candidates",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-20T08:55:47Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "command": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-20T08:55:47Z",
+      "finished_at": "2026-04-20T08:55:47Z",
+      "duration_ms": null,
+      "output_excerpt": "OK"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "A candidate with accepted constraints/fitness and a reviewable follow-up request reports `ready_for_review` even before follow-up execution evidence exists.",
+        "checked": false
+      },
+      {
+        "name": "A candidate with accepted constraints/fitness, aligned follow-up receipts, and passing verification artifacts reports `eligible_for_promotion`.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Narrowed review-gate sequences remain preserved on the follow-up request artifact and still allow `ready_for_review` when other handoff prerequisites are satisfied.",
+        "checked": false
+      },
+      {
+        "name": "Execution and verification evidence refs are surfaced in the gate result so later promotion-envelope recording can reuse them without recomputing lineage.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Missing review gates, rejected/pending fitness, or rejected constraints keep the gate in `blocked` with explicit blocker codes instead of a generic false boolean.",
+        "checked": false
+      },
+      {
+        "name": "Mismatched follow-up execution or verification lineage fails loudly instead of silently treating unrelated evidence as valid promotion input.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "A candidate with accepted constraints/fitness and a reviewable follow-up request reports ready_for_review even before follow-up execution evidence exists.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "A candidate with accepted constraints/fitness, aligned follow-up receipts, and passing verification artifacts reports eligible_for_promotion.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Narrowed review-gate sequences remain preserved on the follow-up request artifact and still allow ready_for_review when other handoff prerequisites are satisfied.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Execution and verification evidence refs are surfaced in the gate result so later promotion-envelope recording can reuse them without recomputing lineage.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Missing review gates, rejected/pending fitness, or rejected constraints keep the gate in blocked with explicit blocker codes instead of a generic false boolean.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Mismatched follow-up execution or verification lineage fails loudly instead of silently treating unrelated evidence as valid promotion input.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-8c360cd7dddb",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "define-promotion-gate-for-evolution-candidates"
+  }
+}

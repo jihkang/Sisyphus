@@ -1,0 +1,163 @@
+{
+  "id": "TF-20260420-feature-record-followup-taskrun-and-execution-receipt",
+  "type": "feature",
+  "slug": "record-followup-taskrun-and-execution-receipt",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-20T08:36:32Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved the receipt-linkage slice. The scope is narrow and coherent: read executed evolution follow-up tasks, derive stable task-run identifiers and receipt locators, and emit receipt artifacts without broadening into verification-claim or promotion-decision work.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised the task from the generic scaffold into a concrete receipt-linkage slice: project executed evolution follow-up tasks back into TaskRunRef and ExecutionReceiptArtifact data using real verify/promotion receipt locators, and fail loudly on missing receipt evidence.",
+      "timestamp": "2026-04-20T08:36:20Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved the receipt-linkage slice. The scope is narrow and coherent: read executed evolution follow-up tasks, derive stable task-run identifiers and receipt locators, and emit receipt artifacts without broadening into verification-claim or promotion-decision work.",
+      "timestamp": "2026-04-20T08:36:32Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-20T08:36:36Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to receipt projection only. The implementation may read evolution follow-up source context, verify results, VERIFY.md, and optional promotion receipt files to emit TaskRunRef plus ExecutionReceiptArtifact data. It must not add promotion/invalidation decisions, verification-claim linkage, or new CLI/MCP surfaces.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-20T05:35:37Z",
+  "updated_at": "2026-04-20T08:38:43Z",
+  "closed_at": "2026-04-20T08:38:43Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260420-feature-record-followup-taskrun-and-execution-receipt",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260420-feature-record-followup-taskrun-and-execution-receipt",
+  "branch": "feat/record-followup-taskrun-and-execution-receipt",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-20T08:38:40Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "command": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-20T08:38:40Z",
+      "finished_at": "2026-04-20T08:38:40Z",
+      "duration_ms": null,
+      "output_excerpt": "OK"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "An executed evolution follow-up task with verify results projects into `ExecutionReceiptArtifact` entries and `TaskRunRef` records tied to the source evolution run.",
+        "checked": false
+      },
+      {
+        "name": "A follow-up task with a recorded promotion receipt adds that receipt as an additional execution receipt artifact without changing the derived verify task runs.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Verify-command receipt locators remain stable and task-relative even when the task directory is nested under `.planning/tasks/<task-id>/`.",
+        "checked": false
+      },
+      {
+        "name": "Receipt linkage ignores unrelated task metadata and only reads the evolution follow-up source-context segment.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "A bridged follow-up task with no verify results fails clearly instead of fabricating task-run linkage.",
+        "checked": false
+      },
+      {
+        "name": "A task that claims to have a promotion receipt but lacks the referenced file fails with an actionable missing-receipt error.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "An executed evolution follow-up task with verify results projects into ExecutionReceiptArtifact entries and TaskRunRef records tied to the source evolution run.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "A follow-up task with a recorded promotion receipt adds that receipt as an additional execution receipt artifact without changing the derived verify task runs.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Verify-command receipt locators remain stable and task-relative even when the task directory is nested under .planning/tasks/<task-id>/.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Receipt linkage ignores unrelated task metadata and only reads the evolution follow-up source-context segment.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "A bridged follow-up task with no verify results fails clearly instead of fabricating task-run linkage.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "A task that claims to have a promotion receipt but lacks the referenced file fails with an actionable missing-receipt error.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-25e68af40761",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "record-followup-taskrun-and-execution-receipt"
+  }
+}

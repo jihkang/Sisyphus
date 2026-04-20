@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 
+def required_str(value: object, field_name: str) -> str:
+    if value in (None, ""):
+        raise ValueError(f"{field_name} is required")
+    return str(value)
+
+
 def optional_str(value: object) -> str | None:
     if value in (None, ""):
         return None

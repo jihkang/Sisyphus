@@ -1,0 +1,163 @@
+{
+  "id": "TF-20260420-feature-bridge-evolution-followup-through-sisyphus-review-gates",
+  "type": "feature",
+  "slug": "bridge-evolution-followup-through-sisyphus-review-gates",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-20T05:31:02Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved the bridge slice. The scope is narrow and enforceable: request-only handoff into Sisyphus with preserved review gates and explicit rejection of any self-approval, self-execution, or self-promotion path.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised the task docs from the generic template into a concrete bridge scope: convert EvolutionFollowupRequest into a reviewable Sisyphus task request, attach lineage/evidence/verification metadata, and enforce that the bridge cannot approve, freeze, execute, or promote.",
+      "timestamp": "2026-04-20T05:30:55Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved the bridge slice. The scope is narrow and enforceable: request-only handoff into Sisyphus with preserved review gates and explicit rejection of any self-approval, self-execution, or self-promotion path.",
+      "timestamp": "2026-04-20T05:31:02Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-20T05:31:06Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to request-only evolution follow-up bridging. The implementation may create Sisyphus tasks and attach evolution lineage/evidence/verification metadata, but it must not auto-approve plans, auto-freeze specs, execute providers for production changes, write promotion decisions, or add CLI/MCP surface changes.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-20T05:29:25Z",
+  "updated_at": "2026-04-20T05:35:17Z",
+  "closed_at": "2026-04-20T05:35:17Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260420-feature-bridge-evolution-followup-through-sisyphus-review-gates",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260420-feature-bridge-evolution-followup-through-sisyphus-review-gates",
+  "branch": "feat/bridge-evolution-followup-through-sisyphus-review-gates",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-20T05:35:12Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "command": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-20T05:35:12Z",
+      "finished_at": "2026-04-20T05:35:12Z",
+      "duration_ms": null,
+      "output_excerpt": "OK"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "A valid `EvolutionFollowupRequest` creates a new Sisyphus task with evolution lineage, evidence summary, and verification obligations attached in request metadata.",
+        "checked": false
+      },
+      {
+        "name": "The created follow-up task stays in the normal reviewable lifecycle state (`plan_in_review` / draft spec) because the bridge only requests work.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Duplicate evidence summaries or owned paths are normalized into a stable, deduped request payload without broadening scope.",
+        "checked": false
+      },
+      {
+        "name": "Follow-up requests with explicit review gates preserve the declared gate order instead of defaulting silently to a wider execution path.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Any follow-up request that sets `permits_plan_approval`, `permits_spec_freeze`, `permits_execution`, or `permits_promotion` fails with an actionable error and does not create a task.",
+        "checked": false
+      },
+      {
+        "name": "Missing required evidence or verification obligations fails loudly instead of emitting an under-specified task request.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "A valid EvolutionFollowupRequest creates a new Sisyphus task with evolution lineage, evidence summary, and verification obligations attached in request metadata.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "The created follow-up task stays in the normal reviewable lifecycle state (plan_in_review / draft spec) because the bridge only requests work.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Duplicate evidence summaries or owned paths are normalized into a stable, deduped request payload without broadening scope.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Follow-up requests with explicit review gates preserve the declared gate order instead of defaulting silently to a wider execution path.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Any follow-up request that sets permits_plan_approval, permits_spec_freeze, permits_execution, or permits_promotion fails with an actionable error and does not create a task.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Missing required evidence or verification obligations fails loudly instead of emitting an under-specified task request.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-27f621186df3",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "bridge-evolution-followup-through-sisyphus-review-gates"
+  }
+}

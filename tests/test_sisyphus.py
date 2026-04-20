@@ -8,7 +8,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -27,6 +28,9 @@ from sisyphus.conformance import append_conformance_log
 from sisyphus.cli import (
     build_parser,
     handle_agent_run,
+    handle_evolution_decide,
+    handle_evolution_execute,
+    handle_evolution_request_followup,
     handle_ingest_conversation,
     handle_ingest_pull_request_merged,
     handle_request,
@@ -2064,6 +2068,247 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(compare_args.evolution_command, "compare")
         self.assertEqual(compare_args.left_run_id, "EVR-left")
         self.assertEqual(compare_args.right_run_id, "EVR-right")
+
+    def test_parser_accepts_evolution_execute_surface(self) -> None:
+        parser = build_parser()
+
+        execute_args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "evolution",
+                "execute",
+                "--run-id",
+                "EVR-demo",
+                "--target-id",
+                "execution-contract-wording",
+                "--target-id",
+                "mcp-tool-descriptions",
+                "--task-id",
+                "TF-1",
+                "--max-events",
+                "7",
+            ]
+        )
+
+        self.assertEqual(execute_args.command, "evolution")
+        self.assertEqual(execute_args.evolution_command, "execute")
+        self.assertEqual(execute_args.run_id, "EVR-demo")
+        self.assertEqual(execute_args.target_ids, ["execution-contract-wording", "mcp-tool-descriptions"])
+        self.assertEqual(execute_args.task_ids, ["TF-1"])
+        self.assertEqual(execute_args.max_events, 7)
+
+    def test_parser_accepts_evolution_followup_and_decide_surfaces(self) -> None:
+        parser = build_parser()
+
+        followup_args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "evolution",
+                "request-followup",
+                "EVR-demo",
+                "--candidate-id",
+                "candidate-001",
+                "--title",
+                "Request follow-up",
+                "--summary",
+                "Create a review-gated task.",
+                "--task-type",
+                "feature",
+                "--target-id",
+                "execution-contract-wording",
+                "--owned-path",
+                "docs/architecture.md",
+                "--review-gate",
+                "plan_review",
+                "--verification-obligation-json",
+                '{"claim":"preserves intent","method":"sisyphus verify","required":true}',
+                "--evidence-summary-json",
+                '{"kind":"report","summary":"from evolution report","locator":"report.md"}',
+            ]
+        )
+        decide_args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "evolution",
+                "decide",
+                "TF-123",
+                "--claim",
+                "candidate remains reviewable",
+            ]
+        )
+
+        self.assertEqual(followup_args.command, "evolution")
+        self.assertEqual(followup_args.evolution_command, "request-followup")
+        self.assertEqual(followup_args.run_id, "EVR-demo")
+        self.assertEqual(followup_args.candidate_id, "candidate-001")
+        self.assertEqual(followup_args.requested_task_type, "feature")
+        self.assertEqual(followup_args.target_ids, ["execution-contract-wording"])
+        self.assertEqual(followup_args.owned_paths, ["docs/architecture.md"])
+        self.assertEqual(followup_args.review_gates, ["plan_review"])
+        self.assertEqual(len(followup_args.verification_obligation_json), 1)
+        self.assertEqual(len(followup_args.evidence_summary_json), 1)
+        self.assertEqual(decide_args.evolution_command, "decide")
+        self.assertEqual(decide_args.task_id, "TF-123")
+        self.assertEqual(decide_args.claim, "candidate remains reviewable")
+
+    def test_handle_evolution_execute_renders_created_run(self) -> None:
+        with mock.patch(
+            "sisyphus.cli.execute_evolution_surface",
+            return_value=SimpleNamespace(
+                ok=True,
+                run_id="EVR-demo",
+                artifact_dir=str(self.repo_root / ".planning" / "evolution" / "runs" / "EVR-demo"),
+                resource_uri="evolution://EVR-demo/run",
+                final_stage="report_built",
+                content="evolution run EVR-demo\nfinal_stage: report_built\n",
+                error=None,
+                error_type=None,
+                failure_stage=None,
+            ),
+        ):
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                exit_code = handle_evolution_execute(
+                    run_id="EVR-demo",
+                    target_ids=["execution-contract-wording"],
+                    task_ids=["TF-1"],
+                    max_events=5,
+                    repo_root=self.repo_root,
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("evolution run EVR-demo", stdout.getvalue())
+
+    def test_handle_evolution_execute_reports_actionable_failure(self) -> None:
+        with mock.patch(
+            "sisyphus.cli.execute_evolution_surface",
+            return_value=SimpleNamespace(
+                ok=False,
+                run_id="EVR-demo",
+                artifact_dir=str(self.repo_root / ".planning" / "evolution" / "runs" / "EVR-demo"),
+                resource_uri="evolution://EVR-demo/run",
+                final_stage="failed",
+                content="evolution execute failed\n",
+                error="run already exists",
+                error_type="FileExistsError",
+                failure_stage=None,
+            ),
+        ):
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                exit_code = handle_evolution_execute(
+                    run_id="EVR-demo",
+                    target_ids=None,
+                    task_ids=None,
+                    max_events=5,
+                    repo_root=self.repo_root,
+                )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("error: run already exists", stderr.getvalue())
+        self.assertIn("run_id: EVR-demo", stderr.getvalue())
+        self.assertIn("error_type: FileExistsError", stderr.getvalue())
+
+    def test_handle_evolution_request_followup_renders_created_task(self) -> None:
+        with mock.patch(
+            "sisyphus.cli.request_evolution_followup",
+            return_value=SimpleNamespace(
+                task_id="TF-followup",
+                task_uri="task://TF-followup/record",
+                run_id="EVR-demo",
+                candidate_id="candidate-001",
+                requested_targets=("execution-contract-wording",),
+                required_review_gates=("plan_review", "verify"),
+                content="evolution followup request EVR-demo candidate-001\nfollowup_task_id: TF-followup\n",
+            ),
+        ):
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                exit_code = handle_evolution_request_followup(
+                    run_id="EVR-demo",
+                    candidate_id="candidate-001",
+                    title="Request follow-up",
+                    summary="Create a review-gated task.",
+                    requested_task_type="feature",
+                    slug="request-followup",
+                    target_ids=["execution-contract-wording"],
+                    owned_paths=["docs/architecture.md"],
+                    review_gates=["plan_review"],
+                    verification_obligation_json=[
+                        '{"claim":"preserves intent","method":"sisyphus verify","required":true}'
+                    ],
+                    evidence_summary_json=[
+                        '{"kind":"report","summary":"from evolution report","locator":"report.md"}'
+                    ],
+                    repo_root=self.repo_root,
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("evolution followup request EVR-demo candidate-001", stdout.getvalue())
+
+    def test_handle_evolution_request_followup_reports_bad_json(self) -> None:
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            exit_code = handle_evolution_request_followup(
+                run_id="EVR-demo",
+                candidate_id="candidate-001",
+                title="Request follow-up",
+                summary="Create a review-gated task.",
+                requested_task_type="feature",
+                slug=None,
+                target_ids=None,
+                owned_paths=None,
+                review_gates=None,
+                verification_obligation_json=["[]"],
+                evidence_summary_json=None,
+                repo_root=self.repo_root,
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("verification obligation entry 1 must decode to an object", stderr.getvalue())
+
+    def test_handle_evolution_decide_renders_decision(self) -> None:
+        with mock.patch(
+            "sisyphus.cli.evaluate_evolution_followup_decision",
+            return_value=SimpleNamespace(
+                task_id="TF-followup",
+                task_uri="task://TF-followup/record",
+                run_id="EVR-demo",
+                candidate_id="candidate-001",
+                gate_status="eligible_for_promotion",
+                envelope_status="promotion",
+                content="evolution decision TF-followup\ngate_status: eligible_for_promotion\n",
+            ),
+        ):
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                exit_code = handle_evolution_decide(
+                    task_id="TF-followup",
+                    claim="candidate remains eligible",
+                    repo_root=self.repo_root,
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("eligible_for_promotion", stdout.getvalue())
+
+    def test_handle_evolution_decide_reports_actionable_failure(self) -> None:
+        with mock.patch(
+            "sisyphus.cli.evaluate_evolution_followup_decision",
+            side_effect=ValueError("task is not an evolution follow-up task"),
+        ):
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                exit_code = handle_evolution_decide(
+                    task_id="TF-bad",
+                    claim=None,
+                    repo_root=self.repo_root,
+                )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("error: task is not an evolution follow-up task", stderr.getvalue())
 
     def test_sisyphus_package_reexports_library_api(self) -> None:
         self.assertIs(sisyphus.request_task, request_task)

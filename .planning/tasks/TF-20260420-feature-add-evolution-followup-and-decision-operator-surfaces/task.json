@@ -1,0 +1,135 @@
+{
+  "id": "TF-20260420-feature-add-evolution-followup-and-decision-operator-surfaces",
+  "type": "feature",
+  "slug": "add-evolution-followup-and-decision-operator-surfaces",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-20T11:03:29Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve the bounded operator-surface slice: expose evolution follow-up request creation and promotion/invalidation decision recording over CLI and MCP using existing bridge, receipt, verification, gate, and envelope logic, while keeping actual plan/spec/provider/verify execution in the normal Sisyphus lifecycle.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve the bounded operator-surface slice: expose evolution follow-up request creation and promotion/invalidation decision recording over CLI and MCP using existing bridge, receipt, verification, gate, and envelope logic, while keeping actual plan/spec/provider/verify execution in the normal Sisyphus lifecycle.",
+      "timestamp": "2026-04-20T11:03:29Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-20T11:03:29Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to operator-facing follow-up request and decision surfaces only. The implementation may add shared projection helpers plus CLI/MCP entrypoints that create review-gated follow-up tasks and evaluate decision envelopes from follow-up tasks. It must not auto-approve, auto-freeze, auto-execute providers, or auto-verify follow-up tasks.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-20T11:02:37Z",
+  "updated_at": "2026-04-20T11:15:44Z",
+  "closed_at": "2026-04-20T11:15:44Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260420-feature-add-evolution-followup-and-decision-operator-surfaces",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260420-feature-add-evolution-followup-and-decision-operator-surfaces",
+  "branch": "feat/add-evolution-followup-and-decision-operator-surfaces",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-20T11:15:31Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "CLI and MCP can request a review-gated evolution follow-up task from an executed run and receive stable lineage metadata back.",
+        "checked": false
+      },
+      {
+        "name": "CLI and MCP can evaluate an executed follow-up task into a promotion or invalidation decision using current receipts and verification artifacts.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Minimal follow-up request input defaults evidence and verification obligations from the originating run without widening scope.",
+        "checked": false
+      },
+      {
+        "name": "Decision evaluation fails clearly when the task is not an evolution follow-up task or when the originating run artifacts are missing.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Decision evaluation surfaces actionable blocker or lineage errors instead of recording a misleading envelope.",
+        "checked": false
+      },
+      {
+        "name": "Follow-up request creation rejects unsupported gate overrides or malformed evidence input without creating a task.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "CLI and MCP can request a review-gated evolution follow-up task from an executed run and receive stable lineage metadata back.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution tests.test_sisyphus tests.test_mcp_core tests.test_mcp_adapter"
+      },
+      {
+        "target": "CLI and MCP can evaluate an executed follow-up task into a promotion or invalidation decision using current receipts and verification artifacts.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution tests.test_sisyphus tests.test_mcp_core tests.test_mcp_adapter"
+      },
+      {
+        "target": "Minimal follow-up request input defaults evidence and verification obligations from the originating run without widening scope.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution tests.test_sisyphus"
+      },
+      {
+        "target": "Decision evaluation surfaces actionable blocker or lineage errors instead of recording a misleading envelope.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution tests.test_sisyphus"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-a547ac3d723b",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "add-evolution-followup-and-decision-operator-surfaces"
+  }
+}

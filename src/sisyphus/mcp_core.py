@@ -13,8 +13,14 @@ from .closeout import run_close
 from .config import load_config
 from .conformance import ensure_task_conformance_defaults, summarize_subtask_conformance, summarize_task_conformance
 from .daemon import run_daemon
+from .evolution.handoff import EvolutionEvidenceSummary, EvolutionVerificationObligation
+from .evolution.operator import (
+    evaluate_evolution_followup_decision,
+    request_evolution_followup,
+)
 from .evolution.surface import (
     compare_evolution_runs,
+    execute_evolution_surface,
     load_evolution_run_artifacts,
     render_evolution_run_compare,
     render_evolution_run_overview,
@@ -123,6 +129,70 @@ class SisyphusMcpCoreService:
                 "right_run_id": right_run_id,
                 "resource_uri": _evolution_compare_uri(left_run_id, right_run_id),
                 "content": render_evolution_run_compare(comparison),
+            }
+
+        if tool_name == "sisyphus.evolution_execute":
+            result = execute_evolution_surface(
+                self.repo_root,
+                run_id=optional_str(args.get("run_id")),
+                target_ids=optional_str_list(args.get("target_ids")),
+                task_ids=optional_str_list(args.get("task_ids")),
+                max_events=int(args.get("max_events", 50)),
+                config=config,
+            )
+            return {
+                "ok": result.ok,
+                "run_id": result.run_id,
+                "resource_uri": result.resource_uri,
+                "artifact_dir": result.artifact_dir,
+                "final_stage": result.final_stage,
+                "failure_stage": result.failure_stage,
+                "content": result.content,
+                "error": result.error,
+                "error_type": result.error_type,
+            }
+
+        if tool_name == "sisyphus.evolution_followup_request":
+            result = request_evolution_followup(
+                self.repo_root,
+                run_id=str(args["run_id"]),
+                candidate_id=str(args["candidate_id"]),
+                title=str(args["title"]),
+                summary=str(args["summary"]),
+                requested_task_type=str(args.get("requested_task_type", "feature")),
+                slug=optional_str(args.get("slug")),
+                target_ids=optional_str_list(args.get("target_ids")),
+                owned_paths=optional_str_list(args.get("owned_paths")),
+                review_gates=optional_str_list(args.get("review_gates")),
+                verification_obligations=_verification_obligations(args.get("verification_obligations")),
+                evidence_summary=_evidence_summary(args.get("evidence_summary")),
+                config=config,
+            )
+            return {
+                "task_id": result.task_id,
+                "task_uri": result.task_uri,
+                "run_id": result.run_id,
+                "candidate_id": result.candidate_id,
+                "requested_targets": list(result.requested_targets),
+                "required_review_gates": list(result.required_review_gates),
+                "content": result.content,
+            }
+
+        if tool_name == "sisyphus.evolution_decide":
+            result = evaluate_evolution_followup_decision(
+                self.repo_root,
+                task_id=str(args["task_id"]),
+                claim=optional_str(args.get("claim")),
+                config=config,
+            )
+            return {
+                "task_id": result.task_id,
+                "task_uri": result.task_uri,
+                "run_id": result.run_id,
+                "candidate_id": result.candidate_id,
+                "gate_status": result.gate_status,
+                "envelope_status": result.envelope_status,
+                "content": result.content,
             }
 
         if tool_name == "sisyphus.record_merged_pr":
@@ -389,6 +459,117 @@ def mcp_tool_definitions() -> list[dict[str, object]]:
                 "additionalProperties": False,
             },
             "outputSchema": {"type": "object", "properties": {"task": {"type": "object"}}},
+        },
+        {
+            "name": "sisyphus.evolution_execute",
+            "description": "Start a new read-only evolution run and return reviewable run metadata.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "target_ids": {"type": "array", "items": {"type": "string"}},
+                    "task_ids": {"type": "array", "items": {"type": "string"}},
+                    "max_events": {"type": "integer"},
+                },
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "ok": {"type": "boolean"},
+                    "run_id": {"type": ["string", "null"]},
+                    "resource_uri": {"type": ["string", "null"]},
+                    "artifact_dir": {"type": ["string", "null"]},
+                    "final_stage": {"type": ["string", "null"]},
+                    "failure_stage": {"type": ["string", "null"]},
+                    "content": {"type": "string"},
+                    "error": {"type": ["string", "null"]},
+                    "error_type": {"type": ["string", "null"]},
+                },
+            },
+        },
+        {
+            "name": "sisyphus.evolution_followup_request",
+            "description": "Create a review-gated Sisyphus follow-up task from an evolution run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "candidate_id": {"type": "string"},
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "requested_task_type": {"type": "string", "enum": ["feature", "issue"]},
+                    "slug": {"type": "string"},
+                    "target_ids": {"type": "array", "items": {"type": "string"}},
+                    "owned_paths": {"type": "array", "items": {"type": "string"}},
+                    "review_gates": {"type": "array", "items": {"type": "string"}},
+                    "verification_obligations": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "claim": {"type": "string"},
+                                "method": {"type": "string"},
+                                "required": {"type": "boolean"},
+                            },
+                            "required": ["claim", "method"],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "evidence_summary": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "kind": {"type": "string"},
+                                "summary": {"type": "string"},
+                                "locator": {"type": "string"},
+                            },
+                            "required": ["kind", "summary"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["run_id", "candidate_id", "title", "summary"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "task_uri": {"type": "string"},
+                    "run_id": {"type": "string"},
+                    "candidate_id": {"type": "string"},
+                    "requested_targets": {"type": "array", "items": {"type": "string"}},
+                    "required_review_gates": {"type": "array", "items": {"type": "string"}},
+                    "content": {"type": "string"},
+                },
+            },
+        },
+        {
+            "name": "sisyphus.evolution_decide",
+            "description": "Evaluate an evolution follow-up task and record the current promotion or invalidation decision.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "claim": {"type": "string"},
+                },
+                "required": ["task_id"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "task_uri": {"type": "string"},
+                    "run_id": {"type": "string"},
+                    "candidate_id": {"type": "string"},
+                    "gate_status": {"type": "string"},
+                    "envelope_status": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+            },
         },
         {
             "name": "sisyphus.evolution_run",
@@ -686,6 +867,52 @@ def _dict_list(value: object) -> list[dict[str, object]] | None:
             raise TypeError("expected changed_files entries to be objects")
         normalized.append({str(key): item[key] for key in item})
     return normalized
+
+
+def _verification_obligations(
+    value: object,
+) -> tuple[EvolutionVerificationObligation, ...] | None:
+    raw_items = _dict_list(value)
+    if raw_items is None:
+        return None
+    normalized: list[EvolutionVerificationObligation] = []
+    for index, item in enumerate(raw_items, start=1):
+        claim = str(item.get("claim", "")).strip()
+        method = str(item.get("method", "")).strip()
+        if not claim or not method:
+            raise ValueError(
+                f"verification_obligations[{index}] requires non-empty claim and method"
+            )
+        normalized.append(
+            EvolutionVerificationObligation(
+                claim=claim,
+                method=method,
+                required=bool(item.get("required", True)),
+            )
+        )
+    return tuple(normalized)
+
+
+def _evidence_summary(value: object) -> tuple[EvolutionEvidenceSummary, ...] | None:
+    raw_items = _dict_list(value)
+    if raw_items is None:
+        return None
+    normalized: list[EvolutionEvidenceSummary] = []
+    for index, item in enumerate(raw_items, start=1):
+        kind = str(item.get("kind", "")).strip()
+        summary = str(item.get("summary", "")).strip()
+        if not kind or not summary:
+            raise ValueError(
+                f"evidence_summary[{index}] requires non-empty kind and summary"
+            )
+        normalized.append(
+            EvolutionEvidenceSummary(
+                kind=kind,
+                summary=summary,
+                locator=optional_str(item.get("locator")),
+            )
+        )
+    return tuple(normalized)
 
 
 def _evolution_run_uri(run_id: str, view: str) -> str:

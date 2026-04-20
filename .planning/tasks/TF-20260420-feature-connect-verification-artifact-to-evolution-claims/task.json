@@ -1,0 +1,163 @@
+{
+  "id": "TF-20260420-feature-connect-verification-artifact-to-evolution-claims",
+  "type": "feature",
+  "slug": "connect-verification-artifact-to-evolution-claims",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-20T08:41:49Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved the verification-linkage slice. The scope is well-bounded: derive verification artifacts from declared obligations plus receipt-backed execution state, and do not broaden into promotion or invalidation work.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised the task into a concrete verification-linkage slice: map declared follow-up verification obligations plus linked receipt evidence into evolution VerificationArtifact records, preserve the obligation method in hard state, and fail loudly on missing obligations or missing receipt linkage.",
+      "timestamp": "2026-04-20T08:41:41Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved the verification-linkage slice. The scope is well-bounded: derive verification artifacts from declared obligations plus receipt-backed execution state, and do not broaden into promotion or invalidation work.",
+      "timestamp": "2026-04-20T08:41:49Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-20T08:41:57Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze scope to verification-artifact linkage only. The implementation may read follow-up source context, verification obligations, receipt projections, and task verify state to emit VerificationArtifact records. It must not add promotion/invalidation decisions or new CLI/MCP surface changes.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-20T08:39:01Z",
+  "updated_at": "2026-04-20T08:47:57Z",
+  "closed_at": "2026-04-20T08:47:57Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260420-feature-connect-verification-artifact-to-evolution-claims",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260420-feature-connect-verification-artifact-to-evolution-claims",
+  "branch": "feat/connect-verification-artifact-to-evolution-claims",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-20T08:47:52Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "command": "cd /Users/jihokang/Documents/Sisyphus && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-20T08:47:51Z",
+      "finished_at": "2026-04-20T08:47:52Z",
+      "duration_ms": null,
+      "output_excerpt": "OK"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "A follow-up task with declared obligations and passing verify results projects into `VerificationArtifact` records that preserve the obligation claim, method, and linked receipt evidence.",
+        "checked": false
+      },
+      {
+        "name": "A follow-up task with failing verify results still produces verification artifacts, but they are marked as failed instead of passed.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Verification linkage uses only the evolution follow-up source-context obligation list and ignores unrelated source-context keys.",
+        "checked": false
+      },
+      {
+        "name": "Multiple obligations map to stable artifact ids and share linked receipt evidence without duplicating or dropping records unpredictably.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "A bridged follow-up task with no declared verification obligations fails clearly instead of fabricating verification artifacts.",
+        "checked": false
+      },
+      {
+        "name": "A follow-up task whose linked receipts cannot be projected fails with an actionable missing-receipt error.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "A follow-up task with declared obligations and passing verify results projects into VerificationArtifact records that preserve the obligation claim, method, and linked receipt evidence.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "A follow-up task with failing verify results still produces verification artifacts, but they are marked as failed instead of passed.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Verification linkage uses only the evolution follow-up source-context obligation list and ignores unrelated source-context keys.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "Multiple obligations map to stable artifact ids and share linked receipt evidence without duplicating or dropping records unpredictably.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "A bridged follow-up task with no declared verification obligations fails clearly instead of fabricating verification artifacts.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      },
+      {
+        "target": "A follow-up task whose linked receipts cannot be projected fails with an actionable missing-receipt error.",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_evolution"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-fd6da7ee894a",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "connect-verification-artifact-to-evolution-claims"
+  }
+}

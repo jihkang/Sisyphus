@@ -26,7 +26,16 @@ from sisyphus.evolution import (
     EVOLUTION_ARTIFACT_OWNER_SISYPHUS,
     EVOLUTION_ARTIFACT_STATUS_FUTURE,
     EVOLUTION_ARTIFACT_STATUS_PLANNED,
+    EVOLUTION_ARTIFACT_STATUS_RECORDED,
     EVOLUTION_DEFAULT_REVIEW_GATES,
+    EVOLUTION_ENVELOPE_STATUS_INVALIDATION,
+    EVOLUTION_ENVELOPE_STATUS_PROMOTION,
+    EVOLUTION_EVENT_DECISION_RECORDED,
+    EVOLUTION_EVENT_EXECUTION_PROJECTED,
+    EVOLUTION_EVENT_FOLLOWUP_REQUESTED,
+    EVOLUTION_EVENT_RUN_FAILED,
+    EVOLUTION_EVENT_RUN_RECORDED,
+    EVOLUTION_EVENT_VERIFICATION_PROJECTED,
     EVOLUTION_EVALUATION_EXECUTION_MODE_SISYPHUS_TASK,
     EVOLUTION_EVALUATION_EXECUTION_MODE_WORKTREE_HARNESS,
     EVOLUTION_EVALUATION_STATUS_COMPLETED,
@@ -34,11 +43,27 @@ from sisyphus.evolution import (
     EVOLUTION_EVALUATION_STATUS_PLANNED,
     EVOLUTION_EXTENSION_STAGE_SEQUENCE,
     EVOLUTION_FAILURE_SHAPE,
+    EVOLUTION_FOLLOWUP_SOURCE_CONTEXT_KIND,
+    EVOLUTION_INVALIDATION_ACTION_RECREATE_FOLLOWUP_REQUEST,
+    EVOLUTION_INVALIDATION_ACTION_REPROJECT_RECEIPTS,
+    EVOLUTION_INVALIDATION_ACTION_REPROJECT_VERIFICATION,
+    EVOLUTION_INVALIDATION_ACTION_RERECORD_ENVELOPE,
+    EVOLUTION_INVALIDATION_ACTION_RERUN_PROMOTION_GATE,
+    EVOLUTION_INVALIDATION_CHANGE_ENVELOPE,
+    EVOLUTION_INVALIDATION_CHANGE_EXECUTION_RECEIPT,
+    EVOLUTION_INVALIDATION_CHANGE_FOLLOWUP_REQUEST,
+    EVOLUTION_INVALIDATION_CHANGE_REVIEW_GATES,
+    EVOLUTION_INVALIDATION_CHANGE_VERIFICATION,
     EVOLUTION_ISOLATION_MODE_TASK_WORKTREE_COPY,
     EVOLUTION_MATERIALIZATION_STATUS_BASELINE_CAPTURED,
     EVOLUTION_MATERIALIZATION_STATUS_CANDIDATE_APPLIED,
     EVOLUTION_OPERATOR_REVIEWABILITY_BLOCKED,
     EVOLUTION_PHASE_1,
+    EVOLUTION_PROMOTION_BLOCKER_SCOPE_HANDOFF,
+    EVOLUTION_PROMOTION_BLOCKER_SCOPE_PROMOTION,
+    EVOLUTION_PROMOTION_GATE_STATUS_BLOCKED,
+    EVOLUTION_PROMOTION_GATE_STATUS_ELIGIBLE,
+    EVOLUTION_PROMOTION_GATE_STATUS_READY_FOR_REVIEW,
     EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
     EVOLUTION_READ_ONLY_RUN_STAGES,
     EVOLUTION_READ_ONLY_STAGE_SEQUENCE,
@@ -46,17 +71,24 @@ from sisyphus.evolution import (
     EVOLUTION_STAGE_REPORT_BUILT,
     EVOLUTION_TARGET_KIND_TEXT_POLICY,
     EvolutionArtifactRef,
+    EvolutionBridgedFollowupTask,
     EvolutionCandidateArtifact,
     EvolutionDatasetArtifact,
+    EvolutionDecisionEnvelope,
     EvolutionEvaluationArtifact,
     EvolutionEvaluationExecutionError,
     EvolutionEvaluationOutcome,
     EvolutionEvidenceSummary,
     EvolutionFollowupRequest,
+    EvolutionFollowupExecutionProjection,
+    EvolutionFollowupVerificationProjection,
     EvolutionFollowupRequestArtifact,
+    EvolutionInvalidationChange,
+    EvolutionInvalidationOutcome,
     EvolutionMaterializationError,
     EvolutionPlannedMetrics,
     EvolutionPromotionCandidate,
+    EvolutionPromotionGateResult,
     EvolutionReportArtifact,
     EvolutionRunExecutionError,
     EvolutionRunRequest,
@@ -70,10 +102,14 @@ from sisyphus.evolution import (
     VerificationArtifact,
     build_evolution_dataset,
     build_evolution_report,
+    bridge_evolution_followup_request,
     build_sisyphus_evaluation_request,
     build_worktree_evaluation_command_plan,
+    dedupe_artifact_refs,
     evaluate_evolution_constraints,
     evaluate_evolution_fitness,
+    evaluate_evolution_invalidation,
+    evaluate_evolution_promotion_gate,
     execute_evolution_harness,
     execute_sisyphus_evaluation,
     execute_worktree_backed_evaluation,
@@ -86,19 +122,40 @@ from sisyphus.evolution import (
     ordered_target_source_paths,
     plan_evolution_harness,
     plan_evolution_run,
+    project_followup_execution,
+    project_followup_execution_record,
+    project_followup_request_artifact,
+    project_followup_verification,
+    project_followup_verification_record,
+    request_evolution_followup,
+    record_evolution_decision_envelope,
+    evaluate_evolution_followup_decision,
 )
 from sisyphus.evolution.surface import (
     compare_evolution_runs,
+    execute_evolution_surface,
     load_evolution_run_artifacts,
     render_evolution_run_compare,
     render_evolution_run_overview,
     render_evolution_run_report,
     render_evolution_run_status,
 )
+from sisyphus.artifacts import TaskRunRef
 from sisyphus.config import load_config
 from sisyphus.conformance import append_conformance_log
 from sisyphus.state import create_task_record, save_task_record
 from sisyphus.templates import materialize_task_templates
+
+
+def _load_repo_events(repo_root: Path) -> list[dict[str, object]]:
+    event_path = repo_root / ".planning" / "events.jsonl"
+    if not event_path.exists():
+        return []
+    return [
+        json.loads(line)
+        for line in event_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
 
 class EvolutionCoreTests(unittest.TestCase):
@@ -323,10 +380,13 @@ class EvolutionCoreTests(unittest.TestCase):
             producing_stage="ready_for_review",
             status=EVOLUTION_ARTIFACT_STATUS_FUTURE,
             run_id="EVR-123",
+            candidate_id="candidate-001",
             title="Request normal Sisyphus follow-up task",
             summary="handoff instead of direct mutation",
             requested_task_type="feature",
             requested_targets=("execution-contract-wording",),
+            required_review_gates=("plan_review", "operator_approval", "verify"),
+            followup_task_id="TF-123",
             depends_on=(run_ref,),
             evidence_refs=(run_ref,),
         )
@@ -347,6 +407,7 @@ class EvolutionCoreTests(unittest.TestCase):
             status=EVOLUTION_ARTIFACT_STATUS_FUTURE,
             run_id="EVR-123",
             claim="follow-up matches the reviewed evolution request",
+            verification_method="tests.test_evolution",
             verification_scope="cross",
             result="pending",
             depends_on=(run_ref,),
@@ -357,9 +418,11 @@ class EvolutionCoreTests(unittest.TestCase):
             producing_stage="ready_for_review",
             status=EVOLUTION_ARTIFACT_STATUS_FUTURE,
             run_id="EVR-123",
+            candidate_id="candidate-001",
             decision="pending_followup_execution",
             claim="candidate is eligible for reviewable handoff",
             followup_task_id="TF-123",
+            blocker_details=(),
             depends_on=(run_ref,),
             evidence_refs=(run_ref,),
         )
@@ -415,11 +478,1585 @@ class EvolutionCoreTests(unittest.TestCase):
         self.assertFalse(request.permits_promotion)
 
 
+class EvolutionFollowupBridgeTests(unittest.TestCase):
+    def test_bridge_creates_reviewable_task_request_with_lineage(self) -> None:
+        request = EvolutionFollowupRequest(
+            source_run_id="EVR-1234567890ab",
+            candidate_id="candidate-001",
+            title="Refine evolution report wording",
+            summary="Create a reviewable follow-up for the accepted evolution candidate.",
+            requested_task_type="feature",
+            target_scope=("execution-contract-wording", "review-gate-explanation-text"),
+            instruction_set=(
+                "Update the wording in the documented sections only.",
+                "Preserve the current review and verify gates.",
+            ),
+            owned_paths=("docs/architecture.md", "docs/architecture.md", "docs/self-evolution-mcp-plan.md"),
+            expected_verification_obligations=(
+                EvolutionVerificationObligation(
+                    claim="follow-up request includes review context",
+                    method="tests.test_evolution",
+                ),
+            ),
+            evidence_summary=(
+                EvolutionEvidenceSummary(
+                    kind="fitness_delta",
+                    summary="candidate improves wording coverage",
+                    locator=".planning/evolution/runs/EVR-1234567890ab/report.md",
+                ),
+                EvolutionEvidenceSummary(
+                    kind="fitness_delta",
+                    summary="candidate improves wording coverage",
+                    locator=".planning/evolution/runs/EVR-1234567890ab/report.md",
+                ),
+            ),
+            promotion_intent=EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
+        )
+        captured: dict[str, object] = {}
+
+        def fake_request_task(repo_root, *, config=None, **kwargs):
+            captured["repo_root"] = repo_root
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(
+                ok=True,
+                task_id="TF-followup-001",
+                task={
+                    "id": "TF-followup-001",
+                    "slug": "refine-evolution-report-wording",
+                    "status": "open",
+                    "plan_status": "pending_review",
+                    "spec_status": "draft",
+                    "workflow_phase": "plan_in_review",
+                },
+                error=None,
+            )
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with patch("sisyphus.evolution.bridge.request_task", side_effect=fake_request_task):
+                outcome = bridge_evolution_followup_request(Path(tempdir), request)
+
+        self.assertIsInstance(outcome, EvolutionBridgedFollowupTask)
+        self.assertEqual(outcome.task_id, "TF-followup-001")
+        self.assertEqual(outcome.plan_status, "pending_review")
+        self.assertEqual(outcome.spec_status, "draft")
+        self.assertEqual(outcome.workflow_phase, "plan_in_review")
+        self.assertEqual(
+            outcome.owned_paths,
+            ("docs/architecture.md", "docs/self-evolution-mcp-plan.md"),
+        )
+        self.assertEqual(outcome.artifact.requested_targets, request.target_scope)
+        self.assertEqual(outcome.artifact.candidate_id, "candidate-001")
+        self.assertEqual(outcome.artifact.required_review_gates, EVOLUTION_DEFAULT_REVIEW_GATES)
+        self.assertEqual(outcome.artifact.followup_task_id, "TF-followup-001")
+        kwargs = captured["kwargs"]
+        self.assertEqual(kwargs["auto_run"], False)
+        self.assertEqual(kwargs["task_type"], "feature")
+        self.assertEqual(
+            kwargs["owned_paths"],
+            ["docs/architecture.md", "docs/self-evolution-mcp-plan.md"],
+        )
+        self.assertIsNone(kwargs.get("config"))
+        self.assertIn("Do not bypass plan review", kwargs["instruction"])
+        source_context = kwargs["source_context"][EVOLUTION_FOLLOWUP_SOURCE_CONTEXT_KIND]
+        self.assertEqual(source_context["source_run_id"], "EVR-1234567890ab")
+        self.assertEqual(source_context["candidate_id"], "candidate-001")
+        self.assertEqual(source_context["required_review_gates"], list(EVOLUTION_DEFAULT_REVIEW_GATES))
+        self.assertEqual(len(source_context["evidence_summary"]), 1)
+        self.assertEqual(
+            source_context["expected_verification_obligations"][0]["claim"],
+            "follow-up request includes review context",
+        )
+
+    def test_bridge_preserves_explicit_review_gate_order(self) -> None:
+        request = EvolutionFollowupRequest(
+            source_run_id="EVR-bridge-gates",
+            candidate_id="candidate-ordered",
+            title="Preserve review gate order",
+            summary="Use a narrowed review gate sequence for a follow-up request.",
+            requested_task_type="feature",
+            target_scope=("execution-contract-wording",),
+            instruction_set=(),
+            owned_paths=("docs/architecture.md",),
+            expected_verification_obligations=(
+                EvolutionVerificationObligation(
+                    claim="gate order is preserved",
+                    method="tests.test_evolution",
+                ),
+            ),
+            evidence_summary=(
+                EvolutionEvidenceSummary(
+                    kind="report",
+                    summary="report is ready for operator review",
+                ),
+            ),
+            promotion_intent=EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
+            required_review_gates=("operator_approval", "plan_review", "verify"),
+        )
+        captured: dict[str, object] = {}
+
+        def fake_request_task(repo_root, *, config=None, **kwargs):
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(
+                ok=True,
+                task_id="TF-followup-ordered",
+                task={
+                    "id": "TF-followup-ordered",
+                    "slug": "preserve-review-gate-order",
+                    "status": "open",
+                    "plan_status": "pending_review",
+                    "spec_status": "draft",
+                    "workflow_phase": "plan_in_review",
+                },
+                error=None,
+            )
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with patch("sisyphus.evolution.bridge.request_task", side_effect=fake_request_task):
+                bridge_evolution_followup_request(Path(tempdir), request)
+
+        source_context = captured["kwargs"]["source_context"][EVOLUTION_FOLLOWUP_SOURCE_CONTEXT_KIND]
+        self.assertEqual(
+            source_context["required_review_gates"],
+            ["operator_approval", "plan_review", "verify"],
+        )
+        self.assertEqual(
+            captured["kwargs"]["source_context"][EVOLUTION_FOLLOWUP_SOURCE_CONTEXT_KIND]["required_review_gates"],
+            ["operator_approval", "plan_review", "verify"],
+        )
+
+    def test_bridge_writes_evolution_followup_event(self) -> None:
+        request = EvolutionFollowupRequest(
+            source_run_id="EVR-bridge-events",
+            candidate_id="candidate-events",
+            title="Bridge emits event",
+            summary="Emit an evolution follow-up event after task creation.",
+            requested_task_type="feature",
+            target_scope=("execution-contract-wording",),
+            instruction_set=(),
+            owned_paths=("docs/architecture.md",),
+            expected_verification_obligations=(
+                EvolutionVerificationObligation(
+                    claim="bridge emits event",
+                    method="tests.test_evolution",
+                ),
+            ),
+            evidence_summary=(
+                EvolutionEvidenceSummary(
+                    kind="report",
+                    summary="report is ready for handoff",
+                ),
+            ),
+            promotion_intent=EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
+        )
+
+        def fake_request_task(repo_root, *, config=None, **kwargs):
+            return SimpleNamespace(
+                ok=True,
+                task_id="TF-followup-event-001",
+                task={
+                    "id": "TF-followup-event-001",
+                    "slug": "bridge-emits-event",
+                    "status": "open",
+                    "plan_status": "pending_review",
+                    "spec_status": "draft",
+                    "workflow_phase": "plan_in_review",
+                },
+                error=None,
+            )
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / ".taskflow.toml").write_text(
+                "[event_bus]\nprovider = \"jsonl\"\n",
+                encoding="utf-8",
+            )
+            config = load_config(repo_root)
+            with patch("sisyphus.evolution.bridge.request_task", side_effect=fake_request_task):
+                bridge_evolution_followup_request(repo_root, request, config=config)
+
+            evolution_events = [
+                event
+                for event in _load_repo_events(repo_root)
+                if event.get("event_type") == EVOLUTION_EVENT_FOLLOWUP_REQUESTED
+            ]
+
+        self.assertEqual(len(evolution_events), 1)
+        self.assertEqual(evolution_events[0]["data"]["run_id"], "EVR-bridge-events")
+        self.assertEqual(evolution_events[0]["data"]["candidate_id"], "candidate-events")
+        self.assertEqual(evolution_events[0]["data"]["followup_task_id"], "TF-followup-event-001")
+
+    def _build_constraints(self, *, accepted: bool | None, status: str, notes: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            run_id="EVR-promotion",
+            evaluated_at="2026-04-20T00:00:00Z",
+            status=status,
+            accepted=accepted,
+            warning_increase_threshold=0,
+            baseline_evaluation_id="EVR-promotion:baseline",
+            candidate_evaluation_id="EVR-promotion:candidate",
+            blocking_failure_count=0 if accepted else 1,
+            pending_guard_count=0 if accepted is not None else 1,
+            checks=(),
+            notes=notes,
+        )
+
+    def _build_fitness(self, *, eligible: bool | None, status: str, notes: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            run_id="EVR-promotion",
+            evaluated_at="2026-04-20T00:00:00Z",
+            status=status,
+            eligible_for_promotion=eligible,
+            comparable_metric_count=2,
+            baseline_score=62.0,
+            candidate_score=87.0,
+            score_delta=25.0,
+            comparisons=(),
+            notes=notes,
+        )
+
+
+class EvolutionPromotionGateTests(unittest.TestCase):
+    def _build_constraints(self, *, accepted: bool | None, status: str, notes: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            run_id="EVR-promotion",
+            evaluated_at="2026-04-20T00:00:00Z",
+            status=status,
+            accepted=accepted,
+            warning_increase_threshold=0,
+            baseline_evaluation_id="EVR-promotion:baseline",
+            candidate_evaluation_id="EVR-promotion:candidate",
+            blocking_failure_count=0 if accepted else 1,
+            pending_guard_count=0 if accepted is not None else 1,
+            checks=(),
+            notes=notes,
+        )
+
+    def _build_fitness(self, *, eligible: bool | None, status: str, notes: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            run_id="EVR-promotion",
+            evaluated_at="2026-04-20T00:00:00Z",
+            status=status,
+            eligible_for_promotion=eligible,
+            comparable_metric_count=2,
+            baseline_score=62.0,
+            candidate_score=87.0,
+            score_delta=25.0,
+            comparisons=(),
+            notes=notes,
+        )
+
+    def _build_followup_artifact(
+        self,
+        *,
+        required_review_gates: tuple[str, ...] = ("plan_review", "operator_approval", "verify"),
+    ) -> EvolutionFollowupRequestArtifact:
+        return EvolutionFollowupRequestArtifact(
+            artifact_id="artifact-followup-promotion",
+            producing_stage="followup_requested",
+            status=EVOLUTION_ARTIFACT_STATUS_RECORDED,
+            run_id="EVR-promotion",
+            candidate_id="candidate-123",
+            title="Request promotion-gated follow-up",
+            summary="Use Sisyphus review gates before any promotion record is written.",
+            requested_task_type="feature",
+            requested_targets=("execution-contract-wording",),
+            required_review_gates=required_review_gates,
+            followup_task_id="TF-promotion-001",
+        )
+
+    def _build_execution_projection(self) -> EvolutionFollowupExecutionProjection:
+        receipt = ExecutionReceiptArtifact(
+            artifact_id="artifact-followup-receipt-1",
+            producing_stage="followup_requested",
+            status=EVOLUTION_ARTIFACT_STATUS_RECORDED,
+            run_id="EVR-promotion",
+            task_id="TF-promotion-001",
+            receipt_kind="verify_command_1",
+            receipt_locator=".planning/tasks/TF-promotion-001/VERIFY.md",
+        )
+        return EvolutionFollowupExecutionProjection(
+            source_run_id="EVR-promotion",
+            candidate_id="candidate-123",
+            followup_task_id="TF-promotion-001",
+            execution_receipts=(receipt,),
+            task_runs=(
+                TaskRunRef(
+                    task_id="TF-promotion-001",
+                    run_id="TF-promotion-001:verify:1",
+                    status="passed",
+                    receipt_locator=receipt.artifact_id,
+                ),
+            ),
+        )
+
+    def _build_verification_projection(
+        self,
+        execution_projection: EvolutionFollowupExecutionProjection,
+        *,
+        result: str = "passed",
+    ) -> EvolutionFollowupVerificationProjection:
+        artifact = VerificationArtifact(
+            artifact_id="artifact-followup-verification-1",
+            producing_stage="followup_requested",
+            status=EVOLUTION_ARTIFACT_STATUS_RECORDED,
+            run_id="EVR-promotion",
+            claim="follow-up execution remains reviewable",
+            verification_method="tests.test_evolution",
+            verification_scope="followup_execution",
+            result=result,
+            depends_on=tuple(
+                receipt.to_ref(notes=receipt.receipt_kind)
+                for receipt in execution_projection.execution_receipts
+            ),
+            evidence_refs=tuple(
+                receipt.to_ref(notes=receipt.receipt_kind)
+                for receipt in execution_projection.execution_receipts
+            ),
+        )
+        return EvolutionFollowupVerificationProjection(
+            source_run_id="EVR-promotion",
+            candidate_id="candidate-123",
+            followup_task_id="TF-promotion-001",
+            verification_artifacts=(artifact,),
+            execution_projection=execution_projection,
+        )
+
+    def test_evaluate_promotion_gate_reports_ready_for_review_before_execution_closure(self) -> None:
+        followup = self._build_followup_artifact()
+        gate = evaluate_evolution_promotion_gate(
+            followup,
+            constraints=self._build_constraints(
+                accepted=True,
+                status="accepted",
+                notes="candidate satisfies hard guards",
+            ),
+            fitness=self._build_fitness(
+                eligible=True,
+                status="scored",
+                notes="fitness scoring supports reviewable handoff",
+            ),
+        )
+
+        self.assertIsInstance(gate, EvolutionPromotionGateResult)
+        self.assertEqual(gate.status, EVOLUTION_PROMOTION_GATE_STATUS_READY_FOR_REVIEW)
+        self.assertTrue(gate.reviewable_handoff_eligible)
+        self.assertFalse(gate.promotion_eligible)
+        self.assertEqual(
+            [blocker.blocker_id for blocker in gate.blocking_conditions],
+            ["execution_receipts_pending", "verification_artifacts_pending"],
+        )
+        self.assertTrue(all(
+            blocker.scope == EVOLUTION_PROMOTION_BLOCKER_SCOPE_PROMOTION
+            for blocker in gate.blocking_conditions
+        ))
+
+    def test_evaluate_promotion_gate_reports_eligible_when_execution_and_verification_pass(self) -> None:
+        followup = self._build_followup_artifact()
+        execution_projection = self._build_execution_projection()
+        verification_projection = self._build_verification_projection(execution_projection)
+
+        gate = evaluate_evolution_promotion_gate(
+            followup,
+            constraints=self._build_constraints(
+                accepted=True,
+                status="accepted",
+                notes="candidate satisfies hard guards",
+            ),
+            fitness=self._build_fitness(
+                eligible=True,
+                status="scored",
+                notes="fitness scoring supports promotion",
+            ),
+            execution_projection=execution_projection,
+            verification_projection=verification_projection,
+        )
+
+        self.assertEqual(gate.status, EVOLUTION_PROMOTION_GATE_STATUS_ELIGIBLE)
+        self.assertTrue(gate.reviewable_handoff_eligible)
+        self.assertTrue(gate.promotion_eligible)
+        self.assertEqual(gate.blocking_conditions, ())
+        self.assertEqual(
+            [ref.kind for ref in gate.evidence_refs],
+            [
+                followup.kind,
+                EVOLUTION_ARTIFACT_KIND_EXECUTION_RECEIPT,
+                EVOLUTION_ARTIFACT_KIND_VERIFICATION,
+            ],
+        )
+
+    def test_evaluate_promotion_gate_blocks_on_missing_review_gates_and_ineligible_fitness(self) -> None:
+        followup = self._build_followup_artifact(required_review_gates=())
+
+        gate = evaluate_evolution_promotion_gate(
+            followup,
+            constraints=self._build_constraints(
+                accepted=False,
+                status="rejected",
+                notes="hard guards failed",
+            ),
+            fitness=self._build_fitness(
+                eligible=False,
+                status="rejected",
+                notes="fitness result is not promotion-eligible",
+            ),
+        )
+
+        self.assertEqual(gate.status, EVOLUTION_PROMOTION_GATE_STATUS_BLOCKED)
+        self.assertFalse(gate.reviewable_handoff_eligible)
+        self.assertFalse(gate.promotion_eligible)
+        blocker_scopes = {blocker.blocker_id: blocker.scope for blocker in gate.blocking_conditions}
+        self.assertEqual(blocker_scopes["review_gates_missing"], EVOLUTION_PROMOTION_BLOCKER_SCOPE_HANDOFF)
+        self.assertEqual(blocker_scopes["constraints_rejected"], EVOLUTION_PROMOTION_BLOCKER_SCOPE_HANDOFF)
+        self.assertEqual(blocker_scopes["fitness_rejected"], EVOLUTION_PROMOTION_BLOCKER_SCOPE_HANDOFF)
+
+    def test_evaluate_promotion_gate_rejects_mismatched_execution_lineage(self) -> None:
+        followup = self._build_followup_artifact()
+        execution_projection = EvolutionFollowupExecutionProjection(
+            source_run_id="EVR-other",
+            candidate_id="candidate-123",
+            followup_task_id="TF-promotion-001",
+            execution_receipts=(),
+            task_runs=(),
+        )
+
+        with self.assertRaisesRegex(ValueError, "execution projection run_id"):
+            evaluate_evolution_promotion_gate(
+                followup,
+                constraints=self._build_constraints(
+                    accepted=True,
+                    status="accepted",
+                    notes="candidate satisfies hard guards",
+                ),
+                fitness=self._build_fitness(
+                    eligible=True,
+                    status="scored",
+                    notes="fitness scoring supports promotion",
+                ),
+                execution_projection=execution_projection,
+            )
+
+    def test_record_decision_envelope_records_promotion_artifact_for_eligible_gate(self) -> None:
+        followup = self._build_followup_artifact()
+        execution_projection = self._build_execution_projection()
+        verification_projection = self._build_verification_projection(execution_projection)
+        gate = evaluate_evolution_promotion_gate(
+            followup,
+            constraints=self._build_constraints(
+                accepted=True,
+                status="accepted",
+                notes="candidate satisfies hard guards",
+            ),
+            fitness=self._build_fitness(
+                eligible=True,
+                status="scored",
+                notes="fitness scoring supports promotion",
+            ),
+            execution_projection=execution_projection,
+            verification_projection=verification_projection,
+        )
+
+        envelope = record_evolution_decision_envelope(
+            gate,
+            claim="candidate is fully promotion-eligible",
+        )
+
+        self.assertIsInstance(envelope, EvolutionDecisionEnvelope)
+        self.assertEqual(envelope.status, EVOLUTION_ENVELOPE_STATUS_PROMOTION)
+        self.assertIsNotNone(envelope.promotion_decision)
+        self.assertIsNone(envelope.invalidation_record)
+        self.assertEqual(envelope.promotion_decision.decision, EVOLUTION_PROMOTION_GATE_STATUS_ELIGIBLE)
+        self.assertEqual(envelope.promotion_decision.candidate_id, "candidate-123")
+        self.assertEqual(envelope.promotion_decision.followup_task_id, "TF-promotion-001")
+        self.assertEqual(
+            envelope.promotion_decision.evidence_refs,
+            gate.evidence_refs,
+        )
+
+    def test_record_decision_envelope_records_ready_for_review_as_promotion_decision(self) -> None:
+        followup = self._build_followup_artifact()
+        gate = evaluate_evolution_promotion_gate(
+            followup,
+            constraints=self._build_constraints(
+                accepted=True,
+                status="accepted",
+                notes="candidate satisfies hard guards",
+            ),
+            fitness=self._build_fitness(
+                eligible=True,
+                status="scored",
+                notes="fitness scoring supports reviewable handoff",
+            ),
+        )
+
+        envelope = record_evolution_decision_envelope(
+            gate,
+            claim="candidate is ready for reviewable handoff",
+        )
+
+        self.assertEqual(envelope.status, EVOLUTION_ENVELOPE_STATUS_PROMOTION)
+        self.assertEqual(
+            envelope.promotion_decision.decision,
+            EVOLUTION_PROMOTION_GATE_STATUS_READY_FOR_REVIEW,
+        )
+        self.assertEqual(len(envelope.promotion_decision.blocker_details), 2)
+
+    def test_record_decision_envelope_records_blocked_gate_as_invalidation(self) -> None:
+        followup = self._build_followup_artifact(required_review_gates=())
+        gate = evaluate_evolution_promotion_gate(
+            followup,
+            constraints=self._build_constraints(
+                accepted=False,
+                status="rejected",
+                notes="hard guards failed",
+            ),
+            fitness=self._build_fitness(
+                eligible=False,
+                status="rejected",
+                notes="fitness result is not promotion-eligible",
+            ),
+        )
+
+        envelope = record_evolution_decision_envelope(
+            gate,
+            claim="candidate cannot progress because obligations are incomplete",
+        )
+
+        self.assertEqual(envelope.status, EVOLUTION_ENVELOPE_STATUS_INVALIDATION)
+        self.assertIsNone(envelope.promotion_decision)
+        self.assertEqual(envelope.invalidation_record.status, EVOLUTION_PROMOTION_GATE_STATUS_BLOCKED)
+        self.assertEqual(envelope.invalidation_record.candidate_id, "candidate-123")
+        self.assertEqual(
+            envelope.invalidation_record.followup_task_id,
+            "TF-promotion-001",
+        )
+        self.assertGreaterEqual(len(envelope.invalidation_record.blocker_details), 3)
+
+    def test_record_decision_envelope_dedupes_evidence_refs(self) -> None:
+        gate = EvolutionPromotionGateResult(
+            run_id="EVR-promotion",
+            candidate_id="candidate-123",
+            followup_task_id="TF-promotion-001",
+            status=EVOLUTION_PROMOTION_GATE_STATUS_READY_FOR_REVIEW,
+            reviewable_handoff_eligible=True,
+            promotion_eligible=False,
+            required_review_gates=("plan_review",),
+            blocking_conditions=(),
+            evidence_refs=(
+                EvolutionArtifactRef(
+                    artifact_id="artifact-a",
+                    kind="report",
+                    owner=EVOLUTION_ARTIFACT_OWNER_EVOLUTION,
+                    notes="same",
+                ),
+                EvolutionArtifactRef(
+                    artifact_id="artifact-a",
+                    kind="report",
+                    owner=EVOLUTION_ARTIFACT_OWNER_EVOLUTION,
+                    notes="same",
+                ),
+            ),
+            notes="ready for review",
+        )
+
+        envelope = record_evolution_decision_envelope(
+            gate,
+            claim="dedupe evidence refs",
+        )
+
+        self.assertEqual(len(envelope.evidence_refs), 1)
+        self.assertEqual(len(envelope.promotion_decision.evidence_refs), 1)
+
+    def test_record_decision_envelope_writes_evolution_decision_event(self) -> None:
+        gate = EvolutionPromotionGateResult(
+            run_id="EVR-promotion",
+            candidate_id="candidate-123",
+            followup_task_id="TF-promotion-001",
+            status=EVOLUTION_PROMOTION_GATE_STATUS_READY_FOR_REVIEW,
+            reviewable_handoff_eligible=True,
+            promotion_eligible=False,
+            required_review_gates=("plan_review",),
+            blocking_conditions=(),
+            evidence_refs=(),
+            notes="ready for review",
+        )
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / ".taskflow.toml").write_text(
+                "[event_bus]\nprovider = \"jsonl\"\n",
+                encoding="utf-8",
+            )
+            config = load_config(repo_root)
+
+            envelope = record_evolution_decision_envelope(
+                gate,
+                claim="emit decision event",
+                repo_root=repo_root,
+                config=config,
+            )
+
+            evolution_events = [
+                event
+                for event in _load_repo_events(repo_root)
+                if event.get("event_type") == EVOLUTION_EVENT_DECISION_RECORDED
+            ]
+
+        self.assertEqual(envelope.status, EVOLUTION_ENVELOPE_STATUS_PROMOTION)
+        self.assertEqual(len(evolution_events), 1)
+        self.assertEqual(evolution_events[0]["data"]["run_id"], "EVR-promotion")
+        self.assertEqual(evolution_events[0]["data"]["envelope_status"], EVOLUTION_ENVELOPE_STATUS_PROMOTION)
+
+    def test_record_decision_envelope_rejects_unsupported_status(self) -> None:
+        gate = EvolutionPromotionGateResult(
+            run_id="EVR-promotion",
+            candidate_id="candidate-123",
+            followup_task_id="TF-promotion-001",
+            status="unexpected",
+            reviewable_handoff_eligible=False,
+            promotion_eligible=False,
+            required_review_gates=(),
+            blocking_conditions=(),
+            evidence_refs=(),
+            notes="unexpected status",
+        )
+
+        with self.assertRaisesRegex(ValueError, "unsupported promotion gate status"):
+            record_evolution_decision_envelope(
+                gate,
+                claim="should fail",
+            )
+
+    def test_bridge_rejects_privileged_permission_flags(self) -> None:
+        base_request = EvolutionFollowupRequest(
+            source_run_id="EVR-prohibited",
+            candidate_id="candidate-prohibited",
+            title="Reject privileged bridge",
+            summary="This request should fail before a task is created.",
+            requested_task_type="feature",
+            target_scope=("execution-contract-wording",),
+            instruction_set=(),
+            owned_paths=("docs/architecture.md",),
+            expected_verification_obligations=(
+                EvolutionVerificationObligation(
+                    claim="request-only bridge rejects privileged flags",
+                    method="tests.test_evolution",
+                ),
+            ),
+            evidence_summary=(
+                EvolutionEvidenceSummary(
+                    kind="report",
+                    summary="operator review is still required",
+                ),
+            ),
+            promotion_intent=EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
+        )
+        for field_name in (
+            "permits_plan_approval",
+            "permits_spec_freeze",
+            "permits_execution",
+            "permits_promotion",
+        ):
+            with self.subTest(field_name=field_name):
+                request = replace(base_request, **{field_name: True})
+                with tempfile.TemporaryDirectory() as tempdir:
+                    with self.assertRaisesRegex(ValueError, field_name):
+                        bridge_evolution_followup_request(Path(tempdir), request)
+
+    def test_bridge_requires_evidence_and_verification_obligations(self) -> None:
+        request = EvolutionFollowupRequest(
+            source_run_id="EVR-missing",
+            candidate_id="candidate-missing",
+            title="Reject underspecified bridge",
+            summary="The bridge should fail loudly on missing evidence.",
+            requested_task_type="feature",
+            target_scope=("execution-contract-wording",),
+            instruction_set=(),
+            owned_paths=("docs/architecture.md",),
+            expected_verification_obligations=(),
+            evidence_summary=(),
+            promotion_intent=EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
+        )
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with self.assertRaisesRegex(ValueError, "verification obligations"):
+                bridge_evolution_followup_request(Path(tempdir), request)
+
+
+class EvolutionInvalidationRuleTests(unittest.TestCase):
+    def _build_followup_artifact(self) -> EvolutionFollowupRequestArtifact:
+        return EvolutionFollowupRequestArtifact(
+            artifact_id="artifact-followup-invalidation",
+            producing_stage="followup_requested",
+            status=EVOLUTION_ARTIFACT_STATUS_RECORDED,
+            run_id="EVR-invalidation",
+            candidate_id="candidate-invalidation",
+            title="Reproject invalidated follow-up state",
+            summary="Invalidate derived promotion state when upstream artifacts change.",
+            requested_task_type="feature",
+            requested_targets=("execution-contract-wording",),
+            required_review_gates=("plan_review", "operator_approval", "verify"),
+            followup_task_id="TF-invalidation-001",
+        )
+
+    def test_followup_request_change_recreates_followup_and_reruns_gate(self) -> None:
+        followup = self._build_followup_artifact()
+
+        outcome = evaluate_evolution_invalidation(
+            followup,
+            changes=(
+                EvolutionInvalidationChange(
+                    change_kind=EVOLUTION_INVALIDATION_CHANGE_FOLLOWUP_REQUEST,
+                    detail="follow-up request summary changed after operator review",
+                ),
+            ),
+        )
+
+        self.assertIsInstance(outcome, EvolutionInvalidationOutcome)
+        self.assertEqual(outcome.run_id, "EVR-invalidation")
+        self.assertEqual(outcome.candidate_id, "candidate-invalidation")
+        self.assertEqual(
+            outcome.remediation_actions,
+            (
+                EVOLUTION_INVALIDATION_ACTION_RECREATE_FOLLOWUP_REQUEST,
+                EVOLUTION_INVALIDATION_ACTION_RERUN_PROMOTION_GATE,
+                EVOLUTION_INVALIDATION_ACTION_RERECORD_ENVELOPE,
+            ),
+        )
+        self.assertEqual(
+            outcome.stale_artifact_refs,
+            (
+                followup.to_ref(notes=EVOLUTION_INVALIDATION_CHANGE_FOLLOWUP_REQUEST),
+            ),
+        )
+
+    def test_execution_receipt_change_reprojects_receipts_and_verification(self) -> None:
+        followup = self._build_followup_artifact()
+        receipt_ref = EvolutionArtifactRef(
+            artifact_id="artifact-receipt-1",
+            kind=EVOLUTION_ARTIFACT_KIND_EXECUTION_RECEIPT,
+            owner=EVOLUTION_ARTIFACT_OWNER_SISYPHUS,
+            notes="verify_command_1",
+        )
+
+        outcome = evaluate_evolution_invalidation(
+            followup,
+            changes=(
+                EvolutionInvalidationChange(
+                    change_kind=EVOLUTION_INVALIDATION_CHANGE_EXECUTION_RECEIPT,
+                    detail="verify receipt changed after rerun",
+                    stale_artifact_refs=(receipt_ref,),
+                ),
+            ),
+        )
+
+        self.assertEqual(
+            outcome.remediation_actions,
+            (
+                EVOLUTION_INVALIDATION_ACTION_REPROJECT_RECEIPTS,
+                EVOLUTION_INVALIDATION_ACTION_REPROJECT_VERIFICATION,
+                EVOLUTION_INVALIDATION_ACTION_RERUN_PROMOTION_GATE,
+                EVOLUTION_INVALIDATION_ACTION_RERECORD_ENVELOPE,
+            ),
+        )
+        self.assertEqual(outcome.stale_artifact_refs, (receipt_ref,))
+
+    def test_combined_changes_dedupe_actions_and_stale_refs(self) -> None:
+        followup = self._build_followup_artifact()
+        verification_ref = EvolutionArtifactRef(
+            artifact_id="artifact-verification-1",
+            kind=EVOLUTION_ARTIFACT_KIND_VERIFICATION,
+            owner=EVOLUTION_ARTIFACT_OWNER_SISYPHUS,
+            notes="passed",
+        )
+        envelope_ref = EvolutionArtifactRef(
+            artifact_id="artifact-envelope-1",
+            kind="promotion_decision",
+            owner=EVOLUTION_ARTIFACT_OWNER_SISYPHUS,
+            notes="ready_for_review",
+        )
+
+        outcome = evaluate_evolution_invalidation(
+            followup,
+            changes=(
+                EvolutionInvalidationChange(
+                    change_kind=EVOLUTION_INVALIDATION_CHANGE_VERIFICATION,
+                    detail="verification evidence changed",
+                    stale_artifact_refs=(verification_ref, verification_ref),
+                ),
+                EvolutionInvalidationChange(
+                    change_kind=EVOLUTION_INVALIDATION_CHANGE_ENVELOPE,
+                    detail="decision envelope must be rerecorded",
+                    stale_artifact_refs=(envelope_ref,),
+                ),
+            ),
+        )
+
+        self.assertEqual(
+            outcome.remediation_actions,
+            (
+                EVOLUTION_INVALIDATION_ACTION_REPROJECT_VERIFICATION,
+                EVOLUTION_INVALIDATION_ACTION_RERUN_PROMOTION_GATE,
+                EVOLUTION_INVALIDATION_ACTION_RERECORD_ENVELOPE,
+            ),
+        )
+        self.assertEqual(
+            outcome.stale_artifact_refs,
+            dedupe_artifact_refs((verification_ref, verification_ref, envelope_ref)),
+        )
+
+    def test_review_gate_change_preserves_identity_and_marks_followup_stale(self) -> None:
+        followup = self._build_followup_artifact()
+        review_gate_ref = EvolutionArtifactRef(
+            artifact_id="artifact-review-gates",
+            kind=followup.kind,
+            owner=followup.owner,
+            notes="review_gate_snapshot",
+        )
+
+        outcome = evaluate_evolution_invalidation(
+            followup,
+            changes=(
+                EvolutionInvalidationChange(
+                    change_kind=EVOLUTION_INVALIDATION_CHANGE_REVIEW_GATES,
+                    detail="required review gates changed after policy update",
+                    stale_artifact_refs=(review_gate_ref,),
+                ),
+            ),
+        )
+
+        self.assertEqual(outcome.run_id, followup.run_id)
+        self.assertEqual(outcome.candidate_id, followup.candidate_id)
+        self.assertEqual(outcome.followup_task_id, followup.followup_task_id)
+        self.assertEqual(
+            outcome.stale_artifact_refs,
+            dedupe_artifact_refs(
+                (
+                    followup.to_ref(notes=EVOLUTION_INVALIDATION_CHANGE_REVIEW_GATES),
+                    review_gate_ref,
+                )
+            ),
+        )
+
+    def test_unsupported_change_kind_fails_loudly(self) -> None:
+        followup = self._build_followup_artifact()
+
+        with self.assertRaisesRegex(ValueError, "unsupported evolution invalidation change kind"):
+            evaluate_evolution_invalidation(
+                followup,
+                changes=(
+                    EvolutionInvalidationChange(
+                        change_kind="unknown_change",
+                        detail="should fail",
+                    ),
+                ),
+            )
+
+    def test_empty_change_set_fails_loudly(self) -> None:
+        followup = self._build_followup_artifact()
+
+        with self.assertRaisesRegex(ValueError, "requires at least one change"):
+            evaluate_evolution_invalidation(followup, changes=())
+
+
+class EvolutionFollowupReceiptProjectionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.repo_root = Path(self.tempdir.name)
+        (self.repo_root / ".taskflow.toml").write_text(
+            "[event_bus]\nprovider = \"jsonl\"\n",
+            encoding="utf-8",
+        )
+        self.config = load_config(self.repo_root)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def _new_task(self, slug: str) -> dict:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug=slug,
+        )
+        materialize_task_templates(task)
+        return task
+
+    def _configure_followup_task(
+        self,
+        task: dict,
+        *,
+        verify_results: list[dict] | None,
+        include_promotion_receipt: bool = False,
+        extra_source_context: dict[str, object] | None = None,
+    ) -> tuple[dict, Path]:
+        task_dir = self.repo_root / task["task_dir"]
+        task.setdefault("meta", {})
+        source_context: dict[str, object] = dict(extra_source_context or {})
+        source_context[EVOLUTION_FOLLOWUP_SOURCE_CONTEXT_KIND] = {
+            "source_run_id": "EVR-followup-receipts",
+            "candidate_id": "candidate-007",
+            "promotion_intent": EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
+            "target_scope": ["execution-contract-wording"],
+            "required_review_gates": list(EVOLUTION_DEFAULT_REVIEW_GATES),
+            "request_only": True,
+            "expected_verification_obligations": [
+                {
+                    "claim": "follow-up execution remains reviewable",
+                    "method": "tests.test_evolution",
+                    "required": True,
+                }
+            ],
+            "evidence_summary": [
+                {
+                    "kind": "report",
+                    "summary": "candidate approved for follow-up execution",
+                    "locator": ".planning/evolution/runs/EVR-followup-receipts/report.md",
+                }
+            ],
+        }
+        task["meta"]["source_context"] = source_context
+        task["last_verify_results"] = verify_results or []
+        task["verify_status"] = "passed" if verify_results else "not_run"
+        if include_promotion_receipt:
+            promotion_relative = task["docs"]["promotion"]
+            promotion_path = task_dir / promotion_relative
+            promotion_path.parent.mkdir(parents=True, exist_ok=True)
+            promotion_path.write_text("{\"recorded\": true}\n", encoding="utf-8")
+            task["meta"]["promotion"] = {"receipt_path": promotion_relative}
+        save_task_record(task_dir / "task.json", task)
+        return task, task_dir
+
+    def test_project_followup_execution_builds_task_runs_and_verify_receipts(self) -> None:
+        task = self._new_task("followup-receipts")
+        task, task_dir = self._configure_followup_task(
+            task,
+            verify_results=[
+                {
+                    "command": "python -m unittest -q tests.test_evolution",
+                    "status": "passed",
+                    "exit_code": 0,
+                    "started_at": "2026-04-20T00:00:00Z",
+                    "finished_at": "2026-04-20T00:00:01Z",
+                    "output_excerpt": "ok",
+                },
+                {
+                    "command": "python -m unittest -q tests.test_evolution",
+                    "status": "failed",
+                    "exit_code": 1,
+                    "started_at": "2026-04-20T00:01:00Z",
+                    "finished_at": "2026-04-20T00:01:01Z",
+                    "output_excerpt": "boom",
+                },
+            ],
+            extra_source_context={"unrelated": {"value": 1}},
+        )
+
+        projection = project_followup_execution(
+            self.repo_root,
+            self.config,
+            task["id"],
+        )
+
+        self.assertIsInstance(projection, EvolutionFollowupExecutionProjection)
+        self.assertEqual(projection.source_run_id, "EVR-followup-receipts")
+        self.assertEqual(projection.candidate_id, "candidate-007")
+        self.assertEqual(projection.followup_task_id, task["id"])
+        self.assertEqual(len(projection.execution_receipts), 2)
+        self.assertEqual(len(projection.task_runs), 2)
+        self.assertEqual(projection.task_runs[0].run_id, f"{task['id']}:verify:1")
+        self.assertEqual(projection.task_runs[1].status, "failed")
+        self.assertEqual(
+            projection.task_runs[0].receipt_locator,
+            projection.execution_receipts[0].artifact_id,
+        )
+        self.assertEqual(
+            projection.execution_receipts[0].receipt_locator,
+            (Path(task["task_dir"]) / task["docs"]["verify"]).as_posix(),
+        )
+        self.assertEqual(projection.execution_receipts[0].receipt_kind, "verify_command_1")
+        self.assertEqual(projection.execution_receipts[1].receipt_kind, "verify_command_2")
+        self.assertTrue((task_dir / task["docs"]["verify"]).exists())
+        evolution_events = [
+            event
+            for event in _load_repo_events(self.repo_root)
+            if event.get("event_type") == EVOLUTION_EVENT_EXECUTION_PROJECTED
+        ]
+        self.assertEqual(len(evolution_events), 1)
+        self.assertEqual(evolution_events[0]["data"]["run_id"], "EVR-followup-receipts")
+        self.assertEqual(evolution_events[0]["data"]["receipt_count"], 2)
+
+    def test_project_followup_execution_includes_optional_promotion_receipt(self) -> None:
+        task = self._new_task("followup-promotion-receipt")
+        task, _ = self._configure_followup_task(
+            task,
+            verify_results=[
+                {
+                    "command": "python -m unittest -q tests.test_evolution",
+                    "status": "passed",
+                    "exit_code": 0,
+                    "started_at": "2026-04-20T00:00:00Z",
+                    "finished_at": "2026-04-20T00:00:01Z",
+                    "output_excerpt": "ok",
+                }
+            ],
+            include_promotion_receipt=True,
+        )
+
+        projection = project_followup_execution_record(
+            task=task,
+            task_dir=self.repo_root / task["task_dir"],
+        )
+
+        self.assertEqual(len(projection.task_runs), 1)
+        self.assertEqual(len(projection.execution_receipts), 2)
+        self.assertEqual(projection.execution_receipts[-1].receipt_kind, "promotion_receipt")
+        self.assertEqual(
+            projection.execution_receipts[-1].receipt_locator,
+            (Path(task["task_dir"]) / task["docs"]["promotion"]).as_posix(),
+        )
+
+    def test_project_followup_execution_rejects_missing_verify_results(self) -> None:
+        task = self._new_task("followup-no-verify-results")
+        task, _ = self._configure_followup_task(task, verify_results=[])
+
+        with self.assertRaisesRegex(ValueError, "no verify results"):
+            project_followup_execution_record(
+                task=task,
+                task_dir=self.repo_root / task["task_dir"],
+            )
+
+    def test_project_followup_execution_rejects_missing_promotion_receipt_file(self) -> None:
+        task = self._new_task("followup-missing-promotion-receipt")
+        task, _ = self._configure_followup_task(
+            task,
+            verify_results=[
+                {
+                    "command": "python -m unittest -q tests.test_evolution",
+                    "status": "passed",
+                    "exit_code": 0,
+                    "started_at": "2026-04-20T00:00:00Z",
+                    "finished_at": "2026-04-20T00:00:01Z",
+                    "output_excerpt": "ok",
+                }
+            ],
+        )
+        task["meta"]["promotion"] = {"receipt_path": task["docs"]["promotion"]}
+        save_task_record(self.repo_root / task["task_dir"] / "task.json", task)
+
+        with self.assertRaisesRegex(FileNotFoundError, "promotion receipt"):
+            project_followup_execution_record(
+                task=task,
+                task_dir=self.repo_root / task["task_dir"],
+            )
+
+
+class EvolutionFollowupVerificationProjectionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.repo_root = Path(self.tempdir.name)
+        (self.repo_root / ".taskflow.toml").write_text(
+            "[event_bus]\nprovider = \"jsonl\"\n",
+            encoding="utf-8",
+        )
+        self.config = load_config(self.repo_root)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def _new_task(self, slug: str) -> dict:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug=slug,
+        )
+        materialize_task_templates(task)
+        return task
+
+    def _configure_followup_task(
+        self,
+        task: dict,
+        *,
+        verify_status: str,
+        verify_results: list[dict],
+        obligations: list[dict] | None = None,
+        extra_source_context: dict[str, object] | None = None,
+    ) -> tuple[dict, Path]:
+        task_dir = self.repo_root / task["task_dir"]
+        task.setdefault("meta", {})
+        source_context: dict[str, object] = dict(extra_source_context or {})
+        source_context[EVOLUTION_FOLLOWUP_SOURCE_CONTEXT_KIND] = {
+            "source_run_id": "EVR-followup-verification",
+            "candidate_id": "candidate-011",
+            "promotion_intent": EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
+            "target_scope": ["execution-contract-wording"],
+            "required_review_gates": list(EVOLUTION_DEFAULT_REVIEW_GATES),
+            "request_only": True,
+            "expected_verification_obligations": obligations
+            if obligations is not None
+            else [
+                {
+                    "claim": "follow-up execution remains reviewable",
+                    "method": "tests.test_evolution",
+                    "required": True,
+                },
+                {
+                    "claim": "linked receipts prove the verification path",
+                    "method": "manual receipt projection",
+                    "required": True,
+                },
+            ],
+            "evidence_summary": [
+                {
+                    "kind": "report",
+                    "summary": "candidate approved for receipt-backed verification",
+                    "locator": ".planning/evolution/runs/EVR-followup-verification/report.md",
+                }
+            ],
+        }
+        task["meta"]["source_context"] = source_context
+        task["verify_status"] = verify_status
+        task["last_verify_results"] = verify_results
+        save_task_record(task_dir / "task.json", task)
+        return task, task_dir
+
+    def test_project_followup_verification_preserves_claim_method_and_receipt_evidence(self) -> None:
+        task = self._new_task("followup-verification-pass")
+        task, _ = self._configure_followup_task(
+            task,
+            verify_status="passed",
+            verify_results=[
+                {
+                    "command": "python -m unittest -q tests.test_evolution",
+                    "status": "passed",
+                    "exit_code": 0,
+                    "started_at": "2026-04-20T00:00:00Z",
+                    "finished_at": "2026-04-20T00:00:01Z",
+                    "output_excerpt": "ok",
+                }
+            ],
+            extra_source_context={"unrelated": {"ignored": True}},
+        )
+
+        projection = project_followup_verification(
+            self.repo_root,
+            self.config,
+            task["id"],
+        )
+
+        self.assertIsInstance(projection, EvolutionFollowupVerificationProjection)
+        self.assertEqual(projection.source_run_id, "EVR-followup-verification")
+        self.assertEqual(projection.candidate_id, "candidate-011")
+        self.assertEqual(projection.followup_task_id, task["id"])
+        self.assertEqual(len(projection.verification_artifacts), 2)
+        self.assertEqual(
+            projection.verification_artifacts[0].artifact_id,
+            f"artifact-{task['id']}-followup-verification-1",
+        )
+        self.assertEqual(
+            projection.verification_artifacts[0].claim,
+            "follow-up execution remains reviewable",
+        )
+        self.assertEqual(
+            projection.verification_artifacts[0].verification_method,
+            "tests.test_evolution",
+        )
+        self.assertEqual(projection.verification_artifacts[0].result, "passed")
+        self.assertEqual(
+            projection.verification_artifacts[0].evidence_refs,
+            tuple(
+                receipt.to_ref(notes=receipt.receipt_kind)
+                for receipt in projection.execution_projection.execution_receipts
+            ),
+        )
+        self.assertEqual(
+            projection.verification_artifacts[0].depends_on,
+            projection.verification_artifacts[0].evidence_refs,
+        )
+        evolution_events = [
+            event
+            for event in _load_repo_events(self.repo_root)
+            if event.get("event_type") == EVOLUTION_EVENT_VERIFICATION_PROJECTED
+        ]
+        self.assertEqual(len(evolution_events), 1)
+        self.assertEqual(evolution_events[0]["data"]["run_id"], "EVR-followup-verification")
+        self.assertEqual(evolution_events[0]["data"]["verification_count"], 2)
+
+    def test_project_followup_verification_marks_failed_execution_as_failed(self) -> None:
+        task = self._new_task("followup-verification-failed")
+        task, task_dir = self._configure_followup_task(
+            task,
+            verify_status="failed",
+            verify_results=[
+                {
+                    "command": "python -m unittest -q tests.test_evolution",
+                    "status": "failed",
+                    "exit_code": 1,
+                    "started_at": "2026-04-20T00:00:00Z",
+                    "finished_at": "2026-04-20T00:00:01Z",
+                    "output_excerpt": "boom",
+                }
+            ],
+        )
+
+        projection = project_followup_verification_record(
+            task=task,
+            task_dir=task_dir,
+        )
+
+        self.assertTrue(all(artifact.result == "failed" for artifact in projection.verification_artifacts))
+
+    def test_project_followup_verification_rejects_missing_obligations(self) -> None:
+        task = self._new_task("followup-verification-no-obligations")
+        task, task_dir = self._configure_followup_task(
+            task,
+            verify_status="passed",
+            verify_results=[
+                {
+                    "command": "python -m unittest -q tests.test_evolution",
+                    "status": "passed",
+                    "exit_code": 0,
+                    "started_at": "2026-04-20T00:00:00Z",
+                    "finished_at": "2026-04-20T00:00:01Z",
+                    "output_excerpt": "ok",
+                }
+            ],
+            obligations=[],
+        )
+
+        with self.assertRaisesRegex(ValueError, "no verification obligations"):
+            project_followup_verification_record(
+                task=task,
+                task_dir=task_dir,
+            )
+
+    def test_project_followup_verification_surfaces_missing_receipt_linkage(self) -> None:
+        task = self._new_task("followup-verification-missing-receipt")
+        task, task_dir = self._configure_followup_task(
+            task,
+            verify_status="passed",
+            verify_results=[
+                {
+                    "command": "python -m unittest -q tests.test_evolution",
+                    "status": "passed",
+                    "exit_code": 0,
+                    "started_at": "2026-04-20T00:00:00Z",
+                    "finished_at": "2026-04-20T00:00:01Z",
+                    "output_excerpt": "ok",
+                }
+            ],
+        )
+        verify_path = task_dir / task["docs"]["verify"]
+        verify_path.unlink()
+
+        with self.assertRaisesRegex(FileNotFoundError, "verify receipt document"):
+            project_followup_verification_record(
+                task=task,
+                task_dir=task_dir,
+            )
+
+
+class EvolutionOperatorSurfaceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.repo_root = Path(self.tempdir.name)
+        (self.repo_root / ".taskflow.toml").write_text(
+            "[event_bus]\nprovider = \"jsonl\"\n",
+            encoding="utf-8",
+        )
+        self.config = load_config(self.repo_root)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def _new_task(self, slug: str) -> dict:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug=slug,
+        )
+        materialize_task_templates(task)
+        return task
+
+    def _write_evolution_run(
+        self,
+        run_id: str,
+        *,
+        target_ids: tuple[str, ...] = ("execution-contract-wording",),
+        score_delta: float = 0.25,
+    ) -> Path:
+        artifact_dir = self.repo_root / ".planning" / "evolution" / "runs" / run_id
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "run.json").write_text(
+            json.dumps(
+                {
+                    "run": {
+                        "run_id": run_id,
+                        "repo_root": str(self.repo_root),
+                        "target_ids": list(target_ids),
+                        "selection_mode": "explicit",
+                        "status": "planned",
+                        "stage": "planned",
+                    },
+                    "artifact_dir": str(artifact_dir),
+                    "entrypoint": "execute_evolution_run",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "dataset.json").write_text(
+            json.dumps(
+                {
+                    "repo_root": str(self.repo_root),
+                    "generated_at": "2026-04-20T00:00:00Z",
+                    "event_log_path": str(self.repo_root / ".planning" / "events.jsonl"),
+                    "selected_task_ids": [f"{run_id}-task-1"],
+                    "task_traces": [],
+                    "event_traces": [],
+                    "task_count": 1,
+                    "event_count": 1,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "harness_plan.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "repo_root": str(self.repo_root),
+                    "created_at": "2026-04-20T00:00:00Z",
+                    "dataset_task_ids": [f"{run_id}-task-1"],
+                    "dataset_event_count": 1,
+                    "baseline": {"evaluation_id": f"{run_id}:baseline", "role": "baseline"},
+                    "candidate": {"evaluation_id": f"{run_id}:candidate", "role": "candidate"},
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "constraints.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "evaluated_at": "2026-04-20T00:00:00Z",
+                    "status": "accepted",
+                    "accepted": True,
+                    "blocking_failure_count": 0,
+                    "pending_guard_count": 0,
+                    "checks": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "fitness.json").write_text(
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "evaluated_at": "2026-04-20T00:00:00Z",
+                    "status": "scored",
+                    "eligible_for_promotion": True,
+                    "comparable_metric_count": 1,
+                    "baseline_score": 0.62,
+                    "candidate_score": 0.62 + score_delta,
+                    "score_delta": score_delta,
+                    "comparisons": [],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (artifact_dir / "report.md").write_text(
+            "\n".join(
+                [
+                    "# Evolution Report",
+                    "",
+                    f"- Run ID: `{run_id}`",
+                    "- Status: `ready_for_review`",
+                    "- Recommendation: `review_candidate`",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return artifact_dir
+
+    def _fake_request_task_factory(self, captured: dict[str, dict]) -> object:
+        def fake_request_task(repo_root, *, config=None, **kwargs):
+            task = create_task_record(
+                repo_root=repo_root,
+                config=config or self.config,
+                task_type=kwargs["task_type"],
+                slug=kwargs["slug"],
+            )
+            materialize_task_templates(task)
+            task.setdefault("meta", {})["source_context"] = kwargs["source_context"]
+            save_task_record(self.repo_root / task["task_dir"] / "task.json", task)
+            captured["task"] = task
+            return SimpleNamespace(ok=True, task_id=task["id"], task=task, error=None)
+
+        return fake_request_task
+
+    def _configure_followup_results(self, task: dict, *, verify_status: str = "passed") -> None:
+        task_dir = self.repo_root / task["task_dir"]
+        task["verify_status"] = verify_status
+        task["last_verify_results"] = [
+            {
+                "command": "python -m unittest -q tests.test_evolution",
+                "status": verify_status,
+                "exit_code": 0 if verify_status == "passed" else 1,
+                "started_at": "2026-04-20T00:00:00Z",
+                "finished_at": "2026-04-20T00:00:01Z",
+                "output_excerpt": "ok" if verify_status == "passed" else "boom",
+            }
+        ]
+        promotion_relative = task["docs"]["promotion"]
+        promotion_path = task_dir / promotion_relative
+        promotion_path.parent.mkdir(parents=True, exist_ok=True)
+        promotion_path.write_text("{\"recorded\": true}\n", encoding="utf-8")
+        task.setdefault("meta", {})["promotion"] = {"receipt_path": promotion_relative}
+        save_task_record(task_dir / "task.json", task)
+
+    def test_request_evolution_followup_defaults_lineage_metadata(self) -> None:
+        self._write_evolution_run("EVR-operator-defaults")
+        captured: dict[str, dict] = {}
+
+        with patch(
+            "sisyphus.evolution.bridge.request_task",
+            side_effect=self._fake_request_task_factory(captured),
+        ):
+            result = request_evolution_followup(
+                self.repo_root,
+                run_id="EVR-operator-defaults",
+                candidate_id="candidate-001",
+                title="Review requested candidate",
+                summary="Create a review-gated follow-up task.",
+                config=self.config,
+            )
+
+        task = captured["task"]
+        followup_context = task["meta"]["source_context"][EVOLUTION_FOLLOWUP_SOURCE_CONTEXT_KIND]
+        reconstructed = project_followup_request_artifact(task)
+
+        self.assertEqual(result.task_id, task["id"])
+        self.assertEqual(result.requested_targets, ("execution-contract-wording",))
+        self.assertEqual(result.required_review_gates, EVOLUTION_DEFAULT_REVIEW_GATES)
+        self.assertEqual(
+            followup_context["expected_verification_obligations"][0]["method"],
+            "sisyphus verify",
+        )
+        self.assertEqual(
+            followup_context["evidence_summary"][0]["locator"],
+            ".planning/evolution/runs/EVR-operator-defaults/report.md",
+        )
+        self.assertEqual(reconstructed.run_id, "EVR-operator-defaults")
+        self.assertEqual(reconstructed.followup_task_id, task["id"])
+        self.assertIn("followup_task_id", result.content)
+
+    def test_evaluate_evolution_followup_decision_records_promotion_from_task_state(self) -> None:
+        self._write_evolution_run("EVR-operator-decision")
+        captured: dict[str, dict] = {}
+
+        with patch(
+            "sisyphus.evolution.bridge.request_task",
+            side_effect=self._fake_request_task_factory(captured),
+        ):
+            followup = request_evolution_followup(
+                self.repo_root,
+                run_id="EVR-operator-decision",
+                candidate_id="candidate-002",
+                title="Decision candidate",
+                summary="Create a review-gated follow-up task.",
+                config=self.config,
+            )
+
+        task = captured["task"]
+        self._configure_followup_results(task)
+
+        decision = evaluate_evolution_followup_decision(
+            self.repo_root,
+            task_id=followup.task_id,
+            config=self.config,
+        )
+
+        decision_events = [
+            event
+            for event in _load_repo_events(self.repo_root)
+            if event.get("event_type") == EVOLUTION_EVENT_DECISION_RECORDED
+        ]
+
+        self.assertEqual(decision.task_id, followup.task_id)
+        self.assertEqual(decision.run_id, "EVR-operator-decision")
+        self.assertEqual(decision.candidate_id, "candidate-002")
+        self.assertEqual(decision.gate_status, EVOLUTION_PROMOTION_GATE_STATUS_ELIGIBLE)
+        self.assertEqual(decision.envelope_status, EVOLUTION_ENVELOPE_STATUS_PROMOTION)
+        self.assertIn("evolution decision", decision.content)
+        self.assertEqual(len(decision_events), 1)
+        self.assertEqual(decision_events[0]["data"]["candidate_id"], "candidate-002")
+
+    def test_evaluate_evolution_followup_decision_rejects_non_followup_task(self) -> None:
+        task = self._new_task("plain-task")
+
+        with self.assertRaisesRegex(ValueError, "evolution follow-up"):
+            evaluate_evolution_followup_decision(
+                self.repo_root,
+                task_id=task["id"],
+                config=self.config,
+            )
+
+    def test_evaluate_evolution_followup_decision_rejects_missing_run_artifacts(self) -> None:
+        task = self._new_task("missing-run-artifacts")
+        task.setdefault("meta", {})["source_context"] = {
+            EVOLUTION_FOLLOWUP_SOURCE_CONTEXT_KIND: {
+                "source_run_id": "EVR-missing",
+                "candidate_id": "candidate-missing",
+                "title": "Missing run",
+                "summary": "This task points at a missing run.",
+                "requested_task_type": "feature",
+                "target_scope": ["execution-contract-wording"],
+                "required_review_gates": list(EVOLUTION_DEFAULT_REVIEW_GATES),
+                "request_only": True,
+                "expected_verification_obligations": [
+                    {
+                        "claim": "preserves intent",
+                        "method": "sisyphus verify",
+                        "required": True,
+                    }
+                ],
+                "evidence_summary": [
+                    {
+                        "kind": "report",
+                        "summary": "missing run artifact",
+                    }
+                ],
+            }
+        }
+        save_task_record(self.repo_root / task["task_dir"] / "task.json", task)
+
+        with self.assertRaises(FileNotFoundError):
+            evaluate_evolution_followup_decision(
+                self.repo_root,
+                task_id=task["id"],
+                config=self.config,
+            )
+
+
 class EvolutionDatasetTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.repo_root = Path(self.tempdir.name)
-        (self.repo_root / ".taskflow.toml").write_text("", encoding="utf-8")
+        (self.repo_root / ".taskflow.toml").write_text(
+            "[event_bus]\nprovider = \"jsonl\"\n",
+            encoding="utf-8",
+        )
         self.config = load_config(self.repo_root)
 
     def tearDown(self) -> None:
@@ -1549,7 +3186,10 @@ class EvolutionOrchestratorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.repo_root = Path(self.tempdir.name)
-        (self.repo_root / ".taskflow.toml").write_text("", encoding="utf-8")
+        (self.repo_root / ".taskflow.toml").write_text(
+            "[event_bus]\nprovider = \"jsonl\"\n",
+            encoding="utf-8",
+        )
         self.config = load_config(self.repo_root)
 
     def tearDown(self) -> None:
@@ -1569,7 +3209,9 @@ class EvolutionOrchestratorTests(unittest.TestCase):
         return {
             path.relative_to(self.repo_root).as_posix(): path.read_text(encoding="utf-8")
             for path in sorted(self.repo_root.rglob("*"))
-            if path.is_file() and ".planning/evolution/runs/" not in path.as_posix()
+            if path.is_file()
+            and ".planning/evolution/runs/" not in path.as_posix()
+            and path.relative_to(self.repo_root).as_posix() != ".planning/events.jsonl"
         }
 
     def test_execute_run_persists_expected_stage_artifacts(self) -> None:
@@ -1600,6 +3242,14 @@ class EvolutionOrchestratorTests(unittest.TestCase):
         fitness_payload = json.loads((artifact_dir / "fitness.json").read_text(encoding="utf-8"))
         self.assertEqual(constraints_payload["status"], "pending")
         self.assertEqual(fitness_payload["status"], "pending")
+        evolution_events = [
+            event
+            for event in _load_repo_events(self.repo_root)
+            if event.get("event_type") == EVOLUTION_EVENT_RUN_RECORDED
+        ]
+        self.assertEqual(len(evolution_events), 1)
+        self.assertEqual(evolution_events[0]["data"]["run_id"], "EVR-orchestrator-success")
+        self.assertEqual(evolution_events[0]["data"]["final_stage"], EVOLUTION_STAGE_REPORT_BUILT)
 
     def test_execute_run_persists_pending_results_without_fabricating_metrics(self) -> None:
         self._new_task("orchestrator-pending")
@@ -1636,17 +3286,374 @@ class EvolutionOrchestratorTests(unittest.TestCase):
         self.assertEqual(failure_payload["stage"], "report_built")
         self.assertIn("fitness.json", failure_payload["partial_artifacts"])
         self.assertEqual(failure_payload["error_type"], "RuntimeError")
+        evolution_events = [
+            event
+            for event in _load_repo_events(self.repo_root)
+            if event.get("event_type") == EVOLUTION_EVENT_RUN_FAILED
+        ]
+        self.assertEqual(len(evolution_events), 1)
+        self.assertEqual(evolution_events[0]["data"]["run_id"], "EVR-orchestrator-failure")
+        self.assertEqual(evolution_events[0]["data"]["failure_stage"], "report_built")
+
+
+class EvolutionArtifactCycleEndToEndTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.repo_root = Path(self.tempdir.name)
+        (self.repo_root / ".taskflow.toml").write_text(
+            "[event_bus]\nprovider = \"jsonl\"\n",
+            encoding="utf-8",
+        )
+        self.config = load_config(self.repo_root)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def _new_task(self, slug: str) -> dict:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug=slug,
+        )
+        materialize_task_templates(task)
+        return task
+
+    def _seed_phase_1_sources(
+        self,
+        root: Path,
+        target_ids: tuple[str, ...] = ("execution-contract-wording",),
+    ) -> None:
+        for source_path in ordered_target_source_paths(target_ids):
+            target_path = root / source_path
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(
+                (PROJECT_ROOT / source_path).read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+    def _build_evaluation_task(self, task_id: str, worktree_root: Path) -> dict:
+        task_dir = Path(".planning/tasks") / task_id
+        (worktree_root / task_dir).mkdir(parents=True, exist_ok=True)
+        return {
+            "id": task_id,
+            "task_dir": task_dir.as_posix(),
+            "worktree_path": str(worktree_root),
+            "branch": f"feat/{task_id.lower()}",
+            "status": "open",
+            "plan_status": "approved",
+            "spec_status": "frozen",
+            "workflow_phase": "subtask_planning",
+        }
+
+    def _fake_request_task_factory(self, captured: dict[str, dict]) -> object:
+        def fake_request_task(repo_root, *, config=None, **kwargs):
+            task = create_task_record(
+                repo_root=repo_root,
+                config=config or self.config,
+                task_type=kwargs["task_type"],
+                slug=kwargs["slug"],
+            )
+            materialize_task_templates(task)
+            task.setdefault("meta", {})["source_context"] = kwargs["source_context"]
+            save_task_record(self.repo_root / task["task_dir"] / "task.json", task)
+            captured["task"] = task
+            return SimpleNamespace(ok=True, task_id=task["id"], task=task, error=None)
+
+        return fake_request_task
+
+    def _configure_followup_results(
+        self,
+        task: dict,
+        *,
+        verify_status: str = "passed",
+        include_promotion_receipt: bool = True,
+    ) -> None:
+        task_dir = self.repo_root / task["task_dir"]
+        task["verify_status"] = verify_status
+        task["last_verify_results"] = [
+            {
+                "command": "python -m unittest -q tests.test_evolution",
+                "status": verify_status,
+                "exit_code": 0 if verify_status == "passed" else 1,
+                "started_at": "2026-04-20T00:00:00Z",
+                "finished_at": "2026-04-20T00:00:01Z",
+                "output_excerpt": "ok" if verify_status == "passed" else "boom",
+            }
+        ]
+        if include_promotion_receipt:
+            promotion_relative = task["docs"]["promotion"]
+            promotion_path = task_dir / promotion_relative
+            promotion_path.parent.mkdir(parents=True, exist_ok=True)
+            promotion_path.write_text("{\"recorded\": true}\n", encoding="utf-8")
+            task.setdefault("meta", {})["promotion"] = {"receipt_path": promotion_relative}
+        save_task_record(task_dir / "task.json", task)
+
+    def _evolution_event_types(self) -> tuple[str, ...]:
+        return tuple(
+            str(event.get("event_type"))
+            for event in _load_repo_events(self.repo_root)
+            if str(event.get("event_type", "")).startswith("evolution.")
+        )
+
+    def test_happy_path_artifact_cycle_keeps_lineage_aligned(self) -> None:
+        self._new_task("e2e-artifact-cycle")
+
+        executed_run = execute_evolution_run(
+            self.repo_root,
+            run_id="EVR-e2e-happy",
+            config=self.config,
+            target_ids=["execution-contract-wording"],
+        )
+        plan = plan_evolution_harness(executed_run.run, executed_run.dataset)
+        evaluation_worktree = self.repo_root / "_worktrees" / "TF-e2e-eval"
+        evaluation_worktree.mkdir(parents=True, exist_ok=True)
+        self._seed_phase_1_sources(evaluation_worktree)
+        materialization = materialize_evolution_evaluation(
+            plan.candidate,
+            task=self._build_evaluation_task("TF-e2e-eval", evaluation_worktree),
+        )
+        candidate_id = "candidate-e2e-happy"
+
+        followup_request = EvolutionFollowupRequest(
+            source_run_id=executed_run.run.run_id,
+            candidate_id=candidate_id,
+            title="Follow up accepted evolution candidate",
+            summary="Create a normal Sisyphus follow-up task for the accepted candidate.",
+            requested_task_type="feature",
+            target_scope=plan.candidate.target_ids,
+            instruction_set=("Preserve existing review gates.",),
+            owned_paths=("docs/architecture.md",),
+            expected_verification_obligations=(
+                EvolutionVerificationObligation(
+                    claim="follow-up execution remains reviewable",
+                    method="tests.test_evolution",
+                ),
+            ),
+            evidence_summary=(
+                EvolutionEvidenceSummary(
+                    kind="report",
+                    summary="run report recommends promotion",
+                    locator=f".planning/evolution/runs/{executed_run.run.run_id}/report.md",
+                ),
+            ),
+            promotion_intent=EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
+        )
+        captured: dict[str, dict] = {}
+
+        with patch(
+            "sisyphus.evolution.bridge.request_task",
+            side_effect=self._fake_request_task_factory(captured),
+        ):
+            bridged = bridge_evolution_followup_request(
+                self.repo_root,
+                followup_request,
+                config=self.config,
+                slug="e2e-artifact-followup",
+            )
+
+        followup_task = captured["task"]
+        self._configure_followup_results(followup_task)
+
+        execution_projection = project_followup_execution(
+            self.repo_root,
+            self.config,
+            bridged.task_id,
+        )
+        verification_projection = project_followup_verification(
+            self.repo_root,
+            self.config,
+            bridged.task_id,
+        )
+        gate = evaluate_evolution_promotion_gate(
+            bridged.artifact,
+            constraints=SimpleNamespace(
+                accepted=True,
+                status="accepted",
+                notes="hard guards passed",
+            ),
+            fitness=SimpleNamespace(
+                eligible_for_promotion=True,
+                status="scored",
+                notes="fitness supports promotion",
+            ),
+            execution_projection=execution_projection,
+            verification_projection=verification_projection,
+        )
+        decision = record_evolution_decision_envelope(
+            gate,
+            claim="candidate remains promotion eligible",
+            repo_root=self.repo_root,
+            config=self.config,
+        )
+        invalidation = evaluate_evolution_invalidation(
+            bridged.artifact,
+            changes=(
+                EvolutionInvalidationChange(
+                    change_kind=EVOLUTION_INVALIDATION_CHANGE_EXECUTION_RECEIPT,
+                    detail="follow-up verify receipt changed after rerun",
+                    stale_artifact_refs=tuple(
+                        receipt.to_ref(notes=receipt.receipt_kind)
+                        for receipt in execution_projection.execution_receipts
+                    ),
+                ),
+            ),
+        )
+
+        self.assertEqual(materialization.status, EVOLUTION_MATERIALIZATION_STATUS_CANDIDATE_APPLIED)
+        self.assertEqual(bridged.artifact.run_id, executed_run.run.run_id)
+        self.assertEqual(execution_projection.source_run_id, executed_run.run.run_id)
+        self.assertEqual(verification_projection.source_run_id, executed_run.run.run_id)
+        self.assertEqual(gate.status, EVOLUTION_PROMOTION_GATE_STATUS_ELIGIBLE)
+        self.assertEqual(decision.status, EVOLUTION_ENVELOPE_STATUS_PROMOTION)
+        self.assertEqual(decision.promotion_decision.followup_task_id, bridged.task_id)
+        self.assertEqual(invalidation.run_id, executed_run.run.run_id)
+        self.assertEqual(invalidation.candidate_id, candidate_id)
+        self.assertEqual(
+            invalidation.remediation_actions,
+            (
+                EVOLUTION_INVALIDATION_ACTION_REPROJECT_RECEIPTS,
+                EVOLUTION_INVALIDATION_ACTION_REPROJECT_VERIFICATION,
+                EVOLUTION_INVALIDATION_ACTION_RERUN_PROMOTION_GATE,
+                EVOLUTION_INVALIDATION_ACTION_RERECORD_ENVELOPE,
+            ),
+        )
+        self.assertTrue(
+            {
+                EVOLUTION_EVENT_RUN_RECORDED,
+                EVOLUTION_EVENT_FOLLOWUP_REQUESTED,
+                EVOLUTION_EVENT_EXECUTION_PROJECTED,
+                EVOLUTION_EVENT_VERIFICATION_PROJECTED,
+                EVOLUTION_EVENT_DECISION_RECORDED,
+            }.issubset(set(self._evolution_event_types()))
+        )
+
+    def test_blocked_artifact_cycle_records_invalidation_path(self) -> None:
+        self._new_task("e2e-artifact-cycle-blocked")
+        executed_run = execute_evolution_run(
+            self.repo_root,
+            run_id="EVR-e2e-blocked",
+            config=self.config,
+        )
+        followup_request = EvolutionFollowupRequest(
+            source_run_id=executed_run.run.run_id,
+            candidate_id="candidate-blocked",
+            title="Blocked follow-up candidate",
+            summary="Create a follow-up request that will stay blocked.",
+            requested_task_type="feature",
+            target_scope=("execution-contract-wording",),
+            instruction_set=(),
+            owned_paths=("docs/architecture.md",),
+            expected_verification_obligations=(
+                EvolutionVerificationObligation(
+                    claim="blocked path still preserves lineage",
+                    method="tests.test_evolution",
+                ),
+            ),
+            evidence_summary=(
+                EvolutionEvidenceSummary(
+                    kind="report",
+                    summary="blocked candidate still needs a reviewable record",
+                ),
+            ),
+            promotion_intent=EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
+        )
+        captured: dict[str, dict] = {}
+
+        with patch(
+            "sisyphus.evolution.bridge.request_task",
+            side_effect=self._fake_request_task_factory(captured),
+        ):
+            bridged = bridge_evolution_followup_request(
+                self.repo_root,
+                followup_request,
+                config=self.config,
+                slug="e2e-artifact-blocked-followup",
+            )
+
+        gate = evaluate_evolution_promotion_gate(
+            bridged.artifact,
+            constraints=SimpleNamespace(
+                accepted=False,
+                status="rejected",
+                notes="hard guards failed",
+            ),
+            fitness=SimpleNamespace(
+                eligible_for_promotion=False,
+                status="rejected",
+                notes="fitness rejected",
+            ),
+        )
+        decision = record_evolution_decision_envelope(
+            gate,
+            claim="candidate remains blocked",
+            repo_root=self.repo_root,
+            config=self.config,
+        )
+        invalidation = evaluate_evolution_invalidation(
+            bridged.artifact,
+            changes=(
+                EvolutionInvalidationChange(
+                    change_kind=EVOLUTION_INVALIDATION_CHANGE_REVIEW_GATES,
+                    detail="review gate policy changed after the blocked decision",
+                ),
+                EvolutionInvalidationChange(
+                    change_kind=EVOLUTION_INVALIDATION_CHANGE_ENVELOPE,
+                    detail="blocked decision envelope must be rerecorded",
+                    stale_artifact_refs=decision.invalidation_record.affected_artifacts,
+                ),
+            ),
+        )
+
+        decision_events = [
+            event
+            for event in _load_repo_events(self.repo_root)
+            if event.get("event_type") == EVOLUTION_EVENT_DECISION_RECORDED
+        ]
+
+        self.assertEqual(decision.status, EVOLUTION_ENVELOPE_STATUS_INVALIDATION)
+        self.assertEqual(decision.invalidation_record.run_id, executed_run.run.run_id)
+        self.assertEqual(invalidation.run_id, executed_run.run.run_id)
+        self.assertEqual(invalidation.candidate_id, "candidate-blocked")
+        self.assertEqual(
+            invalidation.remediation_actions,
+            (
+                EVOLUTION_INVALIDATION_ACTION_RECREATE_FOLLOWUP_REQUEST,
+                EVOLUTION_INVALIDATION_ACTION_RERUN_PROMOTION_GATE,
+                EVOLUTION_INVALIDATION_ACTION_RERECORD_ENVELOPE,
+            ),
+        )
+        self.assertTrue(decision_events)
+        self.assertEqual(
+            decision_events[-1]["data"]["envelope_status"],
+            EVOLUTION_ENVELOPE_STATUS_INVALIDATION,
+        )
 
 
 class EvolutionSurfaceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.repo_root = Path(self.tempdir.name)
+        (self.repo_root / ".taskflow.toml").write_text(
+            "[event_bus]\nprovider = \"jsonl\"\n",
+            encoding="utf-8",
+        )
+        self.config = load_config(self.repo_root)
         self.runs_root = self.repo_root / ".planning" / "evolution" / "runs"
         self.runs_root.mkdir(parents=True, exist_ok=True)
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
+
+    def _new_task(self, slug: str) -> dict:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug=slug,
+        )
+        materialize_task_templates(task)
+        return task
 
     def _write_run(
         self,
@@ -1850,6 +3857,33 @@ class EvolutionSurfaceTests(unittest.TestCase):
         self.assertIn("EVR-surface-left", render_evolution_run_compare(comparison))
         self.assertIn("Dataset Tasks: 2 -> 4", comparison.lines)
         self.assertIn("Fitness Score Delta: +0.10 -> +0.30", comparison.lines)
+
+    def test_execute_surface_runs_read_only_orchestrator(self) -> None:
+        self._new_task("surface-execute")
+        result = execute_evolution_surface(self.repo_root, run_id="EVR-surface-execute")
+
+        artifact_dir = self.runs_root / "EVR-surface-execute"
+        self.assertTrue(result.ok)
+        self.assertEqual(result.run_id, "EVR-surface-execute")
+        self.assertEqual(result.resource_uri, "evolution://EVR-surface-execute/run")
+        self.assertEqual(result.final_stage, "report_built")
+        self.assertEqual(result.artifact_dir, str(artifact_dir.resolve()))
+        self.assertIn("evolution run EVR-surface-execute", result.content)
+        self.assertTrue((artifact_dir / "run.json").exists())
+        self.assertTrue((artifact_dir / "report.md").exists())
+
+    def test_execute_surface_reports_duplicate_run_id_actionably(self) -> None:
+        self._new_task("surface-duplicate")
+        first = execute_evolution_surface(self.repo_root, run_id="EVR-surface-duplicate")
+        second = execute_evolution_surface(self.repo_root, run_id="EVR-surface-duplicate")
+
+        self.assertTrue(first.ok)
+        self.assertFalse(second.ok)
+        self.assertEqual(second.run_id, "EVR-surface-duplicate")
+        self.assertEqual(second.resource_uri, "evolution://EVR-surface-duplicate/run")
+        self.assertEqual(second.artifact_dir, str((self.runs_root / "EVR-surface-duplicate").resolve()))
+        self.assertEqual(second.error_type, "FileExistsError")
+        self.assertIn("EVR-surface-duplicate", second.content)
 
 if __name__ == "__main__":
     unittest.main()
