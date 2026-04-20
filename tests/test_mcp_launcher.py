@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 import unittest
 
-from sisyphus.mcp_launcher import build_mcp_server_env, build_stdio_server_config, repo_src_path
+from sisyphus.mcp_launcher import (
+    bootstrap_script_path,
+    build_mcp_server_env,
+    build_stdio_server_config,
+    repo_src_path,
+)
 from sisyphus.templates import template_root
 
 
@@ -26,7 +31,14 @@ class McpLauncherTests(unittest.TestCase):
             f"{Path('/tmp/example-repo').resolve() / 'src'}:/tmp/site-packages",
         )
 
-    def test_build_stdio_server_config_uses_sisyphus_launcher_and_env(self) -> None:
+    def test_bootstrap_script_path_uses_repo_local_launcher_script(self) -> None:
+        repo_root = Path("/tmp/example-repo")
+        self.assertEqual(
+            bootstrap_script_path(repo_root),
+            str(repo_root.resolve() / "scripts" / "run_sisyphus_mcp_server.py"),
+        )
+
+    def test_build_stdio_server_config_uses_repo_bootstrap_script_and_env(self) -> None:
         config = build_stdio_server_config(
             "/tmp/sisyphus-venv/bin/python",
             "/tmp/example-repo",
@@ -34,7 +46,10 @@ class McpLauncherTests(unittest.TestCase):
         )
 
         self.assertEqual(config["command"], "/tmp/sisyphus-venv/bin/python")
-        self.assertEqual(config["args"], ["-m", "sisyphus.mcp_server"])
+        self.assertEqual(
+            config["args"],
+            [str(Path("/tmp/example-repo").resolve() / "scripts" / "run_sisyphus_mcp_server.py")],
+        )
         env = config["env"]
         self.assertEqual(env["SISYPHUS_REPO_ROOT"], str(Path("/tmp/example-repo").resolve()))
         self.assertEqual(env["PYTHONPATH"], str(Path("/tmp/example-repo").resolve() / "src"))
