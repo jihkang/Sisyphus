@@ -35,6 +35,8 @@ The currently derived artifact layer is:
 
 This means the repository does not yet run a general artifact graph store or a graph-native invalidation engine as its source of truth.
 
+For diagrams that separate the current task-shaped authority model from the target artifact-centric model, see [runtime-relationship-diagrams.md](./runtime-relationship-diagrams.md).
+
 ## Hard State And Soft Cognition
 
 The architecture separates two categories of system responsibility.
