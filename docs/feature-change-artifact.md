@@ -23,6 +23,18 @@ It is the bridge between the current task-oriented runtime and the target artifa
 
 The protocol does not require that every slot be filled at every stage. It defines when the composite is only a candidate, when it is verified, and when it is promotable.
 
+## Current Implementation Status
+
+The current runtime support is intentionally narrower than the full protocol:
+
+- authoritative state still lives in `task.json`, task docs, and verify receipts
+- `task://<task-id>/artifact-graph` and related resources expose a derived projection, not an authoritative artifact graph store
+- the current evaluator emits `composite` verification claims only
+- the current evaluator derives `draft`, `candidate`, `verified`, `promotable`, `invalid`, and `stale`
+- `promoted` remains a reserved protocol state until promotion is backed by authoritative persisted state
+
+This document therefore mixes a target protocol with partial runtime support. When those differ, the runtime should be described as partial support rather than full protocol realization.
+
 ## Slot Model
 
 The protocol intentionally uses both named slots and collection slots.
@@ -33,13 +45,15 @@ The protocol intentionally uses both named slots and collection slots.
 | `implementation_candidates[]` | collection | 1..n | yes | Candidate implementations capable of satisfying the spec. |
 | `selected_implementation` | named | 0..1 | yes | The implementation candidate currently bound as the promotable change. |
 | `tests[]` | collection | 1..n | yes | Test artifacts covering normal, edge, exception, and regression obligations. |
-| `verification_claims[]` | collection | 0..n | yes | Verification artifacts carrying local, cross, or composite claims and evidence. |
+| `verification_claims[]` | collection | 0..n | yes | Verification artifacts carrying local, cross, or composite claims and evidence. The current runtime emits composite claims only. |
 | `approvals[]` | collection | 0..n | policy-dependent | Human or policy approvals bound to the current candidate. |
 | `execution_receipts[]` | collection | 0..n | yes | Receipts for the task runs, tool executions, and command invocations that produced or checked bound artifacts. |
 
 ## Artifact States
 
 The protocol distinguishes composition state from execution failure.
+
+The protocol defines seven states. The current runtime derives all of them except `promoted`.
 
 | State | Meaning |
 | --- | --- |
@@ -110,6 +124,8 @@ Composite verification checks the higher-order contract.
 
 Passing local verification does not imply passing cross or composite verification.
 
+The current runtime only emits and enforces composite verification by default. Local and cross verification remain protocol targets until the task runtime records them explicitly.
+
 ## Promotion Gate
 
 A `FeatureChangeArtifact` becomes `promotable` only when all of the following are true:
@@ -117,13 +133,15 @@ A `FeatureChangeArtifact` becomes `promotable` only when all of the following ar
 1. `spec` is bound and complete.
 2. `selected_implementation` is bound and belongs to `implementation_candidates[]`.
 3. Required tests are bound for the spec's normal, edge, and exception obligations, or an explicit waiver artifact exists.
-4. Required local, cross, and composite verification claims are all passing.
+4. Required local, cross, and composite verification claims are all passing in the full protocol.
 5. No stale input remains unresolved.
 6. No unresolved ownership, merge, or lineage conflict remains.
 7. Required approvals or policy waivers are present.
 8. The reconstruction envelope is complete enough to replay why the artifact is valid.
 
 Promotion is therefore obligation closure, not task completion.
+
+In the current runtime, the derived evaluator reaches `promotable` but does not authoritatively persist `promoted`.
 
 ## Invalidation Matrix
 
@@ -194,14 +212,16 @@ The envelope does not replace payload artifacts. It explains the contract that m
 
 ## Mapping To Current Sisyphus Runtime
 
-The current repository does not yet implement this artifact graph directly. The nearest existing runtime pieces are:
+The current repository does not yet persist this artifact graph as its source of truth. The nearest existing runtime pieces are:
 
 - task docs and `task.json` as partial spec and lifecycle records
 - task worktrees and receipts as execution evidence
 - verify outputs as early verification artifacts
 - branch, PR, and merge operations as early promotion-adjacent decisions
+- `task://<task-id>/artifact-graph` and related MCP resources as a read-only derived projection over feature tasks
+- the feature-task evaluator as a derived promotion/invalidation summary, not an authoritative artifact-state engine
 
-This protocol should therefore be treated as the next design lock for future implementation, not as a claim that the runtime already persists all of these structures.
+This protocol should therefore be treated as a target contract with partial runtime support, not as a claim that the runtime already persists all of these structures as first-class authoritative artifact records.
 
 ## Implementation Follow-Up
 

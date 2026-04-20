@@ -252,6 +252,10 @@ class McpCoreTests(unittest.TestCase):
         self.assertIn("task://<task-id>/changeset", resource_uris)
         self.assertIn("task://<task-id>/artifact-graph", resource_uris)
         self.assertIn("task://<task-id>/promotion-summary", resource_uris)
+        artifact_graph_resource = next(
+            resource for resource in self.core.list_resources() if resource["uri"] == "task://<task-id>/artifact-graph"
+        )
+        self.assertIn("Derived FeatureChangeArtifact projection", artifact_graph_resource["description"])
         request_tool = next(tool for tool in self.core.list_tools() if tool["name"] == "sisyphus.request_task")
         self.assertEqual(request_tool["inputSchema"]["required"], ["message"])
         self.assertFalse(request_tool["inputSchema"]["additionalProperties"])
@@ -345,10 +349,16 @@ class McpCoreTests(unittest.TestCase):
         invalidation_payload = self.core.read_resource(f"task://{task['id']}/invalidation-summary")
 
         self.assertEqual(graph_payload["task_id"], task["id"])
+        self.assertEqual(graph_payload["projection"]["projection_model"], "derived_feature_task_projection")
+        self.assertEqual(graph_payload["projection"]["supported_verification_scopes"], ["composite"])
+        self.assertEqual(graph_payload["projection"]["reserved_states"], ["promoted"])
         self.assertEqual(graph_payload["composite"]["artifact_type"], "feature_change")
         self.assertEqual(slot_payload["slot_bindings"]["spec"]["slot_name"], "spec")
+        self.assertEqual(slot_payload["projection"]["authority_source"], "task_runtime")
         self.assertTrue(claim_payload["claims"])
+        self.assertEqual(claim_payload["projection"]["derived_states"][0], "draft")
         self.assertEqual(promotion_payload["promotion"]["decision"], "promotable")
+        self.assertEqual(promotion_payload["projection"]["source_of_truth"], ["task.json", "task_docs", "verify_receipts"])
         self.assertEqual(invalidation_payload["invalidation"]["status"], "fresh")
 
     def test_reads_repo_status_and_schema_resources(self) -> None:
