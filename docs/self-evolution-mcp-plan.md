@@ -209,33 +209,43 @@ Use:
 - task/worktree copies
 - isolated evaluation runs
 
-## MCP Surface To Add Later
+## Current Read-Only MCP Surface
 
-The next implementation pass should expose evolution through MCP, but only after the run artifact cycle and handoff contract are fixed.
+The current implementation exposes persisted evolution runs through MCP as a read-only surface only. It does not start new runs, materialize candidates, approve follow-up work, or mutate live task state.
 
 ### Tools
 
 - `sisyphus.evolution_run`
-  - start a new evolution run
+  - render the read-only overview for a persisted run
 - `sisyphus.evolution_status`
-  - fetch run status
+  - render the read-only status summary for a persisted run
 - `sisyphus.evolution_report`
-  - fetch the reviewable report for a run
+  - render the reviewable report for a persisted run
 - `sisyphus.evolution_compare`
-  - compare baseline and candidate results
+  - compare two persisted runs without mutating them
 
-The system should not expose approval or branch-materialization tools until receipts and promotion envelopes exist.
+The system does not expose approval, branch-materialization, follow-up execution, or promotion tools here. Those remain deferred until receipts, promotion envelopes, and the Sisyphus handoff contract are complete.
 
 ### Resources
 
+- `evolution://<run-id>/run`
+  - read-only overview for a persisted run
 - `evolution://<run-id>/report`
   - human-readable run report
-- `evolution://<run-id>/dataset`
-  - evaluation set metadata
 - `evolution://<run-id>/status`
   - run stage and failure status
-- `evolution://<run-id>/compare`
-  - candidate summaries and scores
+- `evolution://compare/<left-run-id>/<right-run-id>`
+  - read-only comparison across two persisted runs
+
+## MCP Surface Still Deferred
+
+The following MCP capabilities are still intentionally out of scope.
+
+- start a new evolution run
+- isolated candidate materialization and harness execution
+- follow-up task creation or approval
+- promotion or invalidation write-back
+- event-bus mutation for evolution decisions
 
 ## Next-Run MCP Workflow
 

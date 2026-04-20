@@ -1,0 +1,252 @@
+{
+  "id": "TF-20260419-feature-add-evolution-read-only-mcp-surface",
+  "type": "feature",
+  "slug": "add-evolution-read-only-mcp-surface",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-19T23:06:53Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Scoped to a read-only evolution MCP surface over persisted run artifacts, reusing evolution/surface.py and excluding execution, promotion, and event-bus mutation.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Scoped to a read-only evolution MCP surface over persisted run artifacts, reusing evolution/surface.py and excluding execution, promotion, and event-bus mutation.",
+      "timestamp": "2026-04-19T23:06:53Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-19T23:07:00Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze spec for the read-only evolution MCP surface: tools/resources only, using existing evolution surface helpers, with no write-side behavior.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-19T23:02:37Z",
+  "updated_at": "2026-04-20T05:16:34Z",
+  "closed_at": "2026-04-20T05:16:34Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260419-feature-add-evolution-read-only-mcp-surface",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-mcp-surface",
+  "branch": "feat/add-evolution-read-only-mcp-surface",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-mcp-surface && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_mcp_core tests.test_mcp_adapter tests.test_mcp_server",
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-mcp-surface && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m compileall -q src"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-20T05:16:16Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-mcp-surface && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_mcp_core tests.test_mcp_adapter tests.test_mcp_server",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-mcp-surface && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m unittest -q tests.test_mcp_core tests.test_mcp_adapter tests.test_mcp_server",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-20T05:16:15Z",
+      "finished_at": "2026-04-20T05:16:16Z",
+      "duration_ms": null,
+      "output_excerpt": "OK"
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-mcp-surface && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m compileall -q src",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260419-feature-add-evolution-read-only-mcp-surface && env PYTHONDONTWRITEBYTECODE=1 /tmp/sisyphus-venv-fresh/bin/python -m compileall -q src",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-04-20T05:16:16Z",
+      "finished_at": "2026-04-20T05:16:16Z",
+      "duration_ms": null,
+      "output_excerpt": ""
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "MCP tool returns evolution run overview, status, report, and compare output for persisted run artifacts",
+        "checked": false
+      },
+      {
+        "name": "MCP resource reads return the same persisted evolution views for overview, status, report, and compare",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Compare works across two persisted runs with different stage/result combinations",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Missing evolution run IDs raise a clear not-found error through MCP tool/resource calls",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "MCP tool returns evolution run overview, status, report, and compare output for persisted run artifacts",
+        "method": "python -m unittest -q tests.test_mcp_core tests.test_mcp_adapter"
+      },
+      {
+        "target": "MCP resource reads return the same persisted evolution views for overview, status, report, and compare",
+        "method": "python -m unittest -q tests.test_mcp_core tests.test_mcp_adapter"
+      },
+      {
+        "target": "Compare works across two persisted runs with different stage/result combinations",
+        "method": "python -m unittest -q tests.test_mcp_core tests.test_mcp_adapter"
+      },
+      {
+        "target": "Missing evolution run IDs raise a clear not-found error through MCP tool/resource calls",
+        "method": "python -m unittest -q tests.test_mcp_core tests.test_mcp_adapter"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "MCP tool returns evolution run overview, status, report, and compare output for persisted run artifacts",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-002",
+      "title": "MCP resource reads return the same persisted evolution views for overview, status, report, and compare",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-003",
+      "title": "Compare works across two persisted runs with different stage/result combinations",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-004",
+      "title": "Missing evolution run IDs raise a clear not-found error through MCP tool/resource calls",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    }
+  ],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-7304088d309a",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "add-evolution-read-only-mcp-surface"
+  }
+}
