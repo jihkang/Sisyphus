@@ -12,6 +12,7 @@ from .config import SisyphusConfig, load_config
 from .creation import create_task_workspace
 from .gitops import copy_relative_path, current_branch_name, list_dirty_paths, remove_relative_path
 from .events import new_event_envelope
+from .metrics import publish_manual_intervention_required
 from .paths import event_log_file, inbox_failed_dir, inbox_pending_dir, inbox_processed_dir
 from .planning import enforce_plan_approved, enforce_spec_frozen
 from .promotion import record_merged_pull_request
@@ -420,6 +421,8 @@ def _process_conversation_event(repo_root: Path, config: SisyphusConfig, event: 
         provider=provider,
         auto_loop_enabled=requested_auto_run,
         source_context=source_context,
+        owned_paths=owned_paths,
+        requested_adopt_paths=requested_adopt_paths,
         requested_slug=requested_slug,
         parent_task_id=parent_task_id,
     )
@@ -443,6 +446,15 @@ def _process_conversation_event(repo_root: Path, config: SisyphusConfig, event: 
                 "worktree_path": task["worktree_path"],
             },
         )
+    )
+    publish_manual_intervention_required(
+        repo_root,
+        config,
+        task_id=str(task["id"]),
+        reason="plan_review_required",
+        workflow_phase="plan_in_review",
+        status=str(task.get("status") or ""),
+        detail="new task creation starts in plan review",
     )
 
     agent_exit_code = None
@@ -541,6 +553,11 @@ def _process_pull_request_merged_event(repo_root: Path, config: SisyphusConfig, 
                 "recorded_at": outcome.recorded_at,
                 "receipt_path": str(outcome.receipt_path),
                 "changeset_path": str(outcome.changeset_path),
+                "close_attempted": outcome.close_attempted,
+                "closed": outcome.closed,
+                "close_status": outcome.close_status,
+                "close_gate_codes": list(outcome.close_gate_codes),
+                "child_retargeted_task_ids": list(outcome.child_retargeted_task_ids),
             },
         )
     )
@@ -552,6 +569,11 @@ def _process_pull_request_merged_event(repo_root: Path, config: SisyphusConfig, 
         "recorded_at": outcome.recorded_at,
         "receipt_path": str(outcome.receipt_path),
         "changeset_path": str(outcome.changeset_path),
+        "close_attempted": outcome.close_attempted,
+        "closed": outcome.closed,
+        "close_status": outcome.close_status,
+        "close_gate_codes": list(outcome.close_gate_codes),
+        "child_retargeted_task_ids": list(outcome.child_retargeted_task_ids),
     }
 
 
@@ -564,6 +586,8 @@ def _hydrate_task_from_conversation(
     provider: str,
     auto_loop_enabled: bool,
     source_context: dict[str, object],
+    owned_paths: list[str],
+    requested_adopt_paths: list[str],
     requested_slug: str,
     parent_task_id: str | None,
 ) -> None:
@@ -599,6 +623,8 @@ def _hydrate_task_from_conversation(
     task_record["meta"]["default_provider"] = provider
     task_record["meta"]["auto_loop_enabled"] = auto_loop_enabled
     task_record["meta"]["requested_slug"] = requested_slug
+    task_record["meta"]["owned_paths"] = list(owned_paths)
+    task_record["meta"]["requested_adopt_paths"] = list(requested_adopt_paths)
     if parent_task_id:
         task_record["meta"]["followup_of_task_id"] = parent_task_id
     if source_context:
@@ -826,6 +852,21 @@ def _render_feature_plan(task: dict, title: str, message: str) -> str:
             "- The conversation request may omit edge conditions that still matter in the current codebase.",
             "- The change may affect adjacent flows if the requested behavior touches shared state.",
             "",
+            "## Design Evaluation",
+            "",
+            "- Design Mode: `none`",
+            "- Decision Reason: `existing contract only`",
+            "- Confidence: `medium`",
+            "- Layer Impact: `layer-preserving`",
+            "- Layer Decision Reason: `n/a`",
+            "- Required Design Artifacts: `none`",
+            "",
+            "## Design Artifacts",
+            "",
+            "- Connection Diagram: `n/a`",
+            "- Sequence Diagram: `n/a`",
+            "- Boundary Note: `n/a`",
+            "",
             "## Test Strategy",
             "",
             "### Normal Cases",
@@ -906,6 +947,21 @@ def _render_issue_fix_plan(task: dict, title: str, message: str) -> str:
             "2. Add or update a regression test around the failing path.",
             "3. Implement the fix and re-run the relevant checks.",
             "4. Update task docs with the verified outcome.",
+            "",
+            "## Design Evaluation",
+            "",
+            "- Design Mode: `none`",
+            "- Decision Reason: `existing contract only`",
+            "- Confidence: `medium`",
+            "- Layer Impact: `layer-preserving`",
+            "- Layer Decision Reason: `n/a`",
+            "- Required Design Artifacts: `none`",
+            "",
+            "## Design Artifacts",
+            "",
+            "- Connection Diagram: `n/a`",
+            "- Sequence Diagram: `n/a`",
+            "- Boundary Note: `n/a`",
             "",
             "## Test Strategy",
             "",

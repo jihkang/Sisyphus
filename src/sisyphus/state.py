@@ -6,8 +6,11 @@ import json
 
 from .conformance import default_task_conformance, ensure_task_conformance_defaults
 from .config import SisyphusConfig
+from .design import default_task_design, ensure_task_design_defaults
 from .gitops import branch_name, worktree_path
 from .paths import task_dir
+from .promotion_state import default_task_promotion, ensure_task_promotion_defaults
+from .strategy import sync_test_strategy_from_docs
 
 
 DEFAULT_CHANGESET_PATH = "CHANGESET.md"
@@ -109,6 +112,8 @@ def build_task_record(
                 "status": "not_needed",
             },
         },
+        "design": default_task_design(),
+        "promotion": default_task_promotion(),
         "gates": [],
         "subtasks": [],
         "conformance": default_task_conformance(),
@@ -125,7 +130,7 @@ def load_task_record(repo_root: Path, task_dir_name: str, task_id: str) -> tuple
     if not task_file.exists():
         raise FileNotFoundError(f"task not found: {task_id}")
     task = json.loads(task_file.read_text(encoding="utf-8"))
-    return ensure_task_record_defaults(task), task_file
+    return normalize_task_projection(task, task_file=task_file), task_file
 
 
 def list_task_records(repo_root: Path, task_dir_name: str) -> list[dict]:
@@ -137,14 +142,14 @@ def list_task_records(repo_root: Path, task_dir_name: str) -> list[dict]:
     for task_file in sorted(root.glob("*/task.json")):
         try:
             task = json.loads(task_file.read_text(encoding="utf-8"))
-            tasks.append(ensure_task_record_defaults(task))
+            tasks.append(normalize_task_projection(task, task_file=task_file))
         except json.JSONDecodeError:
             continue
     return tasks
 
 
 def save_task_record(task_file: Path, task: dict) -> None:
-    ensure_task_record_defaults(task)
+    normalize_task_projection(task, task_file=task_file)
     task["updated_at"] = utc_now()
     task_file.write_text(json.dumps(task, indent=2) + "\n", encoding="utf-8")
     sync_task_support_files(task)
@@ -184,6 +189,8 @@ def ensure_task_record_defaults(task: dict) -> dict:
     task.setdefault("last_verified_at", None)
     task.setdefault("last_verify_results", [])
     task.setdefault("test_strategy", {})
+    task.setdefault("design", {})
+    task.setdefault("promotion", {})
     task.setdefault("gates", [])
     task.setdefault("subtasks", [])
     if not isinstance(task.get("conformance"), dict):
@@ -197,8 +204,39 @@ def ensure_task_record_defaults(task: dict) -> dict:
     else:
         task["meta"].setdefault("sequence", None)
         task["meta"].setdefault("close_override_used", False)
+    ensure_task_design_defaults(task)
+    ensure_task_promotion_defaults(task)
     ensure_task_conformance_defaults(task)
     return task
+
+
+def normalize_task_projection(task: dict, *, task_file: Path | None = None) -> dict:
+    ensure_task_record_defaults(task)
+    _normalize_terminal_lifecycle_state(task)
+
+    task_dir_path: Path | None = None
+    if task_file is not None:
+        task_dir_path = task_file.parent
+    else:
+        repo_root_value = str(task.get("repo_root", "")).strip()
+        task_dir_value = str(task.get("task_dir", "")).strip()
+        if repo_root_value and task_dir_value:
+            repo_root = Path(repo_root_value)
+            task_dir_path = repo_root / task_dir_value
+
+    if task_dir_path is None or not task_dir_path.exists():
+        return task
+    return sync_test_strategy_from_docs(task=task, task_dir=task_dir_path)
+
+
+def _normalize_terminal_lifecycle_state(task: dict) -> None:
+    status = str(task.get("status") or "").strip().lower()
+    closed_at = str(task.get("closed_at") or "").strip()
+    if status != "closed" and not closed_at:
+        return
+    task["status"] = "closed"
+    task["stage"] = "done"
+    task["workflow_phase"] = "closed"
 
 
 def sync_task_support_files(task: dict) -> None:

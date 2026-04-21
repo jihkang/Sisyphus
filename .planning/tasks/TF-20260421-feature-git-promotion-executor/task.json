@@ -1,0 +1,126 @@
+{
+  "id": "TF-20260421-feature-git-promotion-executor",
+  "type": "feature",
+  "slug": "git-promotion-executor",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-21T10:22:14Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Promotion executor scope matches the implemented gitops primitives, execution receipt flow, and MCP surface.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Added git stage/commit/push primitives, promotion.execute_promotion orchestration, execution receipts, and API/MCP surfaces. Regression covers real push to a bare remote and mocked gh PR creation.",
+      "timestamp": "2026-04-21T10:22:12Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Promotion executor scope matches the implemented gitops primitives, execution receipt flow, and MCP surface.",
+      "timestamp": "2026-04-21T10:22:14Z"
+    }
+  ],
+  "workflow_phase": "closed",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-21T10:22:17Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Spec frozen after executor behavior, receipts, and regression results were synced into task docs.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-21T09:10:40Z",
+  "updated_at": "2026-04-21T13:56:47Z",
+  "closed_at": "2026-04-21T13:56:47Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260421-feature-git-promotion-executor",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260421-feature-git-promotion-executor",
+  "branch": "feat/git-promotion-executor",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-21T13:56:47Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "A promotable task can commit, push, and open a PR through the executor",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "A previously pushed task can resume PR creation without requiring new staged changes",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Non-promotable tasks fail cleanly instead of entering the promotion chain",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "A promotable task can commit, push, and open a PR through the executor",
+        "method": "python -m unittest tests.test_sisyphus tests.test_mcp_core"
+      },
+      {
+        "target": "A previously pushed task can resume PR creation without requiring new staged changes",
+        "method": "python -m unittest tests.test_sisyphus tests.test_mcp_core"
+      },
+      {
+        "target": "Non-promotable tasks fail cleanly instead of entering the promotion chain",
+        "method": "python -m unittest tests.test_sisyphus tests.test_mcp_core"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-e9723606ae24",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "git-promotion-executor"
+  }
+}

@@ -5,6 +5,11 @@ from pathlib import Path
 
 from ..artifacts import TaskRunRef
 from ..config import SisyphusConfig
+from ..promotion_state import (
+    PROMOTION_STATUS_MERGED,
+    PROMOTION_STATUS_RECORDED,
+    promotion_summary,
+)
 from ..state import load_task_record
 from ..utils import required_str
 from .artifacts import (
@@ -99,11 +104,11 @@ def project_followup_execution_record(
             )
         )
 
-    promotion = task.get("meta", {}).get("promotion", {})
-    if isinstance(promotion, dict) and promotion.get("receipt_path"):
+    promotion = promotion_summary(task)
+    if promotion.get("status") in {PROMOTION_STATUS_MERGED, PROMOTION_STATUS_RECORDED} and promotion.get("receipt_path"):
         promotion_relative = required_str(
             promotion.get("receipt_path"),
-            "task.meta.promotion.receipt_path",
+            "task.promotion.receipt_path",
         )
         promotion_path = task_dir / promotion_relative
         if not promotion_path.exists():

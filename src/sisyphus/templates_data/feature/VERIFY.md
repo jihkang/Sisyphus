@@ -24,6 +24,15 @@
 - [ ] Edge cases covered
 - [ ] Exception cases covered
 
+### Design Assessment
+
+- Mode: `none | light | full`
+- Layer impact: `layer-preserving | layer-touching | layer-reshaping | layer-adding`
+- Status: `not_assessed | appropriate | underdesigned | overdesigned`
+- Replan required: `yes/no`
+- Missing artifacts:
+- Summary:
+
 ### External LLM Review
 
 - Required: `yes/no`

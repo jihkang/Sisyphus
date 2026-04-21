@@ -81,6 +81,83 @@ def list_dirty_paths(repo_root: Path) -> tuple[list[str], list[str]]:
     return changed_paths, deleted_paths
 
 
+def stage_all_changes(repo_root: Path) -> None:
+    _run_git(
+        repo_root,
+        ["add", "-A"],
+        error_prefix="failed to stage changes",
+    )
+
+
+def has_staged_changes(repo_root: Path) -> bool:
+    completed = subprocess.run(
+        ["git", "diff", "--cached", "--quiet", "--exit-code"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return completed.returncode != 0
+
+
+def current_head_sha(repo_root: Path) -> str:
+    completed = _run_git(
+        repo_root,
+        ["rev-parse", "HEAD"],
+        error_prefix="failed to resolve HEAD",
+    )
+    return completed.stdout.strip()
+
+
+def commit_staged_changes(repo_root: Path, message: str) -> str:
+    normalized_message = message.strip()
+    if not normalized_message:
+        raise GitOperationError("commit message must be non-empty")
+
+    _run_git(
+        repo_root,
+        ["commit", "-m", normalized_message],
+        error_prefix="failed to commit staged changes",
+    )
+    return current_head_sha(repo_root)
+
+
+def push_branch(repo_root: Path, remote_name: str, branch: str, *, set_upstream: bool = True) -> None:
+    normalized_remote = remote_name.strip()
+    normalized_branch = branch.strip()
+    if not normalized_remote:
+        raise GitOperationError("remote name must be non-empty")
+    if not normalized_branch:
+        raise GitOperationError("branch name must be non-empty")
+
+    args = ["push"]
+    if set_upstream:
+        args.append("-u")
+    args.extend([normalized_remote, normalized_branch])
+    _run_git(
+        repo_root,
+        args,
+        error_prefix="failed to push branch",
+    )
+
+
+def remote_url(repo_root: Path, remote_name: str) -> str | None:
+    normalized_remote = remote_name.strip()
+    if not normalized_remote:
+        return None
+    completed = subprocess.run(
+        ["git", "remote", "get-url", normalized_remote],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return None
+    value = completed.stdout.strip()
+    return value or None
+
+
 def copy_relative_path(source_root: Path, target_root: Path, relative_path: str) -> None:
     source_path = source_root / relative_path
     target_path = target_root / relative_path

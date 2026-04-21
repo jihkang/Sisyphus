@@ -11,6 +11,21 @@
 - Risk 1
 - Risk 2
 
+## Design Evaluation
+
+- Design Mode: `none | light | full`
+- Decision Reason: `existing contract only / crosses a few modules / introduces a new layer`
+- Confidence: `low/medium/high`
+- Layer Impact: `layer-preserving | layer-touching | layer-reshaping | layer-adding`
+- Layer Decision Reason: `n/a`
+- Required Design Artifacts: `none | connection_diagram, sequence_diagram, boundary_note`
+
+## Design Artifacts
+
+- Connection Diagram: `n/a`
+- Sequence Diagram: `n/a`
+- Boundary Note: `n/a`
+
 ## Test Strategy
 
 ### Normal Cases
