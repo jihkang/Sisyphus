@@ -1,0 +1,142 @@
+{
+  "id": "TF-20260421-feature-repair-mcp-resource-discovery-and-schema-contract",
+  "type": "feature",
+  "slug": "repair-mcp-resource-discovery-and-schema-contract",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-21T09:23:42Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Plan matches the implemented scope: MCP discovery/template splitting, schema surface repair, stable placeholder reads, unavailable feature artifact responses on issue tasks, and focused regression coverage.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Aligned the task docs with the implemented MCP contract repair: generic template token detection across task and evolution URIs, resilient discovery that skips invalid URI definitions, stable placeholder responses for pre-merge promotion/changeset reads, explicit unavailable payloads for feature artifact resources on non-feature tasks, and targeted regression coverage in MCP server/core/adapter tests.",
+      "timestamp": "2026-04-21T09:23:40Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Plan matches the implemented scope: MCP discovery/template splitting, schema surface repair, stable placeholder reads, unavailable feature artifact responses on issue tasks, and focused regression coverage.",
+      "timestamp": "2026-04-21T09:23:42Z"
+    }
+  ],
+  "workflow_phase": "closed",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-21T09:23:46Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Froze the contract for resilient MCP resource discovery and schema publication: generic URI template handling, task/evolution markdown MIME normalization, listed repro surface, and stable placeholder/unavailable payloads for incomplete lifecycle state.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-21T09:10:40Z",
+  "updated_at": "2026-04-21T13:55:36Z",
+  "closed_at": "2026-04-21T13:55:36Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260421-feature-repair-mcp-resource-discovery-and-schema-contract",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260421-feature-repair-mcp-resource-discovery-and-schema-contract",
+  "branch": "feat/repair-mcp-resource-discovery-and-schema-contract",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-21T13:50:05Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Resource listing cleanly separates concrete resources from template resources across task and evolution URI patterns.",
+        "checked": true
+      },
+      {
+        "name": "MCP clients can discover the full intended schema, including `task://<task-id>/repro`, without stale entries breaking the list.",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Invalid URI definitions in the published resource list are skipped instead of crashing discovery.",
+        "checked": true
+      },
+      {
+        "name": "Pre-merge `promotion` and `changeset` resources return stable placeholders instead of raising file-not-found errors.",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Feature-only artifact resources read from issue tasks return explicit unavailable payloads instead of leaking projection exceptions.",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Resource listing cleanly separates concrete resources from template resources across task and evolution URI patterns",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_mcp_server"
+      },
+      {
+        "target": "MCP clients can discover the full intended schema, including task://<task-id>/repro, without stale entries breaking the list",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_mcp_core tests.test_mcp_adapter"
+      },
+      {
+        "target": "Invalid URI definitions in the published resource list are skipped instead of crashing discovery",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_mcp_server"
+      },
+      {
+        "target": "Pre-merge promotion and changeset resources return stable placeholders instead of raising file-not-found errors",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_mcp_core"
+      },
+      {
+        "target": "Feature-only artifact resources read from issue tasks return explicit unavailable payloads instead of leaking projection exceptions",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_mcp_core"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-949c2af32623",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "repair-mcp-resource-discovery-and-schema-contract"
+  }
+}

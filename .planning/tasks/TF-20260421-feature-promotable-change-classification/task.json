@@ -1,0 +1,126 @@
+{
+  "id": "TF-20260421-feature-promotable-change-classification",
+  "type": "feature",
+  "slug": "promotable-change-classification",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-21T10:12:22Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Promotion requirement classification and regression coverage are in place. Plan scope matches the implemented MVP.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Promotion classification now uses conversation-derived path signals. Feature tasks default promotable, issue and test-only paths stay non-promotable, and explicit required_override wins cleanly.",
+      "timestamp": "2026-04-21T10:12:17Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Promotion requirement classification and regression coverage are in place. Plan scope matches the implemented MVP.",
+      "timestamp": "2026-04-21T10:12:22Z"
+    }
+  ],
+  "workflow_phase": "closed",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-21T10:12:24Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Spec frozen after promotion classification rules, override semantics, and regression results were synced into task docs.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-21T09:10:40Z",
+  "updated_at": "2026-04-21T13:56:35Z",
+  "closed_at": "2026-04-21T13:56:35Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260421-feature-promotable-change-classification",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260421-feature-promotable-change-classification",
+  "branch": "feat/promotable-change-classification",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-21T13:56:35Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Conversation-created feature tasks default to `promotion.required=true`",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Issue tasks and test-only feature paths stay `promotion.required=false`",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Explicit `required_override` beats auto-classification without leaving stale promotion status behind",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Conversation-created feature tasks default to promotion.required=true",
+        "method": "python -m unittest tests.test_sisyphus"
+      },
+      {
+        "target": "Issue tasks and test-only feature paths stay promotion.required=false",
+        "method": "python -m unittest tests.test_sisyphus"
+      },
+      {
+        "target": "Explicit required_override beats auto-classification without leaving stale promotion status behind",
+        "method": "python -m unittest tests.test_sisyphus"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-fabb23e1e0cf",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "promotable-change-classification"
+  }
+}

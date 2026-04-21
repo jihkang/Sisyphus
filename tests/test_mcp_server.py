@@ -45,6 +45,11 @@ class StubCoreService:
         return [
             {"uri": "repo://status/tasks", "description": "stub tasks"},
             {"uri": "task://<task-id>/brief", "description": "stub brief"},
+            {"uri": "task://<task-id>/repro", "description": "stub repro"},
+            {"uri": "task://<task-id>/changeset", "description": "stub changeset"},
+            {"uri": "evolution://<run-id>/run", "description": "stub evolution run"},
+            {"uri": "evolution://compare/<left-run-id>/<right-run-id>", "description": "stub evolution compare"},
+            {"uri": "not a valid uri", "description": "broken entry"},
         ]
 
     def call_tool(self, tool_name: str, arguments: dict[str, object] | None = None) -> dict[str, object]:
@@ -90,7 +95,26 @@ class McpServerTests(unittest.TestCase):
         templates = asyncio.run(self.server.request_handlers[types.ListResourceTemplatesRequest](None))
 
         self.assertEqual([str(resource.uri) for resource in resources.root.resources], ["repo://status/tasks"])
-        self.assertEqual([template.uriTemplate for template in templates.root.resourceTemplates], ["task://{task_id}/brief"])
+        self.assertEqual(
+            [template.uriTemplate for template in templates.root.resourceTemplates],
+            [
+                "task://{task_id}/brief",
+                "task://{task_id}/repro",
+                "task://{task_id}/changeset",
+                "evolution://{run_id}/run",
+                "evolution://compare/{left_run_id}/{right_run_id}",
+            ],
+        )
+
+    def test_template_resources_preserve_markdown_mime_contract(self) -> None:
+        templates = asyncio.run(self.server.request_handlers[types.ListResourceTemplatesRequest](None))
+        mime_types = {template.uriTemplate: template.mimeType for template in templates.root.resourceTemplates}
+
+        self.assertEqual(mime_types["task://{task_id}/brief"], "text/markdown")
+        self.assertEqual(mime_types["task://{task_id}/repro"], "text/markdown")
+        self.assertEqual(mime_types["task://{task_id}/changeset"], "text/markdown")
+        self.assertEqual(mime_types["evolution://{run_id}/run"], "text/markdown")
+        self.assertEqual(mime_types["evolution://compare/{left_run_id}/{right_run_id}"], "text/markdown")
 
     def test_read_resource_preserves_json_and_markdown_mime_types(self) -> None:
         json_request = types.ReadResourceRequest(

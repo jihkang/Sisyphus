@@ -15,6 +15,7 @@ from .conformance import (
 )
 from .config import SisyphusConfig
 from .events import new_event_envelope
+from .metrics import publish_manual_intervention_required
 from .planning import (
     PLAN_APPROVED,
     current_plan_status,
@@ -49,7 +50,7 @@ def _advance_task(repo_root: Path, config: SisyphusConfig, task_id: str) -> bool
 
     if task.get("status") == "closed":
         return False
-    if phase == "needs_user_input":
+    if phase in {"needs_user_input", "promotion_pending", "retarget_required"}:
         return False
 
     plan_status = current_plan_status(task)
@@ -88,7 +89,9 @@ def _advance_task(repo_root: Path, config: SisyphusConfig, task_id: str) -> bool
         if close_outcome.closed:
             _update_workflow_phase(repo_root=repo_root, config=config, task_id=task_id, phase="closed")
         else:
-            _update_workflow_phase(repo_root=repo_root, config=config, task_id=task_id, phase="needs_user_input")
+            latest_task, _ = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+            next_phase = str(latest_task.get("workflow_phase") or "needs_user_input")
+            _update_workflow_phase(repo_root=repo_root, config=config, task_id=task_id, phase=next_phase)
         return True
 
     return False
@@ -221,6 +224,16 @@ def _update_workflow_phase(repo_root: Path, config: SisyphusConfig, task_id: str
             },
         )
     )
+    if phase == "needs_user_input":
+        publish_manual_intervention_required(
+            repo_root,
+            config,
+            task_id=task_id,
+            reason="workflow_needs_user_input",
+            workflow_phase=phase,
+            status=str(task.get("status") or ""),
+            detail="workflow paused and requires operator input before continuing",
+        )
 
 
 def _update_subtask_status(

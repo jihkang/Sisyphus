@@ -18,7 +18,7 @@ from .mcp_core import SisyphusMcpCoreService
 SERVER_NAME = "sisyphus"
 SERVER_VERSION = "0.1.0"
 DEBUG_ENV_VAR = "SISYPHUS_MCP_DEBUG_LOG"
-TASK_TEMPLATE_TOKEN = "<task-id>"
+TEMPLATE_TOKEN_PATTERN = re.compile(r"<([a-zA-Z0-9-]+)>")
 
 
 def resolve_mcp_repo_root() -> Path:
@@ -45,16 +45,12 @@ def build_server(repo_root: Path, core: SisyphusMcpCoreService | None = None) ->
     @server.list_resources()
     async def list_resources() -> list[types.Resource]:
         _debug_log("list_resources")
-        return [_to_resource(resource) for resource in service.list_resources() if not _is_template_uri(str(resource["uri"]))]
+        return _convert_resources(service.list_resources(), templates=False)
 
     @server.list_resource_templates()
     async def list_resource_templates() -> list[types.ResourceTemplate]:
         _debug_log("list_resource_templates")
-        return [
-            _to_resource_template(resource)
-            for resource in service.list_resources()
-            if _is_template_uri(str(resource["uri"]))
-        ]
+        return _convert_resources(service.list_resources(), templates=True)
 
     @server.read_resource()
     async def read_resource(uri: types.AnyUrl) -> list[ReadResourceContents]:
@@ -85,7 +81,7 @@ async def run_stdio_server(repo_root: Path | None = None) -> None:
 
 
 def main() -> int:
-    _debug_log("main_start")
+    _debug_log(f"main_start module_file={Path(__file__).resolve()}")
     try:
         anyio.run(run_stdio_server)
     except Exception as exc:
@@ -118,7 +114,7 @@ def _to_resource(definition: dict[str, object]) -> types.Resource:
 
 def _to_resource_template(definition: dict[str, object]) -> types.ResourceTemplate:
     uri = str(definition["uri"])
-    uri_template = uri.replace(TASK_TEMPLATE_TOKEN, "{task_id}")
+    uri_template = _uri_to_template(uri)
     return types.ResourceTemplate(
         uriTemplate=uri_template,
         name=_resource_name(uri_template),
@@ -128,7 +124,15 @@ def _to_resource_template(definition: dict[str, object]) -> types.ResourceTempla
 
 
 def _is_template_uri(uri: str) -> bool:
-    return TASK_TEMPLATE_TOKEN in uri
+    return TEMPLATE_TOKEN_PATTERN.search(uri) is not None
+
+
+def _uri_to_template(uri: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        token = match.group(1).strip().replace("-", "_")
+        return "{" + token + "}"
+
+    return TEMPLATE_TOKEN_PATTERN.sub(replace, uri)
 
 
 def _resource_name(uri: str) -> str:
@@ -139,9 +143,35 @@ def _resource_name(uri: str) -> str:
 def _resource_mime_type(uri: str) -> str:
     if uri == "repo://schema/mcp":
         return "text/markdown"
-    if any(uri.endswith(suffix) for suffix in ("/brief", "/plan", "/verify", "/log")):
+    if uri.startswith("evolution://"):
+        return "text/markdown"
+    if any(uri.endswith(suffix) for suffix in ("/brief", "/plan", "/verify", "/log", "/repro", "/changeset")):
         return "text/markdown"
     return "application/json"
+
+
+def _convert_resources(
+    definitions: list[dict[str, object]],
+    *,
+    templates: bool,
+) -> list[types.Resource] | list[types.ResourceTemplate]:
+    converted: list[types.Resource] | list[types.ResourceTemplate] = []
+    for definition in definitions:
+        uri = str(definition.get("uri") or "")
+        if not uri:
+            _debug_log("skip_resource empty_uri")
+            continue
+        if _is_template_uri(uri) != templates:
+            continue
+        try:
+            if templates:
+                converted.append(_to_resource_template(definition))
+            else:
+                converted.append(_to_resource(definition))
+        except Exception as exc:
+            _debug_log(f"skip_resource uri={uri} templates={templates} error={exc}")
+            continue
+    return converted
 
 
 def _debug_log(message: str) -> None:

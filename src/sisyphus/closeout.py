@@ -7,7 +7,9 @@ import subprocess
 from .bus import build_event_publisher
 from .config import SisyphusConfig
 from .events import new_event_envelope
+from .metrics import publish_manual_intervention_required
 from .planning import collect_plan_gates
+from .promotion_state import PROMOTION_STATUS_NOT_REQUIRED, PROMOTION_STATUS_RECORDED, promotion_summary
 from .state import load_task_record, save_task_record, utc_now
 
 
@@ -28,6 +30,19 @@ def run_close(repo_root: Path, config: SisyphusConfig, task_id: str, allow_dirty
     if task.get("verify_status") != "passed":
         gates.append(_gate("VERIFY_REQUIRED", "task must pass verify before close", source="close"))
 
+    promotion = promotion_summary(task)
+    if bool(promotion.get("required")) and promotion.get("status") not in {
+        PROMOTION_STATUS_NOT_REQUIRED,
+        PROMOTION_STATUS_RECORDED,
+    }:
+        gates.append(
+            _gate(
+                "PROMOTION_REQUIRED",
+                "task requires promotion completion before close",
+                source="close",
+            )
+        )
+
     dirty = is_dirty_worktree(_resolve_dirty_check_path(repo_root=repo_root, task=task))
     if dirty and not allow_dirty:
         gates.append(_gate("DIRTY_WORKTREE", "working tree is dirty", source="close"))
@@ -39,8 +54,14 @@ def run_close(repo_root: Path, config: SisyphusConfig, task_id: str, allow_dirty
     task["gates"] = gates
 
     if gates:
-        task["status"] = "blocked"
-        task["stage"] = "plan_review" if any(gate.get("source") == "plan" for gate in gates) else "audit"
+        close_gate_codes = {gate.get("code") for gate in gates if gate.get("source") == "close"}
+        if close_gate_codes == {"PROMOTION_REQUIRED"}:
+            task["status"] = "verified"
+            task["stage"] = "promotion"
+            task["workflow_phase"] = "promotion_pending"
+        else:
+            task["status"] = "blocked"
+            task["stage"] = "plan_review" if any(gate.get("source") == "plan" for gate in gates) else "audit"
         save_task_record(task_file=task_file, task=task)
         build_event_publisher(repo_root, config).publish(
             new_event_envelope(
@@ -49,6 +70,16 @@ def run_close(repo_root: Path, config: SisyphusConfig, task_id: str, allow_dirty
                 data={"task_id": task["id"], "closed": False, "status": task["status"], "gate_count": len(gates)},
             )
         )
+        if close_gate_codes == {"PROMOTION_REQUIRED"}:
+            publish_manual_intervention_required(
+                repo_root,
+                config,
+                task_id=str(task["id"]),
+                reason="promotion_required",
+                workflow_phase="promotion_pending",
+                status=str(task.get("status") or ""),
+                detail="task passed verify but cannot close until promotion is recorded",
+            )
         return CloseOutcome(
             task_id=task["id"],
             status=task["status"],
@@ -59,6 +90,7 @@ def run_close(repo_root: Path, config: SisyphusConfig, task_id: str, allow_dirty
 
     task["status"] = "closed"
     task["stage"] = "done"
+    task["workflow_phase"] = "closed"
     task["closed_at"] = utc_now()
     save_task_record(task_file=task_file, task=task)
     build_event_publisher(repo_root, config).publish(

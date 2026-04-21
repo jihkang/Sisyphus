@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .metrics import publish_manual_intervention_required
 from .config import SisyphusConfig
+from .conformance import mark_design_anchor
+from .design import ensure_task_design_defaults, freeze_design_anchor
 from .state import load_task_record, save_task_record, utc_now
 from .strategy import sync_test_strategy_from_docs
 
@@ -98,6 +101,15 @@ def approve_task_plan(
     _append_review_history(task, action="approve", actor=task["plan_reviewed_by"], notes=notes)
     _restore_task_status_after_plan_gate(task)
     save_task_record(task_file=task_file, task=task)
+    publish_manual_intervention_required(
+        repo_root,
+        config,
+        task_id=str(task["id"]),
+        reason="spec_freeze_required",
+        workflow_phase="spec_drafting",
+        status=str(task.get("status") or ""),
+        detail="plan approval completed and the task now awaits spec freeze",
+    )
     return PlanReviewOutcome(
         task_id=task["id"],
         plan_status=task["plan_status"],
@@ -130,6 +142,15 @@ def request_plan_changes(
     task["status"] = "blocked"
     task["stage"] = "plan_review"
     save_task_record(task_file=task_file, task=task)
+    publish_manual_intervention_required(
+        repo_root,
+        config,
+        task_id=str(task["id"]),
+        reason="plan_changes_requested",
+        workflow_phase=str(task.get("workflow_phase") or ""),
+        status=str(task.get("status") or ""),
+        detail="plan review requested changes before execution can continue",
+    )
     return PlanReviewOutcome(
         task_id=task["id"],
         plan_status=task["plan_status"],
@@ -158,6 +179,15 @@ def revise_task_plan(
     _restore_task_status_after_plan_gate(task)
     task["stage"] = "plan_review"
     save_task_record(task_file=task_file, task=task)
+    publish_manual_intervention_required(
+        repo_root,
+        config,
+        task_id=str(task["id"]),
+        reason="plan_review_required",
+        workflow_phase="plan_in_review",
+        status=str(task.get("status") or ""),
+        detail="a revised plan now awaits another review decision",
+    )
     return PlanReviewOutcome(
         task_id=task["id"],
         plan_status=task["plan_status"],
@@ -200,6 +230,7 @@ def freeze_task_spec(
     task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
     _ensure_plan_fields(task)
     _ensure_spec_fields(task)
+    task = sync_test_strategy_from_docs(task=task, task_dir=task_file.parent)
     task["plan_status"] = current_plan_status(task)
     task["gates"] = [gate for gate in task.get("gates", []) if gate.get("source") != "spec"]
     plan_gates = collect_plan_gates(task, action="spec freeze")
@@ -219,6 +250,8 @@ def freeze_task_spec(
     task["spec_frozen_at"] = utc_now()
     task["spec_reviewed_by"] = reviewer.strip() or "operator"
     task["spec_review_notes"] = notes
+    freeze_design_anchor(task, frozen_at=task["spec_frozen_at"])
+    mark_design_anchor(task, source="planning.freeze_task_spec")
     task["workflow_phase"] = "subtask_planning"
     _restore_task_status_after_plan_gate(task)
     save_task_record(task_file=task_file, task=task)
@@ -281,6 +314,7 @@ def _ensure_plan_fields(task: dict) -> None:
     task.setdefault("max_plan_review_rounds", 3)
     task.setdefault("plan_review_history", [])
     task.setdefault("workflow_phase", "execution" if current_plan_status(task) == PLAN_APPROVED else "plan_in_review")
+    ensure_task_design_defaults(task)
 
 
 def _ensure_spec_fields(task: dict) -> None:
@@ -289,6 +323,7 @@ def _ensure_spec_fields(task: dict) -> None:
     task.setdefault("spec_reviewed_by", None)
     task.setdefault("spec_review_notes", None)
     task.setdefault("subtasks", [])
+    ensure_task_design_defaults(task)
 
 
 def _restore_task_status_after_plan_gate(task: dict) -> None:
@@ -296,6 +331,7 @@ def _restore_task_status_after_plan_gate(task: dict) -> None:
     if task.get("closed_at"):
         task["status"] = "closed"
         task["stage"] = "done"
+        task["workflow_phase"] = "closed"
         return
     if task.get("verify_status") == "passed":
         task["status"] = "verified"
@@ -328,6 +364,33 @@ def _append_review_history(task: dict, *, action: str, actor: str, notes: str | 
         }
     )
     task["plan_review_history"] = history
+
+
+def reopen_task_plan_for_design_replan(
+    task: dict,
+    *,
+    actor: str,
+    notes: str | None,
+) -> None:
+    _ensure_plan_fields(task)
+    _ensure_spec_fields(task)
+    task["plan_status"] = PLAN_CHANGES_REQUESTED
+    task["plan_review_round"] = int(task.get("plan_review_round", 0)) + 1
+    task["plan_reviewed_at"] = utc_now()
+    task["plan_reviewed_by"] = actor.strip() or "design-audit"
+    task["plan_review_notes"] = notes
+    task["workflow_phase"] = "plan_revision"
+    task["spec_status"] = SPEC_DRAFT
+    task["spec_frozen_at"] = None
+    task["spec_reviewed_by"] = None
+    task["spec_review_notes"] = None
+    task["gates"] = _dedupe_gates(
+        [gate for gate in task.get("gates", []) if gate.get("source") not in {"plan", "spec"}] +
+        collect_plan_gates(task, action="execution")
+    )
+    task["status"] = "blocked"
+    task["stage"] = "plan_review"
+    _append_review_history(task, action="design_replan", actor=task["plan_reviewed_by"], notes=notes)
 
 
 def _build_subtasks(task: dict) -> list[dict]:

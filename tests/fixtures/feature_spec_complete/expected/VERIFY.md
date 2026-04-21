@@ -18,6 +18,15 @@
 - Exception cases defined: `yes`
 - Verification methods defined: `yes`
 
+## Design Assessment
+
+- Mode: `none`
+- Layer impact: `layer-preserving`
+- Status: `appropriate`
+- Replan required: `no`
+- Missing artifacts: `none`
+- Summary: `design depth matches the current task shape`
+
 ## External LLM Review
 
 - Required: `no`

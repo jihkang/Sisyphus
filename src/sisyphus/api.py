@@ -6,6 +6,7 @@ from pathlib import Path
 from .config import SisyphusConfig, load_config
 from .daemon import process_inbox_event, queue_conversation_event, queue_pull_request_merged_event
 from .paths import inbox_failed_dir, inbox_processed_dir
+from .promotion import execute_promotion as run_promotion_execution
 from .state import list_task_records, load_task_record
 from .workflow import run_workflow_cycle
 
@@ -55,12 +56,35 @@ class MergeRecordResult:
     pr_number: int | None
     receipt_path: Path | None
     changeset_path: Path | None
+    close_attempted: bool
+    closed: bool
+    close_status: str | None
+    close_gate_codes: list[str]
+    child_retargeted_task_ids: list[str]
     error: str | None
     processed_event: dict
 
     @property
     def ok(self) -> bool:
         return self.error is None and self.event_status == "processed"
+
+
+@dataclass(slots=True)
+class PromotionExecutionResult:
+    task_id: str | None
+    status: str | None
+    branch: str | None
+    base_branch: str | None
+    head_branch: str | None
+    commit_sha: str | None
+    pr_number: int | None
+    pr_url: str | None
+    receipt_path: Path | None
+    error: str | None
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None and self.task_id is not None
 
 
 def queue_conversation(
@@ -271,8 +295,70 @@ def record_merged_pull_request(
         pr_number=int(pr_number_result) if pr_number_result is not None else None,
         receipt_path=receipt_path,
         changeset_path=changeset_path,
+        close_attempted=bool(result.get("close_attempted", False)),
+        closed=bool(result.get("closed", False)),
+        close_status=str(result.get("close_status")) if result.get("close_status") is not None else None,
+        close_gate_codes=[str(item) for item in result.get("close_gate_codes", [])] if isinstance(result.get("close_gate_codes"), list) else [],
+        child_retargeted_task_ids=[str(item) for item in result.get("child_retargeted_task_ids", [])] if isinstance(result.get("child_retargeted_task_ids"), list) else [],
         error=processed_event.get("error"),
         processed_event=processed_event,
+    )
+
+
+def execute_promotion(
+    repo_root: Path,
+    *,
+    config: SisyphusConfig | None = None,
+    task_id: str,
+    remote_name: str = "origin",
+    repo_full_name: str | None = None,
+    title: str | None = None,
+    body: str | None = None,
+    commit_message: str | None = None,
+    base_branch: str | None = None,
+    head_branch: str | None = None,
+    draft: bool = True,
+) -> PromotionExecutionResult:
+    effective_config = config or load_config(repo_root)
+    try:
+        outcome = run_promotion_execution(
+            repo_root=repo_root,
+            config=effective_config,
+            task_id=task_id,
+            remote_name=remote_name,
+            repo_full_name=repo_full_name,
+            title=title,
+            body=body,
+            commit_message=commit_message,
+            base_branch=base_branch,
+            head_branch=head_branch,
+            draft=draft,
+        )
+    except Exception as exc:
+        return PromotionExecutionResult(
+            task_id=task_id,
+            status=None,
+            branch=None,
+            base_branch=None,
+            head_branch=None,
+            commit_sha=None,
+            pr_number=None,
+            pr_url=None,
+            receipt_path=None,
+            error=str(exc),
+        )
+
+    return PromotionExecutionResult(
+        task_id=outcome.task_id,
+        status=outcome.status,
+        branch=outcome.branch,
+        base_branch=outcome.base_branch,
+        head_branch=outcome.head_branch,
+        commit_sha=outcome.commit_sha,
+        pr_number=outcome.pr_number,
+        pr_url=outcome.pr_url,
+        receipt_path=outcome.receipt_path,
+        error=None,
     )
 
 
