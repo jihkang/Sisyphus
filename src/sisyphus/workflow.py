@@ -16,6 +16,7 @@ from .conformance import (
 from .config import SisyphusConfig
 from .events import new_event_envelope
 from .metrics import publish_manual_intervention_required
+from .obligation_runtime import execute_next_feature_change_obligation, materialize_feature_change_obligation_queue
 from .planning import (
     PLAN_APPROVED,
     current_plan_status,
@@ -66,6 +67,26 @@ def _advance_task(repo_root: Path, config: SisyphusConfig, task_id: str) -> bool
             notes="automatic spec freeze after plan approval",
         )
         return True
+
+    if task.get("type") == "feature":
+        materialized = materialize_feature_change_obligation_queue(
+            repo_root=repo_root,
+            config=config,
+            task_id=task_id,
+        )
+        if materialized.changed:
+            return True
+        execution = execute_next_feature_change_obligation(
+            repo_root=repo_root,
+            config=config,
+            task_id=task_id,
+        )
+        if execution.executed:
+            return True
+        latest_task, _ = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+        latest_phase = str(latest_task.get("workflow_phase") or "")
+        if latest_task.get("status") == "verified" or latest_phase == "verified":
+            return False
 
     if not task.get("subtasks"):
         generate_subtasks(repo_root=repo_root, config=config, task_id=task_id)

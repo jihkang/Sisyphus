@@ -2986,6 +2986,109 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(reloaded["workflow_phase"], "plan_in_review")
         self.assertEqual(reloaded["plan_status"], "pending_review")
 
+    def test_workflow_cycle_materializes_feature_obligation_queue_before_subtasks(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="workflow-obligation-queue",
+        )
+        materialize_task_templates(task)
+        task_dir = self.repo_root / task["task_dir"]
+        (task_dir / "BRIEF.md").write_text(
+            "\n".join(
+                [
+                    "# Brief",
+                    "",
+                    "## Task",
+                    "",
+                    f"- Task ID: `{task['id']}`",
+                    "",
+                    "## Problem",
+                    "",
+                    "- Need daemon-visible obligations.",
+                    "",
+                    "## Desired Outcome",
+                    "",
+                    "- Workflow materializes a compiled obligation queue.",
+                    "",
+                    "## Acceptance Criteria",
+                    "",
+                    "- [x] Queue is written before subtask generation",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (task_dir / "PLAN.md").write_text(
+            "\n".join(
+                [
+                    "# Plan",
+                    "",
+                    "## Implementation Plan",
+                    "",
+                    "1. Materialize queue.",
+                    "",
+                    "## Risks",
+                    "",
+                    "- Queue updates could loop.",
+                    "",
+                    "## Test Strategy",
+                    "",
+                    "### Normal Cases",
+                    "",
+                    "- [x] Queue is written before subtask generation",
+                    "",
+                    "### Edge Cases",
+                    "",
+                    "- [x] Re-running with identical queue does not count as queue progress",
+                    "",
+                    "### Exception Cases",
+                    "",
+                    "- [x] Missing docs fail clearly",
+                    "",
+                    "## Verification Mapping",
+                    "",
+                    "- `Queue is written before subtask generation` -> `unit_test`",
+                    "- `Re-running with identical queue does not count as queue progress` -> `unit_test`",
+                    "- `Missing docs fail clearly` -> `unit_test`",
+                    "",
+                    "## External LLM Review",
+                    "",
+                    "- Required: `no`",
+                    "- Provider: `n/a`",
+                    "- Purpose: `n/a`",
+                    "- Trigger: `n/a`",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="approved",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="frozen",
+        )
+
+        progressed = run_workflow_cycle(repo_root=self.repo_root, config=self.config)
+
+        queue_path = task_dir / "artifacts" / "obligations" / "compiled.json"
+        self.assertEqual(progressed, 1)
+        self.assertTrue(queue_path.exists())
+        payload = json.loads(queue_path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["obligation_count"], 1)
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded.get("subtasks"), [])
+
     def test_workflow_cycle_does_not_auto_advance_promotion_pending_tasks(self) -> None:
         task = create_task_record(
             repo_root=self.repo_root,

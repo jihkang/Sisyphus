@@ -147,6 +147,15 @@ class ArtifactProjectionTests(unittest.TestCase):
         self.assertTrue(projection.verification_claims)
         self.assertTrue(projection.execution_receipts)
         self.assertEqual(
+            [claim.scope for claim in projection.verification_claims],
+            ["local", "cross", "composite"],
+        )
+        self.assertTrue(all(claim.based_on_input_fingerprint for claim in projection.verification_claims))
+        self.assertEqual(
+            len({claim.based_on_input_fingerprint for claim in projection.verification_claims}),
+            3,
+        )
+        self.assertEqual(
             projection.feature_change_artifact.payload["slot_bindings"]["selected_implementation"]["artifact"]["artifact_id"],
             projection.implementation_artifact.artifact_id,
         )

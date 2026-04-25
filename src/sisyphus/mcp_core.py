@@ -927,6 +927,7 @@ def mcp_resource_definitions() -> list[dict[str, object]]:
         {"uri": "task://<task-id>/changeset", "description": "Human-readable merged pull request changeset markdown."},
         {"uri": "task://<task-id>/agents", "description": "Tracked agent records for a task."},
         {"uri": "task://<task-id>/artifact-graph", "description": "Read-only FeatureChangeArtifact graph projection for a feature task."},
+        {"uri": "task://<task-id>/compiled-obligations", "description": "Compiled obligation queue derived from the feature task artifact projection."},
         {"uri": "task://<task-id>/slot-bindings", "description": "Projected slot bindings for a feature task artifact envelope."},
         {"uri": "task://<task-id>/verification-claims", "description": "Projected verification claims bound to a feature task artifact envelope."},
         {"uri": "task://<task-id>/promotion-summary", "description": "Read-only promotion decision summary derived from the feature task artifact projection."},

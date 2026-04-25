@@ -5,10 +5,12 @@ from pathlib import Path
 
 from .artifact_evaluator import evaluate_feature_task_projection
 from .artifact_projection import project_feature_task_record
+from .obligation_runtime import build_feature_change_compiled_obligation_queue, read_feature_change_obligation_queue
 
 FEATURE_TASK_ARTIFACT_RESOURCE_NAMES = frozenset(
     {
         "artifact-graph",
+        "compiled-obligations",
         "slot-bindings",
         "verification-claims",
         "promotion-summary",
@@ -40,6 +42,12 @@ def read_feature_task_artifact_resource(task: Mapping[str, object], task_dir: Pa
             "task_runs": [run.to_dict() for run in projection.task_run_refs],
             "evaluation": evaluation.to_dict(),
         }
+
+    if resource_name == "compiled-obligations":
+        persisted = read_feature_change_obligation_queue(task_dir)
+        if persisted is not None:
+            return persisted
+        return build_feature_change_compiled_obligation_queue(projection, evaluation)
 
     if resource_name == "slot-bindings":
         return {

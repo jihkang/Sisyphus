@@ -43,7 +43,17 @@ _FEATURE_CHANGE_SLOT_BINDINGS_FIELDS = frozenset(
         "execution_receipts",
     }
 )
-_VERIFICATION_CLAIM_FIELDS = frozenset({"claim_id", "claim", "scope", "status", "dependency_refs", "evidence_refs"})
+_VERIFICATION_CLAIM_FIELDS = frozenset(
+    {
+        "claim_id",
+        "claim",
+        "scope",
+        "status",
+        "dependency_refs",
+        "evidence_refs",
+        "based_on_input_fingerprint",
+    }
+)
 _COMMON_RECORD_FIELDS = frozenset(
     {
         "schema_version",
@@ -313,6 +323,7 @@ class VerificationClaimRecord:
     status: str = VERIFICATION_CLAIM_STATUS_PASSED
     dependency_refs: tuple[ArtifactRef, ...] = ()
     evidence_refs: tuple[ArtifactRef, ...] = ()
+    based_on_input_fingerprint: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "claim_id", _require_string(self.claim_id, "claim_id"))
@@ -329,9 +340,10 @@ class VerificationClaimRecord:
             "evidence_refs",
             _coerce_tuple(self.evidence_refs, ArtifactRef, "evidence_refs"),
         )
+        object.__setattr__(self, "based_on_input_fingerprint", _optional_string(self.based_on_input_fingerprint))
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        data: dict[str, object] = {
             "claim_id": self.claim_id,
             "claim": self.claim,
             "scope": self.scope,
@@ -339,6 +351,9 @@ class VerificationClaimRecord:
             "dependency_refs": [artifact.to_dict() for artifact in self.dependency_refs],
             "evidence_refs": [artifact.to_dict() for artifact in self.evidence_refs],
         }
+        if self.based_on_input_fingerprint is not None:
+            data["based_on_input_fingerprint"] = self.based_on_input_fingerprint
+        return data
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, object]) -> VerificationClaimRecord:
@@ -359,6 +374,7 @@ class VerificationClaimRecord:
                 ArtifactRef.from_dict,
                 "verification_claim.evidence_refs",
             ),
+            based_on_input_fingerprint=_optional_string(mapping.get("based_on_input_fingerprint")),
         )
 
 

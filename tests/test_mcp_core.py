@@ -252,6 +252,7 @@ class McpCoreTests(unittest.TestCase):
         self.assertIn("task://<task-id>/promotion", resource_uris)
         self.assertIn("task://<task-id>/changeset", resource_uris)
         self.assertIn("task://<task-id>/artifact-graph", resource_uris)
+        self.assertIn("task://<task-id>/compiled-obligations", resource_uris)
         self.assertIn("task://<task-id>/promotion-summary", resource_uris)
         request_tool = next(tool for tool in self.core.list_tools() if tool["name"] == "sisyphus.request_task")
         self.assertEqual(request_tool["inputSchema"]["required"], ["message"])
@@ -488,6 +489,7 @@ class McpCoreTests(unittest.TestCase):
         graph_payload = self.core.read_resource(f"task://{task['id']}/artifact-graph")
         slot_payload = self.core.read_resource(f"task://{task['id']}/slot-bindings")
         claim_payload = self.core.read_resource(f"task://{task['id']}/verification-claims")
+        obligations_payload = self.core.read_resource(f"task://{task['id']}/compiled-obligations")
         promotion_payload = self.core.read_resource(f"task://{task['id']}/promotion-summary")
         invalidation_payload = self.core.read_resource(f"task://{task['id']}/invalidation-summary")
 
@@ -495,6 +497,7 @@ class McpCoreTests(unittest.TestCase):
         self.assertEqual(graph_payload["composite"]["artifact_type"], "feature_change")
         self.assertEqual(slot_payload["slot_bindings"]["spec"]["slot_name"], "spec")
         self.assertTrue(claim_payload["claims"])
+        self.assertEqual(obligations_payload["obligation_count"], 0)
         self.assertEqual(promotion_payload["promotion"]["decision"], "promotable")
         self.assertEqual(invalidation_payload["invalidation"]["status"], "fresh")
 

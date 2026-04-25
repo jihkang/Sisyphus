@@ -27,7 +27,7 @@ INVALIDATION_STATUS_STALE = "stale"
 INVALIDATION_STATUS_INVALID = "invalid"
 
 _DEFAULT_REQUIRED_TEST_CATEGORIES = ("normal", "edge", "exception")
-_DEFAULT_REQUIRED_VERIFICATION_SCOPES = ("composite",)
+_DEFAULT_REQUIRED_VERIFICATION_SCOPES = ("local", "cross", "composite")
 
 
 @dataclass(frozen=True, slots=True)
@@ -446,13 +446,33 @@ def _claim_binds_current_inputs(
         (ref.artifact_id, ref.artifact_type)
         for ref in claim.dependency_refs
     }
-    required_keys = {
-        (spec_ref.artifact_id, spec_ref.artifact_type),
-    }
-    if selected_ref is not None:
-        required_keys.add((selected_ref.artifact_id, selected_ref.artifact_type))
-    required_keys.update((ref.artifact_id, ref.artifact_type) for ref in test_refs)
+    required_keys = _required_claim_dependency_keys(
+        claim.scope,
+        spec_ref=spec_ref,
+        selected_ref=selected_ref,
+        test_refs=test_refs,
+    )
     return required_keys.issubset(dependency_keys)
+
+
+def _required_claim_dependency_keys(
+    scope: str,
+    *,
+    spec_ref: ArtifactRef,
+    selected_ref: ArtifactRef | None,
+    test_refs: Sequence[ArtifactRef],
+) -> set[tuple[str, str]]:
+    spec_key = (spec_ref.artifact_id, spec_ref.artifact_type)
+    selected_keys: set[tuple[str, str]] = set()
+    if selected_ref is not None:
+        selected_keys.add((selected_ref.artifact_id, selected_ref.artifact_type))
+    test_keys = {(ref.artifact_id, ref.artifact_type) for ref in test_refs}
+
+    if scope == "local":
+        return {spec_key, *test_keys}
+    if scope == "cross":
+        return {spec_key, *selected_keys}
+    return {spec_key, *selected_keys, *test_keys}
 
 
 def _normalize_string_tuple(values: Sequence[str], field_name: str) -> tuple[str, ...]:
