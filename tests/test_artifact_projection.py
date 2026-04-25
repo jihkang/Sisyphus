@@ -12,6 +12,12 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from sisyphus.artifact_projection import project_feature_task, project_feature_task_record
+from sisyphus.artifact_snapshot import (
+    DEFAULT_FEATURE_TASK_ARTIFACT_SNAPSHOT_PATH,
+    FEATURE_TASK_ARTIFACT_SNAPSHOT_SCHEMA_VERSION,
+    materialize_feature_task_artifact_snapshot,
+    read_feature_task_artifact_snapshot,
+)
 from sisyphus.config import load_config
 from sisyphus.planning import approve_task_plan, freeze_task_spec
 from sisyphus.audit import run_verify
@@ -176,6 +182,32 @@ class ArtifactProjectionTests(unittest.TestCase):
             [f"{task['id']}:verify:1"],
         )
         self.assertEqual(projection.task_run_refs[0].receipt_locator, projection.execution_receipts[0].artifact_id)
+
+    def test_feature_task_projection_snapshot_persists_artifact_envelope_and_evaluation(self) -> None:
+        task = self._new_feature_task("artifact-projection-snapshot")
+        self._fill_feature_docs(task)
+        approve_task_plan(self.repo_root, self.config, task["id"], reviewer="reviewer", notes="approved")
+        freeze_task_spec(self.repo_root, self.config, task["id"], reviewer="reviewer", notes="frozen")
+        run_verify(self.repo_root, self.config, task["id"])
+
+        materialized = materialize_feature_task_artifact_snapshot(self.repo_root, self.config, task["id"])
+        persisted = read_feature_task_artifact_snapshot(self.repo_root / task["task_dir"])
+
+        self.assertTrue(materialized.changed)
+        self.assertEqual(
+            materialized.snapshot_path,
+            self.repo_root / task["task_dir"] / DEFAULT_FEATURE_TASK_ARTIFACT_SNAPSHOT_PATH,
+        )
+        self.assertIsNotNone(persisted)
+        assert persisted is not None
+        self.assertEqual(persisted["schema_version"], FEATURE_TASK_ARTIFACT_SNAPSHOT_SCHEMA_VERSION)
+        self.assertEqual(persisted["task_id"], task["id"])
+        self.assertEqual(persisted["composite"]["artifact_type"], "feature_change")
+        self.assertEqual(persisted["evaluation"]["promotion"]["decision"], "promotable")
+        self.assertEqual(
+            [claim["scope"] for claim in persisted["verification_claims"]],
+            ["local", "cross", "composite"],
+        )
 
     def test_pre_verify_feature_task_projects_candidate_with_pending_verification_sections(self) -> None:
         task = self._new_feature_task("artifact-projection-candidate")

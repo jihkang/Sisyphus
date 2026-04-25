@@ -15,6 +15,7 @@ from .conformance import (
 )
 from .config import SisyphusConfig
 from .events import new_event_envelope
+from .artifact_snapshot import materialize_feature_task_artifact_snapshot
 from .metrics import publish_manual_intervention_required
 from .obligation_runtime import execute_next_feature_change_obligation, materialize_feature_change_obligation_queue
 from .planning import (
@@ -69,12 +70,17 @@ def _advance_task(repo_root: Path, config: SisyphusConfig, task_id: str) -> bool
         return True
 
     if task.get("type") == "feature":
+        snapshot = materialize_feature_task_artifact_snapshot(
+            repo_root=repo_root,
+            config=config,
+            task_id=task_id,
+        )
         materialized = materialize_feature_change_obligation_queue(
             repo_root=repo_root,
             config=config,
             task_id=task_id,
         )
-        if materialized.changed:
+        if snapshot.changed or materialized.changed:
             return True
         execution = execute_next_feature_change_obligation(
             repo_root=repo_root,

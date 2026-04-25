@@ -5,6 +5,10 @@ from pathlib import Path
 
 from .artifact_evaluator import evaluate_feature_task_projection
 from .artifact_projection import project_feature_task_record
+from .artifact_snapshot import (
+    build_feature_task_artifact_snapshot,
+    read_feature_task_artifact_snapshot,
+)
 from .obligation_runtime import build_feature_change_compiled_obligation_queue, read_feature_change_obligation_queue
 
 FEATURE_TASK_ARTIFACT_RESOURCE_NAMES = frozenset(
@@ -24,24 +28,43 @@ def is_feature_task_artifact_resource(resource_name: str) -> bool:
 
 
 def read_feature_task_artifact_resource(task: Mapping[str, object], task_dir: Path, resource_name: str) -> dict[str, object]:
+    snapshot = read_feature_task_artifact_snapshot(task_dir)
+    if snapshot is not None and resource_name == "artifact-graph":
+        return snapshot
+    if snapshot is not None and resource_name == "slot-bindings":
+        return {
+            "task_id": str(snapshot.get("task_id")),
+            "feature_id": str(snapshot.get("feature_id")),
+            "slot_bindings": snapshot["slot_bindings"],
+        }
+    if snapshot is not None and resource_name == "verification-claims":
+        return {
+            "task_id": str(snapshot.get("task_id")),
+            "feature_id": str(snapshot.get("feature_id")),
+            "claims": snapshot["verification_claims"],
+        }
+    if snapshot is not None and resource_name == "promotion-summary":
+        evaluation = snapshot["evaluation"]
+        return {
+            "task_id": str(snapshot.get("task_id")),
+            "feature_id": str(snapshot.get("feature_id")),
+            "promotion": evaluation["promotion"],
+            "derived_state": evaluation["derived_state"],
+        }
+    if snapshot is not None and resource_name == "invalidation-summary":
+        evaluation = snapshot["evaluation"]
+        return {
+            "task_id": str(snapshot.get("task_id")),
+            "feature_id": str(snapshot.get("feature_id")),
+            "invalidation": evaluation["invalidation"],
+            "derived_state": evaluation["derived_state"],
+        }
+
     projection = project_feature_task_record(dict(task), task_dir)
     evaluation = evaluate_feature_task_projection(projection)
 
     if resource_name == "artifact-graph":
-        return {
-            "task_id": projection.task_id,
-            "feature_id": projection.feature_id,
-            "composite": projection.feature_change_artifact.to_dict(),
-            "artifacts": {
-                "spec": projection.spec_artifact.to_dict(),
-                "implementation": projection.implementation_artifact.to_dict(),
-                "tests": [artifact.to_dict() for artifact in projection.test_artifacts],
-                "execution_receipts": [artifact.to_dict() for artifact in projection.execution_receipts],
-            },
-            "verification_claims": [claim.to_dict() for claim in projection.verification_claims],
-            "task_runs": [run.to_dict() for run in projection.task_run_refs],
-            "evaluation": evaluation.to_dict(),
-        }
+        return build_feature_task_artifact_snapshot(projection, evaluation)
 
     if resource_name == "compiled-obligations":
         persisted = read_feature_change_obligation_queue(task_dir)
