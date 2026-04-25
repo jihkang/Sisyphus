@@ -22,11 +22,14 @@ from sisyphus.feature_change_dsl import (
     obligation_intents_from_feature_change_evaluation,
 )
 from sisyphus.obligation_runtime import (
+    OBLIGATION_STATUS_PASSED,
     build_feature_change_compiled_obligation_queue,
+    execute_next_feature_change_obligation,
     materialize_feature_change_obligation_queue,
     read_feature_change_obligation_queue,
 )
-from sisyphus.state import create_task_record
+from sisyphus.planning import approve_task_plan, freeze_task_spec
+from sisyphus.state import create_task_record, load_task_record
 from sisyphus.templates import materialize_task_templates
 
 
@@ -199,6 +202,38 @@ class FeatureChangeDslTests(unittest.TestCase):
         obligation = persisted["compiled_obligations"][0]
         self.assertEqual(obligation["spec_ref"], OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE)
         self.assertTrue(obligation["materialized_input_set"]["fingerprint"].startswith("sha256:"))
+
+    def test_pending_verification_obligation_executes_via_verify_runner(self) -> None:
+        task = self._new_feature_task("feature-change-obligation-execute")
+        self._fill_feature_docs(task)
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="approved",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="frozen",
+        )
+        materialize_feature_change_obligation_queue(self.repo_root, self.config, task["id"])
+
+        result = execute_next_feature_change_obligation(self.repo_root, self.config, task["id"])
+        persisted = read_feature_change_obligation_queue(self.repo_root / task["task_dir"])
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+
+        self.assertTrue(result.executed)
+        self.assertEqual(result.status, OBLIGATION_STATUS_PASSED)
+        self.assertEqual(reloaded["verify_status"], "passed")
+        self.assertIsNotNone(persisted)
+        assert persisted is not None
+        obligation = persisted["compiled_obligations"][0]
+        self.assertEqual(obligation["status"], OBLIGATION_STATUS_PASSED)
+        self.assertEqual(obligation["execution_receipts"][-1]["runner"], "sisyphus.verify")
 
 
 if __name__ == "__main__":
