@@ -3081,9 +3081,13 @@ class SisyphusDaemonTests(unittest.TestCase):
 
         progressed = run_workflow_cycle(repo_root=self.repo_root, config=self.config)
 
+        snapshot_path = task_dir / "artifacts" / "projection" / "feature-change.json"
         queue_path = task_dir / "artifacts" / "obligations" / "compiled.json"
         self.assertEqual(progressed, 1)
+        self.assertTrue(snapshot_path.exists())
         self.assertTrue(queue_path.exists())
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        self.assertEqual(snapshot["composite"]["artifact_type"], "feature_change")
         payload = json.loads(queue_path.read_text(encoding="utf-8"))
         self.assertEqual(payload["obligation_count"], 1)
         reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])

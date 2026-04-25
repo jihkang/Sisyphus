@@ -14,6 +14,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from sisyphus.api import record_merged_pull_request
+from sisyphus.artifact_snapshot import materialize_feature_task_artifact_snapshot
 from sisyphus.audit import run_verify
 from sisyphus.config import load_config
 from sisyphus.conformance import append_conformance_log
@@ -500,6 +501,35 @@ class McpCoreTests(unittest.TestCase):
         self.assertEqual(obligations_payload["obligation_count"], 0)
         self.assertEqual(promotion_payload["promotion"]["decision"], "promotable")
         self.assertEqual(invalidation_payload["invalidation"]["status"], "fresh")
+
+    def test_artifact_graph_resource_prefers_persisted_snapshot(self) -> None:
+        task = self._new_task("artifact-graph-snapshot")
+        self._fill_feature_docs(task)
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="approved",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="frozen",
+        )
+        run_verify(self.repo_root, self.config, task["id"])
+        materialize_feature_task_artifact_snapshot(self.repo_root, self.config, task["id"])
+        task_dir = self.repo_root / task["task_dir"]
+        (task_dir / "PLAN.md").unlink()
+
+        graph_payload = self.core.read_resource(f"task://{task['id']}/artifact-graph")
+        promotion_payload = self.core.read_resource(f"task://{task['id']}/promotion-summary")
+
+        self.assertEqual(graph_payload["schema_version"], "sisyphus.feature_task_artifact_snapshot.v1")
+        self.assertEqual(graph_payload["task_id"], task["id"])
+        self.assertEqual(promotion_payload["promotion"]["decision"], "promotable")
 
     def test_reads_repo_status_and_schema_resources(self) -> None:
         task = self._new_task("board")
