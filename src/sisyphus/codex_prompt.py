@@ -121,6 +121,7 @@ def _build_task_snapshot(task: dict) -> dict[str, object]:
             "subtasks": list,
             "gates": list,
             "test_strategy": dict,
+            "design": dict,
             "docs": dict,
         },
     )

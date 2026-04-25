@@ -5,10 +5,24 @@ from pathlib import Path
 import subprocess
 
 from .bus import build_event_publisher
-from .conformance import collect_conformance_gates
+from .conformance import (
+    CONFORMANCE_CHECKPOINT_DESIGN_ASSESSMENT,
+    CONFORMANCE_GREEN,
+    CONFORMANCE_YELLOW,
+    append_conformance_log,
+    collect_conformance_gates,
+)
 from .config import SisyphusConfig
+from .design import (
+    DESIGN_ASSESSMENT_APPROPRIATE,
+    DESIGN_ASSESSMENT_OVERDESIGNED,
+    DESIGN_ASSESSMENT_UNDERDESIGNED,
+    DESIGN_MODE_NONE,
+    evaluate_design_adequacy,
+    ensure_task_design_defaults,
+)
 from .events import new_event_envelope
-from .planning import collect_plan_gates
+from .planning import collect_plan_gates, reopen_task_plan_for_design_replan
 from .state import load_task_record, save_task_record, utc_now
 from .strategy import sync_test_strategy_from_docs
 
@@ -27,12 +41,15 @@ VERIFY_GATE_CODES = {
     "EXTERNAL_LLM_REVIEW_REQUIRED",
     "PLAN_APPROVAL_REQUIRED",
     "PLAN_CHANGES_REQUESTED",
+    "DESIGN_REPLAN_REQUIRED",
+    "DESIGN_ARTIFACTS_MISSING",
 }
 
 TRANSIENT_GATE_SOURCES = {
     "verify",
     "docs",
     "strategy",
+    "design",
     "close",
     "plan",
     "conformance",
@@ -55,6 +72,7 @@ def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyO
     task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
     task_dir = task_file.parent
     task = sync_test_strategy_from_docs(task=task, task_dir=task_dir)
+    _evaluate_and_record_design(task)
 
     task["audit_attempts"] = int(task.get("audit_attempts", 0)) + 1
     task["updated_at"] = utc_now()
@@ -68,13 +86,15 @@ def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyO
     gates.extend(_collect_doc_gates(task, task_dir))
     spec_gates = _collect_spec_gates(task, task_dir)
     gates.extend(spec_gates)
+    design_gates = _collect_design_gates(task)
+    gates.extend(design_gates)
     plan_gates = collect_plan_gates(task, action="verify")
     gates.extend(plan_gates)
     conformance_gates = collect_conformance_gates(task, action="verify")
     gates.extend(conformance_gates)
 
     command_results: list[dict] = []
-    if not spec_gates and not plan_gates and not conformance_gates:
+    if not spec_gates and not design_gates and not plan_gates and not conformance_gates:
         task["stage"] = "audit"
         gates.extend(_collect_test_strategy_gates(task))
         command_results = _run_verify_commands(task, task_dir)
@@ -96,6 +116,8 @@ def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyO
         task["workflow_phase"] = "verified"
     elif spec_gates:
         task["stage"] = "spec"
+    elif design_gates:
+        task["stage"] = "plan_review"
     elif plan_gates:
         task["stage"] = "plan_review"
     elif conformance_gates:
@@ -192,6 +214,26 @@ def _collect_spec_gates(task: dict, task_dir: Path) -> list[dict]:
     return gates
 
 
+def _collect_design_gates(task: dict) -> list[dict]:
+    ensure_task_design_defaults(task)
+    design = task.get("design", {})
+    assessment = design.get("assessment", {})
+    missing_artifacts = list(assessment.get("missing_artifacts") or [])
+    gates: list[dict] = []
+
+    if assessment.get("status") == DESIGN_ASSESSMENT_UNDERDESIGNED:
+        gates.append(_gate("DESIGN_REPLAN_REQUIRED", "design assessment requires a plan revision before verify", source="design"))
+    if missing_artifacts:
+        gates.append(
+            _gate(
+                "DESIGN_ARTIFACTS_MISSING",
+                f"missing required design artifacts: {', '.join(missing_artifacts)}",
+                source="design",
+            )
+        )
+    return gates
+
+
 def _collect_test_strategy_gates(task: dict) -> list[dict]:
     strategy = task.get("test_strategy", {})
     gates: list[dict] = []
@@ -247,6 +289,10 @@ def _render_verify_markdown(task: dict, command_results: list[dict]) -> str:
     result_line = "go next task" if passed else "return to current task"
     strategy = task.get("test_strategy", {})
     external_llm = strategy.get("external_llm", {})
+    ensure_task_design_defaults(task)
+    design = task.get("design", {})
+    assessment = design.get("assessment", {})
+    missing_artifacts = list(assessment.get("missing_artifacts") or [])
 
     command_lines = []
     if command_results:
@@ -278,6 +324,15 @@ def _render_verify_markdown(task: dict, command_results: list[dict]) -> str:
             f"- Edge cases defined: `{'yes' if strategy.get('edge_cases') else 'no'}`",
             f"- Exception cases defined: `{'yes' if strategy.get('exception_cases') else 'no'}`",
             f"- Verification methods defined: `{'yes' if strategy.get('verification_methods') else 'no'}`",
+            "",
+            "## Design Assessment",
+            "",
+            f"- Mode: `{design.get('mode', DESIGN_MODE_NONE)}`",
+            f"- Layer impact: `{design.get('layer_impact', 'layer-preserving')}`",
+            f"- Status: `{assessment.get('status', 'not_assessed')}`",
+            f"- Replan required: `{'yes' if assessment.get('replan_required') else 'no'}`",
+            f"- Missing artifacts: `{', '.join(missing_artifacts) if missing_artifacts else 'none'}`",
+            f"- Summary: `{assessment.get('summary') or 'n/a'}`",
             "",
             "## External LLM Review",
             "",
@@ -330,5 +385,43 @@ def _looks_like_unfilled_template(content: str) -> bool:
         "Risk 1",
         "yes/no",
         "codex/claude/other",
+        "none | light | full",
+        "layer-preserving | layer-touching | layer-reshaping | layer-adding",
     ]
     return any(marker in content for marker in placeholder_markers)
+
+
+def _evaluate_and_record_design(task: dict) -> None:
+    ensure_task_design_defaults(task)
+    previous_status = str(task.get("design", {}).get("assessment", {}).get("status") or "")
+    assessment = evaluate_design_adequacy(task)
+    status = str(assessment.get("status") or "")
+    summary = str(assessment.get("summary") or "design adequacy evaluated")
+
+    if status == DESIGN_ASSESSMENT_UNDERDESIGNED:
+        append_conformance_log(
+            task,
+            checkpoint_type=CONFORMANCE_CHECKPOINT_DESIGN_ASSESSMENT,
+            status=CONFORMANCE_YELLOW,
+            summary=summary,
+            source="audit.design",
+            resolved=False,
+            drift=0,
+        )
+        reopen_task_plan_for_design_replan(
+            task,
+            actor="design-audit",
+            notes=assessment.get("escalation_reason") or summary,
+        )
+        return
+
+    if status in {DESIGN_ASSESSMENT_APPROPRIATE, DESIGN_ASSESSMENT_OVERDESIGNED}:
+        append_conformance_log(
+            task,
+            checkpoint_type=CONFORMANCE_CHECKPOINT_DESIGN_ASSESSMENT,
+            status=CONFORMANCE_GREEN,
+            summary=summary,
+            source="audit.design",
+            resolved=(previous_status == DESIGN_ASSESSMENT_UNDERDESIGNED),
+            drift=0,
+        )

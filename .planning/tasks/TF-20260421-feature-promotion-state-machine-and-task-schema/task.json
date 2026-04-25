@@ -1,0 +1,154 @@
+{
+  "id": "TF-20260421-feature-promotion-state-machine-and-task-schema",
+  "type": "feature",
+  "slug": "promotion-state-machine-and-task-schema",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-21T09:45:19Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Plan matches the implemented scope: first-class promotion state and status normalization in task records, legacy meta compatibility, receipt/MCP/evolution/service projection updates, and regression coverage across those paths.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Aligned the task docs with the implemented promotion schema change: tasks now carry a first-class promotion bundle, legacy meta promotion data migrates into that bundle, merge receipt recording writes the normalized terminal state, and MCP/service/evolution surfaces read the same contract.",
+      "timestamp": "2026-04-21T09:45:16Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Plan matches the implemented scope: first-class promotion state and status normalization in task records, legacy meta compatibility, receipt/MCP/evolution/service projection updates, and regression coverage across those paths.",
+      "timestamp": "2026-04-21T09:45:19Z"
+    }
+  ],
+  "workflow_phase": "closed",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-21T09:45:22Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Froze the promotion state contract: task promotion now has required/status/strategy/lineage/branch/PR/receipt fields, receipt recording updates that bundle directly, and downstream MCP/evolution readers consume the normalized state.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-21T09:10:40Z",
+  "updated_at": "2026-04-21T13:56:11Z",
+  "closed_at": "2026-04-21T13:56:11Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260421-feature-promotion-state-machine-and-task-schema",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260421-feature-promotion-state-machine-and-task-schema",
+  "branch": "feat/promotion-state-machine-and-task-schema",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-21T13:56:11Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "New tasks initialize a first-class promotion bundle with stable defaults.",
+        "checked": true
+      },
+      {
+        "name": "Merge receipt recording writes the promotion terminal state into task state and keeps legacy meta compatibility.",
+        "checked": true
+      },
+      {
+        "name": "MCP task record/status projections expose promotion state to clients.",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Older tasks that only have `meta[\"promotion\"]` migrate into the first-class promotion bundle when loaded.",
+        "checked": true
+      },
+      {
+        "name": "Evolution follow-up receipt projection accepts promotion receipts from the first-class bundle and ignores default receipt paths when no promotion has actually occurred.",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Evolution follow-up receipt projection still fails clearly when a task claims a recorded promotion receipt but the file is missing.",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "New tasks initialize a first-class promotion bundle with stable defaults",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_sisyphus"
+      },
+      {
+        "target": "Merge receipt recording writes the promotion terminal state into task state and keeps legacy meta compatibility",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_sisyphus tests.test_mcp_core"
+      },
+      {
+        "target": "MCP task record/status projections expose promotion state to clients",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_mcp_core"
+      },
+      {
+        "target": "Older tasks that only have meta[\\\"promotion\\\"] migrate into the first-class promotion bundle when loaded",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_sisyphus"
+      },
+      {
+        "target": "Evolution follow-up receipt projection accepts promotion receipts from the first-class bundle and ignores default receipt paths when no promotion has actually occurred",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_evolution"
+      },
+      {
+        "target": "Evolution follow-up receipt projection still fails clearly when a task claims a recorded promotion receipt but the file is missing",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_evolution"
+      },
+      {
+        "target": "Shared task-state and MCP/evolution flows stay stable after the schema change",
+        "method": "env PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_sisyphus tests.test_mcp_server tests.test_mcp_core tests.test_mcp_adapter tests.test_evolution tests.test_golden"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-11095a29da61",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "promotion-state-machine-and-task-schema"
+  }
+}

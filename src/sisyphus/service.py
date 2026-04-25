@@ -7,6 +7,7 @@ import time
 
 from .config import SisyphusConfig
 from .daemon import DaemonStats, run_daemon
+from .promotion_state import promotion_status_summary
 from .state import list_task_records
 
 
@@ -134,6 +135,7 @@ def build_task_update_summary(task: dict, previous_snapshot: TaskSnapshot | None
         followup_segment = f" requested_slug={requested_slug or task.get('slug')} followup_of={followup_of_task_id}"
     task_conformance = format_conformance_summary(extract_conformance_summary(task))
     subtask_conformance = summarize_subtask_conformance(task)
+    promotion_status = promotion_status_summary(task)
     task_transition = None
     subtask_transition = None
     if previous_snapshot is not None:
@@ -152,6 +154,7 @@ def build_task_update_summary(task: dict, previous_snapshot: TaskSnapshot | None
         f"phase={task.get('workflow_phase')} "
         f"plan={task.get('plan_status')} "
         f"spec={task.get('spec_status')} "
+        f"{f'promotion={promotion_status} ' if promotion_status else ''}"
         f"subtasks={completed}/{total}"
         f"{followup_segment}"
         f"{f' conformance={task_conformance}' if task_conformance else ''}"
@@ -165,12 +168,14 @@ def build_task_update_summary(task: dict, previous_snapshot: TaskSnapshot | None
 def _task_snapshot(task: dict) -> TaskSnapshot:
     gates = tuple(sorted(gate.get("code") for gate in task.get("gates", [])))
     task_conformance = format_conformance_summary(extract_conformance_summary(task))
+    promotion_status = promotion_status_summary(task)
     subtasks = _subtask_conformance_entries(task)
     fingerprint = (
         task.get("status"),
         task.get("workflow_phase"),
         task.get("plan_status"),
         task.get("spec_status"),
+        promotion_status,
         gates,
         task_conformance,
         subtasks,

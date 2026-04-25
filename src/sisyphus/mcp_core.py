@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 from .agents import list_agents
 from .artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
-from .api import get_task, list_tasks, record_merged_pull_request, request_task
+from .api import execute_promotion, get_task, list_tasks, record_merged_pull_request, request_task
 from .audit import run_verify
 from .bus_jsonl import read_jsonl_events, resolve_event_bus_path
 from .closeout import run_close
@@ -34,6 +34,8 @@ from .planning import (
     request_plan_changes,
     revise_task_plan,
 )
+from .metrics import build_value_metrics_report
+from .promotion_state import promotion_summary
 from .state import load_task_record
 from .utils import optional_str, optional_str_list
 
@@ -224,6 +226,39 @@ class SisyphusMcpCoreService:
                 "pr_number": result.pr_number,
                 "receipt_path": str(result.receipt_path) if result.receipt_path else None,
                 "changeset_path": str(result.changeset_path) if result.changeset_path else None,
+                "close_attempted": result.close_attempted,
+                "closed": result.closed,
+                "close_status": result.close_status,
+                "close_gate_codes": result.close_gate_codes,
+                "child_retargeted_task_ids": result.child_retargeted_task_ids,
+                "error": result.error,
+            }
+
+        if tool_name == "sisyphus.execute_promotion":
+            result = execute_promotion(
+                repo_root=self.repo_root,
+                config=config,
+                task_id=str(args["task_id"]),
+                remote_name=str(args.get("remote_name", "origin")),
+                repo_full_name=optional_str(args.get("repo_full_name")),
+                title=optional_str(args.get("title")),
+                body=optional_str(args.get("body")),
+                commit_message=optional_str(args.get("commit_message")),
+                base_branch=optional_str(args.get("base_branch")),
+                head_branch=optional_str(args.get("head_branch")),
+                draft=bool(args.get("draft", True)),
+            )
+            return {
+                "ok": result.ok,
+                "task_id": result.task_id,
+                "status": result.status,
+                "branch": result.branch,
+                "base_branch": result.base_branch,
+                "head_branch": result.head_branch,
+                "commit_sha": result.commit_sha,
+                "pr_number": result.pr_number,
+                "pr_url": result.pr_url,
+                "receipt_path": str(result.receipt_path) if result.receipt_path else None,
                 "error": result.error,
             }
 
@@ -343,7 +378,7 @@ class SisyphusMcpCoreService:
             tasks = list_tasks(repo_root=self.repo_root, config=config)
             path = resolve_event_bus_path(self.repo_root, config)
             events = read_jsonl_events(path, limit=20)
-            return _repo_status_board(tasks, events)
+            return _repo_status_board(tasks, events, build_value_metrics_report(self.repo_root, config))
         if parsed.scheme == "repo" and parsed.netloc == "status" and parsed.path == "/events":
             path = resolve_event_bus_path(self.repo_root, config)
             return {
@@ -351,6 +386,8 @@ class SisyphusMcpCoreService:
                 "path": str(path),
                 "events": read_jsonl_events(path, limit=50),
             }
+        if parsed.scheme == "repo" and parsed.netloc == "status" and parsed.path == "/metrics":
+            return build_value_metrics_report(self.repo_root, config)
         if parsed.scheme == "repo" and parsed.netloc == "schema" and parsed.path == "/mcp":
             return _mcp_schema_markdown()
         if parsed.scheme == "evolution":
@@ -373,12 +410,12 @@ class SisyphusMcpCoreService:
         if resource_name == "promotion":
             doc_path = task_dir / str(task["docs"].get("promotion"))
             if not doc_path.exists():
-                raise FileNotFoundError(f"task document not found: {doc_path}")
+                return _promotion_resource_placeholder(task)
             return json.loads(doc_path.read_text(encoding="utf-8"))
         if resource_name == "changeset":
             doc_path = task_dir / str(task["docs"].get("changeset"))
             if not doc_path.exists():
-                raise FileNotFoundError(f"task document not found: {doc_path}")
+                return _changeset_resource_placeholder(task)
             return doc_path.read_text(encoding="utf-8")
         if resource_name == "agents":
             return {
@@ -389,7 +426,20 @@ class SisyphusMcpCoreService:
                 )
             }
         if is_feature_task_artifact_resource(resource_name):
-            return read_feature_task_artifact_resource(task, task_dir, resource_name)
+            if task.get("type") != "feature":
+                return _artifact_resource_unavailable(
+                    task,
+                    resource_name=resource_name,
+                    reason="resource is only available for feature tasks",
+                )
+            try:
+                return read_feature_task_artifact_resource(task, task_dir, resource_name)
+            except Exception as exc:
+                return _artifact_resource_unavailable(
+                    task,
+                    resource_name=resource_name,
+                    reason=str(exc) or "artifact projection is not available for the current task state",
+                )
 
         doc_key = _resource_doc_key(resource_name, task)
         if doc_key is None:
@@ -683,6 +733,47 @@ def mcp_tool_definitions() -> list[dict[str, object]]:
                     "pr_number": {"type": ["integer", "null"]},
                     "receipt_path": {"type": ["string", "null"]},
                     "changeset_path": {"type": ["string", "null"]},
+                    "close_attempted": {"type": "boolean"},
+                    "closed": {"type": "boolean"},
+                    "close_status": {"type": ["string", "null"]},
+                    "close_gate_codes": {"type": "array", "items": {"type": "string"}},
+                    "child_retargeted_task_ids": {"type": "array", "items": {"type": "string"}},
+                    "error": {"type": ["string", "null"]},
+                },
+            },
+        },
+        {
+            "name": "sisyphus.execute_promotion",
+            "description": "Commit, push, and open a pull request for a promotable task branch.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "remote_name": {"type": "string"},
+                    "repo_full_name": {"type": "string"},
+                    "title": {"type": "string"},
+                    "body": {"type": "string"},
+                    "commit_message": {"type": "string"},
+                    "base_branch": {"type": "string"},
+                    "head_branch": {"type": "string"},
+                    "draft": {"type": "boolean"},
+                },
+                "required": ["task_id"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "ok": {"type": "boolean"},
+                    "task_id": {"type": ["string", "null"]},
+                    "status": {"type": ["string", "null"]},
+                    "branch": {"type": ["string", "null"]},
+                    "base_branch": {"type": ["string", "null"]},
+                    "head_branch": {"type": ["string", "null"]},
+                    "commit_sha": {"type": ["string", "null"]},
+                    "pr_number": {"type": ["integer", "null"]},
+                    "pr_url": {"type": ["string", "null"]},
+                    "receipt_path": {"type": ["string", "null"]},
                     "error": {"type": ["string", "null"]},
                 },
             },
@@ -818,6 +909,7 @@ def mcp_resource_definitions() -> list[dict[str, object]]:
         {"uri": "repo://status/conformance", "description": "Repository-wide task conformance board."},
         {"uri": "repo://status/board", "description": "Operator-focused board with conformance summary and recent events."},
         {"uri": "repo://status/events", "description": "Recent event bus envelopes from the repository event log."},
+        {"uri": "repo://status/metrics", "description": "Repository-level workflow value metrics derived from task state and lifecycle events."},
         {"uri": "repo://schema/mcp", "description": "Human-readable MCP tool and resource schema for Sisyphus."},
         {"uri": "evolution://<run-id>/run", "description": "Read-only overview for a persisted evolution run."},
         {"uri": "evolution://<run-id>/status", "description": "Read-only status summary for a persisted evolution run."},
@@ -828,12 +920,14 @@ def mcp_resource_definitions() -> list[dict[str, object]]:
         {"uri": "task://<task-id>/timeline", "description": "Task and subtask conformance/drift timeline."},
         {"uri": "task://<task-id>/brief", "description": "Task brief markdown."},
         {"uri": "task://<task-id>/plan", "description": "Task plan markdown."},
+        {"uri": "task://<task-id>/repro", "description": "Task repro markdown for issue tasks."},
         {"uri": "task://<task-id>/verify", "description": "Task verification markdown."},
         {"uri": "task://<task-id>/log", "description": "Task log markdown."},
         {"uri": "task://<task-id>/promotion", "description": "Recorded promotion receipt JSON for a merged pull request."},
         {"uri": "task://<task-id>/changeset", "description": "Human-readable merged pull request changeset markdown."},
         {"uri": "task://<task-id>/agents", "description": "Tracked agent records for a task."},
         {"uri": "task://<task-id>/artifact-graph", "description": "Read-only FeatureChangeArtifact graph projection for a feature task."},
+        {"uri": "task://<task-id>/compiled-obligations", "description": "Compiled obligation queue derived from the feature task artifact projection."},
         {"uri": "task://<task-id>/slot-bindings", "description": "Projected slot bindings for a feature task artifact envelope."},
         {"uri": "task://<task-id>/verification-claims", "description": "Projected verification claims bound to a feature task artifact envelope."},
         {"uri": "task://<task-id>/promotion-summary", "description": "Read-only promotion decision summary derived from the feature task artifact projection."},
@@ -962,6 +1056,7 @@ def _task_status_projection(task: dict) -> dict[str, object]:
         "plan_status": task.get("plan_status"),
         "spec_status": task.get("spec_status"),
         "updated_at": task.get("updated_at"),
+        "promotion": promotion_summary(task),
         "conformance": {
             "status": conformance.get("status"),
             "last_spec_anchor_at": conformance.get("last_spec_anchor_at"),
@@ -971,6 +1066,37 @@ def _task_status_projection(task: dict) -> dict[str, object]:
             "last_failure": conformance.get("last_failure"),
             "summary": conformance.get("summary"),
         },
+    }
+
+
+def _promotion_resource_placeholder(task: dict) -> dict[str, object]:
+    return {
+        "task_id": task.get("id"),
+        "status": "not_recorded",
+        "promotion": promotion_summary(task),
+    }
+
+
+def _changeset_resource_placeholder(task: dict) -> str:
+    return "\n".join(
+        [
+            "# Changeset",
+            "",
+            f"- Task: `{task.get('id')}`",
+            "- Status: `not_recorded`",
+            "- Notes: no merged pull request receipt has been recorded for this task yet",
+            "",
+        ]
+    )
+
+
+def _artifact_resource_unavailable(task: dict, *, resource_name: str, reason: str) -> dict[str, object]:
+    return {
+        "task_id": task.get("id"),
+        "task_type": task.get("type"),
+        "resource": resource_name,
+        "status": "unavailable",
+        "reason": reason,
     }
 
 
@@ -1015,7 +1141,11 @@ def _mcp_schema_markdown() -> str:
     return "\n".join(lines)
 
 
-def _repo_status_board(tasks: list[dict], events: list[dict[str, object]]) -> dict[str, object]:
+def _repo_status_board(
+    tasks: list[dict],
+    events: list[dict[str, object]],
+    metrics: dict[str, object] | None = None,
+) -> dict[str, object]:
     rows = [_task_status_projection(task) for task in tasks]
     counts = {"green": 0, "yellow": 0, "red": 0, "unknown": 0}
     for row in rows:
@@ -1034,6 +1164,7 @@ def _repo_status_board(tasks: list[dict], events: list[dict[str, object]]) -> di
         },
         "tasks": rows,
         "recent_events": events,
+        "metrics": metrics,
     }
 
 

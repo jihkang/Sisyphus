@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 import uuid
 
+from .design import ensure_task_design_defaults, summarize_design_anchor
+
 
 CONFORMANCE_GREEN = "green"
 CONFORMANCE_YELLOW = "yellow"
@@ -16,6 +18,8 @@ CONFORMANCE_STATUSES = {
 }
 
 CONFORMANCE_CHECKPOINT_SPEC_ANCHOR = "spec_anchor"
+CONFORMANCE_CHECKPOINT_DESIGN_ANCHOR = "design_anchor"
+CONFORMANCE_CHECKPOINT_DESIGN_ASSESSMENT = "design_assessment"
 CONFORMANCE_CHECKPOINT_PRE_EXEC = "pre_exec"
 CONFORMANCE_CHECKPOINT_POST_EXEC = "post_exec"
 CONFORMANCE_CHECKPOINT_PRE_VERIFY = "pre_verify"
@@ -42,6 +46,8 @@ def default_task_conformance() -> dict:
         "summary": None,
         "last_spec_anchor_at": None,
         "last_spec_anchor_source": None,
+        "last_design_anchor_at": None,
+        "last_design_anchor_source": None,
         "last_checkpoint_type": None,
         "last_checkpoint_source": None,
         "last_checkpoint_at": None,
@@ -62,6 +68,8 @@ def default_subtask_conformance() -> dict:
         "summary": None,
         "last_spec_anchor_at": None,
         "last_spec_anchor_source": None,
+        "last_design_anchor_at": None,
+        "last_design_anchor_source": None,
         "last_checkpoint_type": None,
         "last_checkpoint_source": None,
         "last_checkpoint_at": None,
@@ -97,7 +105,9 @@ def ensure_subtask_conformance_defaults(subtask: dict) -> dict:
 
 def summarize_task_conformance(task: dict) -> dict:
     ensure_task_conformance_defaults(task)
+    ensure_task_design_defaults(task)
     conformance = task["conformance"]
+    design = task["design"]
     subtask_summaries = [summarize_subtask_conformance(subtask) for subtask in task.get("subtasks", []) if isinstance(subtask, dict)]
     return {
         "id": task.get("id"),
@@ -105,6 +115,8 @@ def summarize_task_conformance(task: dict) -> dict:
         "status": _aggregate_status(conformance.get("status"), [item["status"] for item in subtask_summaries]),
         "last_spec_anchor_at": conformance.get("last_spec_anchor_at"),
         "last_spec_anchor_source": conformance.get("last_spec_anchor_source"),
+        "last_design_anchor_at": conformance.get("last_design_anchor_at"),
+        "last_design_anchor_source": conformance.get("last_design_anchor_source"),
         "last_checkpoint_type": conformance.get("last_checkpoint_type"),
         "last_checkpoint_source": conformance.get("last_checkpoint_source"),
         "last_checkpoint_at": conformance.get("last_checkpoint_at"),
@@ -114,6 +126,10 @@ def summarize_task_conformance(task: dict) -> dict:
         "resolved_warning_count": int(conformance.get("resolved_warning_count", 0)),
         "last_warning": conformance.get("last_warning"),
         "last_failure": conformance.get("last_failure"),
+        "design_mode": design.get("mode"),
+        "layer_impact": design.get("layer_impact"),
+        "design_assessment": dict(design.get("assessment", {})),
+        "design_anchor_summary": summarize_design_anchor(design.get("frozen", {}) or design),
         "summary": _compose_summary(conformance, subtask_summaries),
         "subtasks": subtask_summaries,
     }
@@ -129,6 +145,8 @@ def summarize_subtask_conformance(subtask: dict) -> dict:
         "status": normalize_conformance_status(conformance.get("status")),
         "last_spec_anchor_at": conformance.get("last_spec_anchor_at"),
         "last_spec_anchor_source": conformance.get("last_spec_anchor_source"),
+        "last_design_anchor_at": conformance.get("last_design_anchor_at"),
+        "last_design_anchor_source": conformance.get("last_design_anchor_source"),
         "last_checkpoint_type": conformance.get("last_checkpoint_type"),
         "last_checkpoint_source": conformance.get("last_checkpoint_source"),
         "last_checkpoint_at": conformance.get("last_checkpoint_at"),
@@ -156,10 +174,18 @@ def build_execution_contract(task: dict, subtask: dict | None = None) -> str:
         "Task conformance:",
         f"- status: `{task_summary['status']}`",
         f"- last spec anchor: `{_format_anchor(task_summary['last_spec_anchor_at'], task_summary['last_spec_anchor_source'])}`",
+        f"- last design anchor: `{_format_anchor(task_summary['last_design_anchor_at'], task_summary['last_design_anchor_source'])}`",
         f"- last checkpoint: `{_format_checkpoint(task_summary['last_checkpoint_type'], task_summary['last_checkpoint_source'], task_summary['last_checkpoint_at'])}`",
         f"- drift count: `{task_summary['drift_count']}`",
         f"- unresolved warnings: `{task_summary['unresolved_warning_count']}`",
+        f"- design mode: `{task_summary['design_mode']}`",
+        f"- layer impact: `{task_summary['layer_impact']}`",
     ]
+    design_assessment = task_summary.get("design_assessment", {})
+    if isinstance(design_assessment, dict) and design_assessment.get("status"):
+        lines.append(f"- design assessment: `{design_assessment.get('status')}`")
+    if task_summary.get("design_anchor_summary"):
+        lines.append(f"- design anchor: `{task_summary['design_anchor_summary']}`")
     if verification_targets:
         lines.append(
             f"- verification targets: `{', '.join(verification_targets[:5])}`"
@@ -216,9 +242,27 @@ def mark_spec_anchor(task: dict, *, source: str, subtask_id: str | None = None) 
     )
 
 
+def mark_design_anchor(task: dict, *, source: str, subtask_id: str | None = None) -> dict:
+    ensure_task_design_defaults(task)
+    design = task.get("design", {})
+    summary = summarize_design_anchor(design.get("frozen", {}) or design)
+    return append_conformance_log(
+        task,
+        checkpoint_type=CONFORMANCE_CHECKPOINT_DESIGN_ANCHOR,
+        status=CONFORMANCE_GREEN,
+        summary=summary,
+        source=source,
+        subtask_id=subtask_id,
+        resolved=False,
+        drift=0,
+    )
+
+
 def run_pre_execution_conformance_check(task: dict, *, subtask_id: str, source: str) -> tuple[str, str]:
     ensure_task_conformance_defaults(task)
     mark_spec_anchor(task, source=source, subtask_id=subtask_id)
+    if task.get("design", {}).get("frozen", {}).get("frozen_at"):
+        mark_design_anchor(task, source=source, subtask_id=subtask_id)
     subtask = _find_subtask(task, subtask_id)
     if subtask is None:
         append_conformance_log(
@@ -505,6 +549,9 @@ def _record_conformance_event(
     if checkpoint_type == CONFORMANCE_CHECKPOINT_SPEC_ANCHOR:
         record["last_spec_anchor_at"] = timestamp
         record["last_spec_anchor_source"] = source
+    if checkpoint_type == CONFORMANCE_CHECKPOINT_DESIGN_ANCHOR:
+        record["last_design_anchor_at"] = timestamp
+        record["last_design_anchor_source"] = source
 
     if status == CONFORMANCE_RED:
         record["drift_count"] = int(record.get("drift_count", 0)) + max(int(drift), 1)

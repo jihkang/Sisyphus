@@ -1,0 +1,127 @@
+{
+  "id": "TF-20260420-issue-assess-third-party-critique-of-sisyphus-codebase",
+  "type": "issue",
+  "slug": "assess-third-party-critique-of-sisyphus-codebase",
+  "status": "closed",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-04-21T14:00:21Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "The umbrella roadmap now matches the landed follow-up task set and the verification notes reflect the completed child closures.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Reframed the issue as an umbrella roadmap, recorded parent/child/dependency relationships for the follow-up task graph, and updated the task docs to track the current DAG until first-class dependency fields exist.",
+      "timestamp": "2026-04-21T09:16:02Z"
+    },
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "The umbrella roadmap now matches the landed follow-up task set and the verification notes reflect the completed child closures.",
+      "timestamp": "2026-04-21T14:00:21Z"
+    }
+  ],
+  "workflow_phase": "closed",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-04-21T14:00:21Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "The umbrella issue is documentation-only and its follow-up graph plus verification summary are stable enough to freeze.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-04-20T11:46:25Z",
+  "updated_at": "2026-04-21T14:00:24Z",
+  "closed_at": "2026-04-21T14:00:24Z",
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260420-issue-assess-third-party-critique-of-sisyphus-codebase",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260420-issue-assess-third-party-critique-of-sisyphus-codebase",
+  "branch": "fix/assess-third-party-critique-of-sisyphus-codebase",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-04-21T14:00:24Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "The critique is translated into a stable umbrella roadmap with explicit parent and child work items",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Contract, promotion schema, and measurement work are separated so observer tasks do not block implementation by accident",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "The roadmap notes the current schema limitation instead of pretending task DAG support already exists",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "The critique is translated into a stable umbrella roadmap with explicit parent and child work items",
+        "method": "manual review"
+      },
+      {
+        "target": "Contract, promotion schema, and measurement work are separated so observer tasks do not block implementation by accident",
+        "method": "manual review"
+      },
+      {
+        "target": "The roadmap notes the current schema limitation instead of pretending task DAG support already exists",
+        "method": "manual review"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "repro": "REPRO.md",
+    "fix_plan": "FIX_PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": true,
+    "source_event_id": "evt-0029206ff80f",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": true,
+    "requested_slug": "assess-third-party-critique-of-sisyphus-codebase"
+  }
+}

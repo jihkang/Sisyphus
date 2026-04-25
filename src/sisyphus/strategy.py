@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
+from .design import sync_design_from_docs
+
 
 SECTION_PATTERN = re.compile(r"^##\s+(?P<title>.+?)\s*$", re.MULTILINE)
 SUBSECTION_PATTERN = re.compile(r"^###\s+(?P<title>.+?)\s*$", re.MULTILINE)
@@ -15,6 +17,9 @@ PLACEHOLDER_VALUES = {
     "exception case 1",
     "exception case 2",
     "baseline behavior still works",
+    "yes/no",
+    "codex/claude/other",
+    "n/a",
 }
 
 
@@ -33,6 +38,7 @@ def sync_test_strategy_from_docs(task: dict, task_dir: Path) -> dict:
         "external_llm": _extract_external_llm(content),
     }
     task["test_strategy"] = strategy
+    task = sync_design_from_docs(task=task, task_dir=task_dir, source_name=source_name)
     return task
 
 

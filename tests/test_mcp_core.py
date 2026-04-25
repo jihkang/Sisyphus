@@ -248,9 +248,11 @@ class McpCoreTests(unittest.TestCase):
         self.assertIn("evolution://<run-id>/report", resource_uris)
         self.assertIn("evolution://compare/<left-run-id>/<right-run-id>", resource_uris)
         self.assertIn("task://<task-id>/conformance", resource_uris)
+        self.assertIn("task://<task-id>/repro", resource_uris)
         self.assertIn("task://<task-id>/promotion", resource_uris)
         self.assertIn("task://<task-id>/changeset", resource_uris)
         self.assertIn("task://<task-id>/artifact-graph", resource_uris)
+        self.assertIn("task://<task-id>/compiled-obligations", resource_uris)
         self.assertIn("task://<task-id>/promotion-summary", resource_uris)
         request_tool = next(tool for tool in self.core.list_tools() if tool["name"] == "sisyphus.request_task")
         self.assertEqual(request_tool["inputSchema"]["required"], ["message"])
@@ -265,7 +267,110 @@ class McpCoreTests(unittest.TestCase):
         brief_payload = self.core.read_resource(f"task://{task['id']}/brief")
 
         self.assertEqual(record_payload["task"]["id"], task["id"])
+        self.assertEqual(record_payload["task"]["promotion"]["status"], "not_required")
         self.assertIn("# Brief", brief_payload)
+
+    def test_task_record_resource_returns_doc_synced_projection_state(self) -> None:
+        task = self._new_task("record-projection")
+        task_dir = self.repo_root / task["task_dir"]
+        (task_dir / "PLAN.md").write_text(
+            "\n".join(
+                [
+                    "# Plan",
+                    "",
+                    "## Implementation Plan",
+                    "",
+                    "1. Normalize MCP task record projection.",
+                    "",
+                    "## Risks",
+                    "",
+                    "- Record resource could drift from PLAN.md.",
+                    "",
+                    "## Design Evaluation",
+                    "",
+                    "- Design Mode: `light`",
+                    "- Decision Reason: `record resource should expose the normalized task state`",
+                    "- Confidence: `high`",
+                    "- Layer Impact: `layer-touching`",
+                    "- Layer Decision Reason: `load_task_record backs the MCP resource surface`",
+                    "- Required Design Artifacts: `boundary_note`",
+                    "",
+                    "## Design Artifacts",
+                    "",
+                    "- Connection Diagram: `n/a`",
+                    "- Sequence Diagram: `n/a`",
+                    "- Boundary Note: `docs/adaptive-planning-protocol.md`",
+                    "",
+                    "## Test Strategy",
+                    "",
+                    "### Normal Cases",
+                    "",
+                    "- [x] Record resource exposes doc-synced strategy",
+                    "",
+                    "### Edge Cases",
+                    "",
+                    "- [x] Placeholder docs remain safe",
+                    "",
+                    "### Exception Cases",
+                    "",
+                    "- [x] Missing sections still load",
+                    "",
+                    "## Verification Mapping",
+                    "",
+                    "- `Record resource exposes doc-synced strategy` -> `unit_test`",
+                    "- `Placeholder docs remain safe` -> `unit_test`",
+                    "- `Missing sections still load` -> `unit_test`",
+                    "",
+                    "## External LLM Review",
+                    "",
+                    "- Required: `no`",
+                    "- Provider: `n/a`",
+                    "- Purpose: `n/a`",
+                    "- Trigger: `n/a`",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        record_payload = self.core.read_resource(f"task://{task['id']}/record")
+
+        self.assertEqual(
+            record_payload["task"]["test_strategy"]["normal_cases"][0]["name"],
+            "Record resource exposes doc-synced strategy",
+        )
+        self.assertEqual(record_payload["task"]["design"]["mode"], "light")
+        self.assertEqual(record_payload["task"]["design"]["required_artifacts"], ["boundary_note"])
+        self.assertEqual(
+            record_payload["task"]["design"]["artifacts"]["boundary_note"],
+            "docs/adaptive-planning-protocol.md",
+        )
+
+    def test_list_tasks_projection_includes_promotion_summary(self) -> None:
+        task = self._new_task("list-promotion")
+        task_dir = self.repo_root / task["task_dir"]
+        task_file = task_dir / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["promotion"] = {
+            "required": True,
+            "status": "pr_open",
+            "strategy": "direct",
+            "base_branch": "main",
+            "head_branch": task["branch"],
+            "pr_number": 41,
+            "pr_url": "https://github.com/jihkang/Sisyphus/pull/41",
+            "receipt_path": task["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        payload = self.core.read_resource("repo://status/tasks")
+        task_payload = next(
+            item for item in payload["tasks"] if (item.get("task_id") or item.get("id")) == task["id"]
+        )
+
+        self.assertEqual(task_payload["promotion"]["status"], "pr_open")
+        self.assertEqual(task_payload["promotion"]["pr_number"], 41)
+        self.assertEqual(task_payload["promotion"]["base_branch"], "main")
 
     def test_reads_task_promotion_and_changeset_resources(self) -> None:
         task = self._new_task("promotion")
@@ -286,6 +391,32 @@ class McpCoreTests(unittest.TestCase):
         self.assertEqual(promotion_payload["pull_request"]["number"], 11)
         self.assertIn("# Changeset", changeset_payload)
         self.assertIn("`src/sisyphus/cli.py`", changeset_payload)
+
+    def test_reads_placeholder_promotion_and_changeset_resources_before_merge(self) -> None:
+        task = self._new_task("promotion-pending")
+
+        promotion_payload = self.core.read_resource(f"task://{task['id']}/promotion")
+        changeset_payload = self.core.read_resource(f"task://{task['id']}/changeset")
+
+        self.assertEqual(promotion_payload["task_id"], task["id"])
+        self.assertEqual(promotion_payload["status"], "not_recorded")
+        self.assertEqual(promotion_payload["promotion"]["status"], "not_required")
+        self.assertEqual(promotion_payload["promotion"]["receipt_path"], task["docs"]["promotion"])
+        self.assertIn("# Changeset", changeset_payload)
+        self.assertIn("`not_recorded`", changeset_payload)
+
+    def test_reads_issue_repro_resource(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="issue",
+            slug="issue-repro",
+        )
+        materialize_task_templates(task)
+
+        repro_payload = self.core.read_resource(f"task://{task['id']}/repro")
+
+        self.assertIn("# Repro", repro_payload)
 
     def test_reads_task_timeline_resource(self) -> None:
         task = self._new_task("timeline")
@@ -319,6 +450,23 @@ class McpCoreTests(unittest.TestCase):
         self.assertEqual(timeline_payload["subtasks"][0]["subtask_id"], "S1")
         self.assertEqual(len(timeline_payload["subtasks"][0]["history"]), 2)
 
+    def test_task_record_resource_normalizes_closed_workflow_phase(self) -> None:
+        task = self._new_task("closed-record-normalization")
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "closed"
+        persisted["stage"] = "done"
+        persisted["workflow_phase"] = "verified"
+        persisted["verify_status"] = "passed"
+        persisted["closed_at"] = "2026-04-21T12:31:44Z"
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        payload = self.core.read_resource(f"task://{task['id']}/record")
+
+        self.assertEqual(payload["task"]["status"], "closed")
+        self.assertEqual(payload["task"]["stage"], "done")
+        self.assertEqual(payload["task"]["workflow_phase"], "closed")
+
     def test_reads_feature_task_artifact_resources(self) -> None:
         task = self._new_task("artifact-graph")
         self._fill_feature_docs(task)
@@ -341,6 +489,7 @@ class McpCoreTests(unittest.TestCase):
         graph_payload = self.core.read_resource(f"task://{task['id']}/artifact-graph")
         slot_payload = self.core.read_resource(f"task://{task['id']}/slot-bindings")
         claim_payload = self.core.read_resource(f"task://{task['id']}/verification-claims")
+        obligations_payload = self.core.read_resource(f"task://{task['id']}/compiled-obligations")
         promotion_payload = self.core.read_resource(f"task://{task['id']}/promotion-summary")
         invalidation_payload = self.core.read_resource(f"task://{task['id']}/invalidation-summary")
 
@@ -348,6 +497,7 @@ class McpCoreTests(unittest.TestCase):
         self.assertEqual(graph_payload["composite"]["artifact_type"], "feature_change")
         self.assertEqual(slot_payload["slot_bindings"]["spec"]["slot_name"], "spec")
         self.assertTrue(claim_payload["claims"])
+        self.assertEqual(obligations_payload["obligation_count"], 0)
         self.assertEqual(promotion_payload["promotion"]["decision"], "promotable")
         self.assertEqual(invalidation_payload["invalidation"]["status"], "fresh")
 
@@ -382,6 +532,81 @@ class McpCoreTests(unittest.TestCase):
 
         self.assertEqual(payload["events"][0]["event_id"], "evt_1")
         self.assertEqual(payload["events"][1]["event_id"], "evt_2")
+
+    def test_reads_repo_metrics_resource(self) -> None:
+        task = self._new_task("metrics")
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["verify_status"] = "passed"
+        persisted["last_verified_at"] = "2026-04-21T00:01:00Z"
+        persisted["promotion"] = {
+            "required": True,
+            "status": "recorded",
+            "strategy": "direct",
+            "recorded_at": "2026-04-21T00:03:00Z",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        event_path = self.repo_root / ".planning" / "events.jsonl"
+        event_path.parent.mkdir(parents=True, exist_ok=True)
+        event_path.write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "event_id": "evt_resume",
+                            "event_type": "conversation",
+                            "status": "queued",
+                            "timestamp": "2026-04-21T00:00:00Z",
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "event_id": "evt_resume",
+                            "event_type": "conversation",
+                            "status": "processed",
+                            "timestamp": "2026-04-21T00:00:05Z",
+                        }
+                    ),
+                    new_event_envelope(
+                        "verify.completed",
+                        data={"task_id": task["id"], "status": "passed"},
+                        timestamp="2026-04-21T00:01:00Z",
+                    ).to_json(),
+                    new_event_envelope(
+                        "task.manual_intervention_required",
+                        data={"task_id": task["id"], "reason": "promotion_required"},
+                        timestamp="2026-04-21T00:01:30Z",
+                    ).to_json(),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        metrics_payload = self.core.read_resource("repo://status/metrics")
+        board_payload = self.core.read_resource("repo://status/board")
+
+        self.assertEqual(metrics_payload["metrics"]["session_resume_time"]["sample_count"], 1)
+        self.assertEqual(metrics_payload["metrics"]["promotion_lead_time"]["sample_count"], 1)
+        self.assertEqual(metrics_payload["metrics"]["manual_intervention_count"]["count"], 1)
+        self.assertEqual(board_payload["metrics"]["metrics"]["session_resume_time"]["sample_count"], 1)
+
+    def test_reads_feature_artifact_resource_on_issue_task_as_unavailable(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="issue",
+            slug="issue-artifact-resource",
+        )
+        materialize_task_templates(task)
+
+        payload = self.core.read_resource(f"task://{task['id']}/artifact-graph")
+
+        self.assertEqual(payload["task_id"], task["id"])
+        self.assertEqual(payload["status"], "unavailable")
+        self.assertIn("feature tasks", payload["reason"])
 
     def test_calls_and_reads_evolution_surface(self) -> None:
         self._write_evolution_run("EVR-mcp-alpha", target_ids=("execution-contract-wording",))
@@ -593,6 +818,44 @@ class McpCoreTests(unittest.TestCase):
         self.assertEqual(payload["pr_number"], 11)
         self.assertIsNotNone(payload["receipt_path"])
         self.assertIsNotNone(payload["changeset_path"])
+        self.assertFalse(payload["close_attempted"])
+        self.assertFalse(payload["closed"])
+        self.assertIsNone(payload["close_status"])
+        self.assertEqual(payload["close_gate_codes"], [])
+        self.assertEqual(payload["child_retargeted_task_ids"], [])
+        self.assertIsNone(payload["error"])
+
+    def test_execute_promotion_tool_returns_open_pr_projection(self) -> None:
+        fake_result = mock.Mock(
+            ok=True,
+            task_id="TF-123",
+            status="pr_open",
+            branch="feat/demo",
+            base_branch="main",
+            head_branch="feat/demo",
+            commit_sha="abc123",
+            pr_number=17,
+            pr_url="https://github.com/jihkang/Sisyphus/pull/17",
+            receipt_path=Path("/tmp/open_pr_receipt.json"),
+            error=None,
+        )
+
+        with mock.patch("sisyphus.mcp_core.execute_promotion", return_value=fake_result):
+            payload = self.core.call_tool(
+                "sisyphus.execute_promotion",
+                {
+                    "task_id": "TF-123",
+                    "repo_full_name": "jihkang/Sisyphus",
+                },
+            )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["task_id"], "TF-123")
+        self.assertEqual(payload["status"], "pr_open")
+        self.assertEqual(payload["commit_sha"], "abc123")
+        self.assertEqual(payload["pr_number"], 17)
+        self.assertEqual(payload["pr_url"], "https://github.com/jihkang/Sisyphus/pull/17")
+        self.assertEqual(payload["receipt_path"], "/tmp/open_pr_receipt.json")
         self.assertIsNone(payload["error"])
 
     def test_request_task_tool_rejects_non_list_owned_paths(self) -> None:

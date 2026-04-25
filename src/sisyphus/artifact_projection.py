@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import hashlib
+import json
 
 from .artifacts import (
     ARTIFACT_STATE_CANDIDATE,
@@ -230,7 +232,7 @@ def _build_verification_claims(
     if task.get("verify_status") != "passed":
         return ()
 
-    dependency_refs = (
+    composite_dependency_refs = (
         ArtifactRef(spec_artifact.artifact_id, spec_artifact.artifact_type),
         ArtifactRef(implementation_artifact.artifact_id, implementation_artifact.artifact_type),
         *(
@@ -242,14 +244,44 @@ def _build_verification_claims(
         ArtifactRef(artifact.artifact_id, artifact.artifact_type)
         for artifact in execution_receipts
     )
+    local_dependency_refs = (
+        ArtifactRef(spec_artifact.artifact_id, spec_artifact.artifact_type),
+        *(
+            ArtifactRef(artifact.artifact_id, artifact.artifact_type)
+            for artifact in test_artifacts
+        ),
+    )
+    cross_dependency_refs = (
+        ArtifactRef(spec_artifact.artifact_id, spec_artifact.artifact_type),
+        ArtifactRef(implementation_artifact.artifact_id, implementation_artifact.artifact_type),
+    )
     return (
         VerificationClaimRecord(
-            claim_id=_artifact_id(task, "verification-claim-1"),
+            claim_id=_artifact_id(task, "verification-claim-local"),
+            claim=f"feature task {task['id']} local spec and test evidence passed for {feature_id}",
+            scope="local",
+            status=VERIFICATION_CLAIM_STATUS_PASSED,
+            dependency_refs=local_dependency_refs,
+            evidence_refs=evidence_refs,
+            based_on_input_fingerprint=_input_fingerprint(local_dependency_refs),
+        ),
+        VerificationClaimRecord(
+            claim_id=_artifact_id(task, "verification-claim-cross"),
+            claim=f"feature task {task['id']} selected implementation binds current spec for {feature_id}",
+            scope="cross",
+            status=VERIFICATION_CLAIM_STATUS_PASSED,
+            dependency_refs=cross_dependency_refs,
+            evidence_refs=evidence_refs,
+            based_on_input_fingerprint=_input_fingerprint(cross_dependency_refs),
+        ),
+        VerificationClaimRecord(
+            claim_id=_artifact_id(task, "verification-claim-composite"),
             claim=f"feature task {task['id']} verify flow passed for {feature_id}",
             scope="composite",
             status=VERIFICATION_CLAIM_STATUS_PASSED,
-            dependency_refs=dependency_refs,
+            dependency_refs=composite_dependency_refs,
             evidence_refs=evidence_refs,
+            based_on_input_fingerprint=_input_fingerprint(composite_dependency_refs),
         ),
     )
 
@@ -362,6 +394,15 @@ def _projected_state(task: dict) -> str:
     if str(task.get("status") or "") == "blocked":
         return ARTIFACT_STATE_INVALID
     return ARTIFACT_STATE_CANDIDATE
+
+
+def _input_fingerprint(refs: tuple[ArtifactRef, ...]) -> str:
+    payload = json.dumps(
+        [ref.to_dict() for ref in refs],
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return f"sha256:{hashlib.sha256(payload.encode('utf-8')).hexdigest()}"
 
 
 def _require_task_doc_path(task: dict, task_dir: Path, doc_key: str) -> Path:

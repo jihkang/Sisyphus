@@ -1422,7 +1422,12 @@ class EvolutionFollowupReceiptProjectionTests(unittest.TestCase):
             promotion_path = task_dir / promotion_relative
             promotion_path.parent.mkdir(parents=True, exist_ok=True)
             promotion_path.write_text("{\"recorded\": true}\n", encoding="utf-8")
-            task["meta"]["promotion"] = {"receipt_path": promotion_relative}
+            task["promotion"] = {
+                "required": True,
+                "status": "promotion_recorded",
+                "strategy": "direct",
+                "receipt_path": promotion_relative,
+            }
         save_task_record(task_dir / "task.json", task)
         return task, task_dir
 
@@ -1515,6 +1520,45 @@ class EvolutionFollowupReceiptProjectionTests(unittest.TestCase):
             (Path(task["task_dir"]) / task["docs"]["promotion"]).as_posix(),
         )
 
+    def test_project_followup_execution_reads_first_class_promotion_bundle(self) -> None:
+        task = self._new_task("followup-promotion-bundle")
+        task, task_dir = self._configure_followup_task(
+            task,
+            verify_results=[
+                {
+                    "command": "python -m unittest -q tests.test_evolution",
+                    "status": "passed",
+                    "exit_code": 0,
+                    "started_at": "2026-04-20T00:00:00Z",
+                    "finished_at": "2026-04-20T00:00:01Z",
+                    "output_excerpt": "ok",
+                }
+            ],
+        )
+        promotion_relative = task["docs"]["promotion"]
+        promotion_path = task_dir / promotion_relative
+        promotion_path.parent.mkdir(parents=True, exist_ok=True)
+        promotion_path.write_text("{\"recorded\": true}\n", encoding="utf-8")
+        task["promotion"] = {
+            "required": True,
+            "status": "promotion_recorded",
+            "strategy": "direct",
+            "receipt_path": promotion_relative,
+        }
+        task.get("meta", {}).pop("promotion", None)
+        save_task_record(self.repo_root / task["task_dir"] / "task.json", task)
+
+        projection = project_followup_execution_record(
+            task=task,
+            task_dir=self.repo_root / task["task_dir"],
+        )
+
+        self.assertEqual(projection.execution_receipts[-1].receipt_kind, "promotion_receipt")
+        self.assertEqual(
+            projection.execution_receipts[-1].receipt_locator,
+            (Path(task["task_dir"]) / promotion_relative).as_posix(),
+        )
+
     def test_project_followup_execution_rejects_missing_verify_results(self) -> None:
         task = self._new_task("followup-no-verify-results")
         task, _ = self._configure_followup_task(task, verify_results=[])
@@ -1540,7 +1584,12 @@ class EvolutionFollowupReceiptProjectionTests(unittest.TestCase):
                 }
             ],
         )
-        task["meta"]["promotion"] = {"receipt_path": task["docs"]["promotion"]}
+        task["promotion"] = {
+            "required": True,
+            "status": "promotion_recorded",
+            "strategy": "direct",
+            "receipt_path": task["docs"]["promotion"],
+        }
         save_task_record(self.repo_root / task["task_dir"] / "task.json", task)
 
         with self.assertRaisesRegex(FileNotFoundError, "promotion receipt"):

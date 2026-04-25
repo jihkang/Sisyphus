@@ -240,6 +240,7 @@ class McpAdapterTests(unittest.TestCase):
         self.assertIn("repo://status/tasks", resource_uris)
         self.assertIn("evolution://<run-id>/run", resource_uris)
         self.assertIn("task://<task-id>/conformance", resource_uris)
+        self.assertIn("task://<task-id>/repro", resource_uris)
         self.assertIn("task://<task-id>/artifact-graph", resource_uris)
 
     def test_read_task_record_and_conformance_resources(self) -> None:

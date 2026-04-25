@@ -21,10 +21,10 @@ if str(SRC_ROOT) not in sys.path:
 import sisyphus
 import sisyphus.cli as sisyphus_cli
 from sisyphus.agents import AgentTrackingError, list_agents, register_agent, update_agent
-from sisyphus.api import queue_conversation, record_merged_pull_request, request_task
+from sisyphus.api import execute_promotion, queue_conversation, record_merged_pull_request, request_task
 from sisyphus.audit import run_verify
 from sisyphus.codex_prompt import build_codex_prompt
-from sisyphus.conformance import append_conformance_log
+from sisyphus.conformance import append_conformance_log, summarize_task_conformance
 from sisyphus.cli import (
     build_parser,
     handle_agent_run,
@@ -52,11 +52,17 @@ from sisyphus.daemon import (
 )
 from sisyphus.discovery import detect_repo_root
 from sisyphus.discord_bot import build_discord_source_context, queue_discord_conversation
+from sisyphus.events import new_event_envelope
+from sisyphus.metrics import (
+    MANUAL_INTERVENTION_REQUIRED_EVENT,
+    REOPENED_AFTER_VERIFY_EVENT,
+    build_value_metrics_report,
+)
 from sisyphus.paths import event_log_file, inbox_failed_dir, inbox_processed_dir
 from sisyphus.planning import approve_task_plan, freeze_task_spec, request_plan_changes, revise_task_plan
 from sisyphus.provider_wrapper import run_provider_wrapper
 from sisyphus.service import TaskNotificationTracker, build_task_update_summary, run_service_step
-from sisyphus.state import build_task_record, create_task_record, load_task_record, save_task_record
+from sisyphus.state import build_task_record, create_task_record, list_task_records, load_task_record, save_task_record
 from sisyphus.templates import materialize_task_templates, template_root
 from sisyphus.workflow import run_workflow_cycle
 
@@ -213,6 +219,203 @@ class SisyphusVerifyTests(unittest.TestCase):
         self.assertEqual(reloaded["gates"], [])
         self.assertEqual(reloaded["last_verify_results"][0]["status"], "passed")
 
+    def test_verify_reopens_plan_when_design_is_underdesigned(self) -> None:
+        task = self._new_feature_task("design-replan")
+        task_dir = self.repo_root / task["task_dir"]
+
+        (task_dir / "BRIEF.md").write_text(
+            "\n".join(
+                [
+                    "# Brief",
+                    "",
+                    "## Acceptance Criteria",
+                    "",
+                    "- [x] Adaptive planning state is persisted",
+                    "- [x] Verify can request a design replan",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (task_dir / "PLAN.md").write_text(
+            "\n".join(
+                [
+                    "# Plan",
+                    "",
+                    "## Implementation Plan",
+                    "",
+                    "1. Add adaptive planning state.",
+                    "2. Add verify-time design evaluation.",
+                    "",
+                    "## Risks",
+                    "",
+                    "- Replanning could disturb the workflow state machine.",
+                    "",
+                    "## Design Evaluation",
+                    "",
+                    "- Design Mode: `none`",
+                    "- Decision Reason: `existing contract only`",
+                    "- Confidence: `medium`",
+                    "- Layer Impact: `layer-adding`",
+                    "- Layer Decision Reason: `introduces an adaptive planning layer`",
+                    "- Required Design Artifacts: `connection_diagram, sequence_diagram`",
+                    "",
+                    "## Design Artifacts",
+                    "",
+                    "- Connection Diagram: `n/a`",
+                    "- Sequence Diagram: `n/a`",
+                    "- Boundary Note: `n/a`",
+                    "",
+                    "## Test Strategy",
+                    "",
+                    "### Normal Cases",
+                    "",
+                    "- [x] Adaptive planning state is persisted",
+                    "",
+                    "### Edge Cases",
+                    "",
+                    "- [x] Verify can reopen planning when design is too shallow",
+                    "",
+                    "### Exception Cases",
+                    "",
+                    "- [x] Existing verify flow remains actionable",
+                    "",
+                    "## Verification Mapping",
+                    "",
+                    "- `Adaptive planning state is persisted` -> `unit_test`",
+                    "- `Verify can reopen planning when design is too shallow` -> `integration_test`",
+                    "- `Existing verify flow remains actionable` -> `manual_check`",
+                    "",
+                    "## External LLM Review",
+                    "",
+                    "- Required: `no`",
+                    "- Provider: `n/a`",
+                    "- Purpose: `n/a`",
+                    "- Trigger: `n/a`",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="design needs later validation",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="freeze initial spec",
+        )
+
+        outcome = run_verify(self.repo_root, self.config, task["id"])
+
+        self.assertEqual(outcome.status, "failed")
+        self.assertEqual(outcome.stage, "plan_review")
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        gate_codes = {gate["code"] for gate in reloaded["gates"]}
+        self.assertEqual(reloaded["plan_status"], "changes_requested")
+        self.assertEqual(reloaded["spec_status"], "draft")
+        self.assertEqual(reloaded["workflow_phase"], "plan_revision")
+        self.assertEqual(reloaded["design"]["assessment"]["status"], "underdesigned")
+        self.assertTrue(reloaded["design"]["assessment"]["replan_required"])
+        self.assertIn("DESIGN_REPLAN_REQUIRED", gate_codes)
+        self.assertIn("PLAN_CHANGES_REQUESTED", gate_codes)
+        verify_text = (task_dir / "VERIFY.md").read_text(encoding="utf-8")
+        self.assertIn("## Design Assessment", verify_text)
+        self.assertIn("- Status: `underdesigned`", verify_text)
+
+    def test_load_and_list_task_records_sync_docs_into_projection_state(self) -> None:
+        task = self._new_feature_task("projection-sync")
+        task_dir = self.repo_root / task["task_dir"]
+
+        (task_dir / "PLAN.md").write_text(
+            "\n".join(
+                [
+                    "# Plan",
+                    "",
+                    "## Implementation Plan",
+                    "",
+                    "1. Normalize task projections.",
+                    "",
+                    "## Risks",
+                    "",
+                    "- Projection state can drift from docs.",
+                    "",
+                    "## Design Evaluation",
+                    "",
+                    "- Design Mode: `light`",
+                    "- Decision Reason: `crosses the load/list projection path`",
+                    "- Confidence: `high`",
+                    "- Layer Impact: `layer-touching`",
+                    "- Layer Decision Reason: `MCP and CLI should read the same normalized task state`",
+                    "- Required Design Artifacts: `boundary_note`",
+                    "",
+                    "## Design Artifacts",
+                    "",
+                    "- Connection Diagram: `n/a`",
+                    "- Sequence Diagram: `n/a`",
+                    "- Boundary Note: `docs/adaptive-planning-protocol.md`",
+                    "",
+                    "## Test Strategy",
+                    "",
+                    "### Normal Cases",
+                    "",
+                    "- [x] Projection surfaces doc-derived strategy",
+                    "",
+                    "### Edge Cases",
+                    "",
+                    "- [x] Placeholder docs still normalize safely",
+                    "",
+                    "### Exception Cases",
+                    "",
+                    "- [x] Missing plan sections do not crash projection loading",
+                    "",
+                    "## Verification Mapping",
+                    "",
+                    "- `Projection surfaces doc-derived strategy` -> `unit_test`",
+                    "- `Placeholder docs still normalize safely` -> `unit_test`",
+                    "- `Missing plan sections do not crash projection loading` -> `unit_test`",
+                    "",
+                    "## External LLM Review",
+                    "",
+                    "- Required: `no`",
+                    "- Provider: `n/a`",
+                    "- Purpose: `n/a`",
+                    "- Trigger: `n/a`",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        listed = next(
+            candidate
+            for candidate in list_task_records(self.repo_root, self.config.task_dir)
+            if candidate["id"] == task["id"]
+        )
+
+        for projected in (reloaded, listed):
+            self.assertEqual(
+                projected["test_strategy"]["normal_cases"][0]["name"],
+                "Projection surfaces doc-derived strategy",
+            )
+            self.assertEqual(projected["test_strategy"]["verification_methods"][0]["method"], "unit_test")
+            self.assertEqual(projected["design"]["mode"], "light")
+            self.assertEqual(projected["design"]["layer_impact"], "layer-touching")
+            self.assertEqual(projected["design"]["required_artifacts"], ["boundary_note"])
+            self.assertEqual(
+                projected["design"]["artifacts"]["boundary_note"],
+                "docs/adaptive-planning-protocol.md",
+            )
+
     def test_verify_requires_plan_approval(self) -> None:
         task = self._new_feature_task("verify-needs-plan-approval")
         task_dir = self.repo_root / task["task_dir"]
@@ -308,6 +511,116 @@ class SisyphusVerifyTests(unittest.TestCase):
         self.assertEqual(reloaded["status"], "closed")
         self.assertEqual(reloaded["gates"], [])
         self.assertTrue(reloaded["meta"]["close_override_used"])
+
+    def test_close_blocks_on_required_promotion_and_marks_promotion_pending(self) -> None:
+        task = self._new_feature_task("close-promotion-pending")
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "verified"
+        persisted["stage"] = "done"
+        persisted["workflow_phase"] = "verified"
+        persisted["verify_status"] = "passed"
+        persisted["plan_status"] = "approved"
+        persisted["spec_status"] = "frozen"
+        persisted["promotion"] = {
+            "required": True,
+            "status": "promotion_pending",
+            "strategy": "direct",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        outcome = run_close(self.repo_root, self.config, task["id"], allow_dirty=False)
+
+        self.assertFalse(outcome.closed)
+        gate_codes = {gate["code"] for gate in outcome.gates}
+        self.assertIn("PROMOTION_REQUIRED", gate_codes)
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded["status"], "verified")
+        self.assertEqual(reloaded["stage"], "promotion")
+        self.assertEqual(reloaded["workflow_phase"], "promotion_pending")
+
+    def test_close_succeeds_when_required_promotion_is_recorded(self) -> None:
+        task = self._new_feature_task("close-promotion-recorded")
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "verified"
+        persisted["stage"] = "done"
+        persisted["workflow_phase"] = "verified"
+        persisted["verify_status"] = "passed"
+        persisted["plan_status"] = "approved"
+        persisted["spec_status"] = "frozen"
+        persisted["promotion"] = {
+            "required": True,
+            "status": "promotion_recorded",
+            "strategy": "direct",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        outcome = run_close(self.repo_root, self.config, task["id"], allow_dirty=False)
+
+        self.assertTrue(outcome.closed)
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded["status"], "closed")
+        self.assertEqual(reloaded["workflow_phase"], "closed")
+
+    def test_load_task_record_normalizes_closed_workflow_phase(self) -> None:
+        task = self._new_feature_task("closed-phase-normalization")
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "closed"
+        persisted["stage"] = "done"
+        persisted["workflow_phase"] = "verified"
+        persisted["verify_status"] = "passed"
+        persisted["closed_at"] = "2026-04-21T12:31:44Z"
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+
+        self.assertEqual(reloaded["status"], "closed")
+        self.assertEqual(reloaded["stage"], "done")
+        self.assertEqual(reloaded["workflow_phase"], "closed")
+
+    def test_create_task_record_initializes_first_class_promotion_bundle(self) -> None:
+        task = self._new_feature_task("promotion-defaults")
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+
+        self.assertIn("promotion", reloaded)
+        self.assertFalse(reloaded["promotion"]["required"])
+        self.assertEqual(reloaded["promotion"]["status"], "not_required")
+        self.assertEqual(reloaded["promotion"]["strategy"], "direct")
+        self.assertEqual(reloaded["promotion"]["base_branch"], "dev")
+        self.assertEqual(reloaded["promotion"]["head_branch"], task["branch"])
+        self.assertEqual(reloaded["promotion"]["receipt_path"], task["docs"]["promotion"])
+
+    def test_load_task_record_migrates_legacy_meta_promotion_to_first_class_bundle(self) -> None:
+        task = self._new_feature_task("promotion-legacy")
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted.setdefault("meta", {})["promotion"] = {
+            "status": "merged",
+            "pr_number": 17,
+            "url": "https://github.com/jihkang/Sisyphus/pull/17",
+            "receipt_path": persisted["docs"]["promotion"],
+            "changeset_path": persisted["docs"]["changeset"],
+            "base_branch": "main",
+            "head_branch": persisted["branch"],
+            "merge_commit_sha": "abc123",
+        }
+        persisted.pop("promotion", None)
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+
+        self.assertTrue(reloaded["promotion"]["required"])
+        self.assertEqual(reloaded["promotion"]["status"], "promotion_recorded")
+        self.assertEqual(reloaded["promotion"]["pr_number"], 17)
+        self.assertEqual(reloaded["promotion"]["pr_url"], "https://github.com/jihkang/Sisyphus/pull/17")
+        self.assertEqual(reloaded["promotion"]["merge_commit_sha"], "abc123")
+        self.assertEqual(reloaded["meta"]["promotion"]["status"], "merged")
 
 class SisyphusNewTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -791,6 +1104,7 @@ class SisyphusAgentTests(unittest.TestCase):
         self.assertEqual(prompt.task_id, self.task["id"])
         self.assertIn('"id":', prompt.prompt)
         self.assertIn('"test_strategy":', prompt.prompt)
+        self.assertIn('"design":', prompt.prompt)
         self.assertIn("Additional operator instruction: focus on the task docs", prompt.prompt)
         self.assertIn("STATUS: completed", prompt.prompt)
         self.assertIn("## Sisyphus Operating Principles", prompt.prompt)
@@ -1218,6 +1532,117 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertTrue((mirrored_task_dir / "PLAN.md").exists())
         self.assertIn("Original request:", (task_dir / "BRIEF.md").read_text(encoding="utf-8"))
 
+    def test_process_inbox_event_marks_feature_tasks_promotable_by_default(self) -> None:
+        _, event_path = queue_conversation_event(
+            self.repo_root,
+            title="Add agent dashboard",
+            message="show agent status in one place",
+            task_type="feature",
+            auto_run=False,
+        )
+
+        event = process_inbox_event(
+            repo_root=self.repo_root,
+            config=self.config,
+            event_path=event_path,
+        )
+
+        self.assertEqual(event["status"], "processed")
+        processed_files = list(inbox_processed_dir(self.repo_root).glob("*.json"))
+        task_id = json.loads(processed_files[0].read_text(encoding="utf-8"))["result"]["task_id"]
+        task, _ = load_task_record(self.repo_root, self.config.task_dir, task_id)
+
+        self.assertTrue(task["promotion"]["required"])
+        self.assertEqual(task["promotion"]["status"], "promotion_pending")
+        self.assertEqual(task["promotion"]["required_source"], "classified")
+        self.assertEqual(task["promotion"]["required_reason"], "feature tasks are promotable by default")
+
+    def test_process_inbox_event_marks_issue_tasks_not_promotable_by_default(self) -> None:
+        _, event_path = queue_conversation_event(
+            self.repo_root,
+            title="Fix agent dashboard",
+            message="the dashboard crashes on load",
+            task_type="issue",
+            auto_run=False,
+        )
+
+        event = process_inbox_event(
+            repo_root=self.repo_root,
+            config=self.config,
+            event_path=event_path,
+        )
+
+        self.assertEqual(event["status"], "processed")
+        processed_files = list(inbox_processed_dir(self.repo_root).glob("*.json"))
+        task_id = json.loads(processed_files[0].read_text(encoding="utf-8"))["result"]["task_id"]
+        task, _ = load_task_record(self.repo_root, self.config.task_dir, task_id)
+
+        self.assertFalse(task["promotion"]["required"])
+        self.assertEqual(task["promotion"]["status"], "not_required")
+        self.assertEqual(task["promotion"]["required_source"], "classified")
+        self.assertEqual(task["promotion"]["required_reason"], "non-feature tasks are not promotable by default")
+
+    def test_process_inbox_event_skips_promotion_for_test_only_feature_paths(self) -> None:
+        _, event_path = queue_conversation_event(
+            self.repo_root,
+            title="Refine verification artifact",
+            message="adjust only the test harness for this feature",
+            task_type="feature",
+            owned_paths=["tests/test_sisyphus.py"],
+            auto_run=False,
+        )
+
+        event = process_inbox_event(
+            repo_root=self.repo_root,
+            config=self.config,
+            event_path=event_path,
+        )
+
+        self.assertEqual(event["status"], "processed")
+        processed_files = list(inbox_processed_dir(self.repo_root).glob("*.json"))
+        task_id = json.loads(processed_files[0].read_text(encoding="utf-8"))["result"]["task_id"]
+        task, _ = load_task_record(self.repo_root, self.config.task_dir, task_id)
+
+        self.assertEqual(task["meta"]["owned_paths"], ["tests/test_sisyphus.py"])
+        self.assertFalse(task["promotion"]["required"])
+        self.assertEqual(task["promotion"]["status"], "not_required")
+        self.assertEqual(task["promotion"]["required_source"], "classified")
+        self.assertEqual(
+            task["promotion"]["required_reason"],
+            "task only targets tests or internal planning artifacts",
+        )
+
+    def test_promotion_required_override_beats_auto_classification(self) -> None:
+        _, event_path = queue_conversation_event(
+            self.repo_root,
+            title="Add agent dashboard",
+            message="show agent status in one place",
+            task_type="feature",
+            auto_run=False,
+        )
+
+        event = process_inbox_event(
+            repo_root=self.repo_root,
+            config=self.config,
+            event_path=event_path,
+        )
+
+        self.assertEqual(event["status"], "processed")
+        processed_files = list(inbox_processed_dir(self.repo_root).glob("*.json"))
+        task_id = json.loads(processed_files[0].read_text(encoding="utf-8"))["result"]["task_id"]
+        task, task_file = load_task_record(self.repo_root, self.config.task_dir, task_id)
+        task["promotion"]["required_override"] = False
+        save_task_record(task_file=task_file, task=task)
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task_id)
+        self.assertFalse(reloaded["promotion"]["required"])
+        self.assertEqual(reloaded["promotion"]["status"], "not_required")
+        self.assertEqual(reloaded["promotion"]["required_source"], "override")
+        self.assertEqual(
+            reloaded["promotion"]["required_reason"],
+            "promotion requirement was overridden explicitly",
+        )
+
     def test_process_inbox_event_records_merge_receipt_and_changeset(self) -> None:
         task = create_task_record(
             repo_root=self.repo_root,
@@ -1264,7 +1689,18 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(len(processed_files), 1)
         persisted_event = json.loads(processed_files[0].read_text(encoding="utf-8"))
         self.assertEqual(persisted_event["result"]["pr_number"], 11)
+        self.assertFalse(persisted_event["result"]["close_attempted"])
+        self.assertFalse(persisted_event["result"]["closed"])
         reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        promotion_bundle = reloaded["promotion"]
+        self.assertTrue(promotion_bundle["required"])
+        self.assertEqual(promotion_bundle["status"], "promotion_recorded")
+        self.assertEqual(promotion_bundle["pr_number"], 11)
+        self.assertEqual(promotion_bundle["pr_url"], "https://github.com/jihkang/Sisyphus/pull/11")
+        self.assertEqual(
+            promotion_bundle["merge_commit_sha"],
+            "5e0a4b80e9c32f5f52d5fff872eba8ee388ef6ee",
+        )
         promotion = reloaded["meta"]["promotion"]
         self.assertEqual(promotion["status"], "merged")
         self.assertEqual(promotion["pr_number"], 11)
@@ -1283,6 +1719,61 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertIn("`src/sisyphus/cli.py`", changeset)
         self.assertIn("`tests/test_sisyphus.py`", changeset)
         self.assertIn("`src`: 1 files", changeset)
+
+    def test_process_inbox_event_records_merge_receipt_and_closes_verified_task(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="merge-receipt-close",
+        )
+        materialize_task_templates(task)
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "verified"
+        persisted["stage"] = "promotion"
+        persisted["workflow_phase"] = "promotion_pending"
+        persisted["verify_status"] = "passed"
+        persisted["plan_status"] = "approved"
+        persisted["spec_status"] = "frozen"
+        persisted["promotion"] = {
+            "required": True,
+            "status": "promotion_pending",
+            "strategy": "direct",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        _, event_path = queue_pull_request_merged_event(
+            self.repo_root,
+            task_id=task["id"],
+            branch=task["branch"],
+            repo_full_name="jihkang/Sisyphus",
+            pr_number=12,
+            title="Close after merge receipt",
+            url="https://github.com/jihkang/Sisyphus/pull/12",
+            base_branch="main",
+            head_branch=task["branch"],
+        )
+
+        event = process_inbox_event(
+            repo_root=self.repo_root,
+            config=self.config,
+            event_path=event_path,
+        )
+
+        self.assertEqual(event["status"], "processed")
+        processed_files = list(inbox_processed_dir(self.repo_root).glob("*.json"))
+        persisted_event = json.loads(processed_files[0].read_text(encoding="utf-8"))
+        self.assertTrue(persisted_event["result"]["close_attempted"])
+        self.assertTrue(persisted_event["result"]["closed"])
+        self.assertEqual(persisted_event["result"]["close_status"], "closed")
+        self.assertEqual(persisted_event["result"]["close_gate_codes"], [])
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded["promotion"]["status"], "promotion_recorded")
+        self.assertEqual(reloaded["status"], "closed")
+        self.assertEqual(reloaded["workflow_phase"], "closed")
 
     def test_record_merged_pull_request_api_returns_structured_result(self) -> None:
         task = create_task_record(
@@ -1310,6 +1801,497 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(result.pr_number, 11)
         self.assertIsNotNone(result.receipt_path)
         self.assertIsNotNone(result.changeset_path)
+        self.assertFalse(result.close_attempted)
+        self.assertFalse(result.closed)
+
+    def test_record_merged_pull_request_api_closes_verified_task_waiting_on_promotion(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="merge-receipt-api-close",
+        )
+        materialize_task_templates(task)
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "verified"
+        persisted["stage"] = "promotion"
+        persisted["workflow_phase"] = "promotion_pending"
+        persisted["verify_status"] = "passed"
+        persisted["plan_status"] = "approved"
+        persisted["spec_status"] = "frozen"
+        persisted["promotion"] = {
+            "required": True,
+            "status": "promotion_pending",
+            "strategy": "direct",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        result = record_merged_pull_request(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            branch=task["branch"],
+            repo_full_name="jihkang/Sisyphus",
+            pr_number=19,
+            title="Close after merge receipt via API",
+            changed_files=[{"path": "src/sisyphus/cli.py", "status": "modified"}],
+        )
+
+        self.assertTrue(result.ok)
+        self.assertTrue(result.close_attempted)
+        self.assertTrue(result.closed)
+        self.assertEqual(result.close_status, "closed")
+        self.assertEqual(result.close_gate_codes, [])
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded["status"], "closed")
+        self.assertEqual(reloaded["workflow_phase"], "closed")
+
+    def test_record_merged_pull_request_marks_stacked_child_for_retarget_and_reverify(self) -> None:
+        parent = create_task_workspace(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="retarget-parent",
+        ).task
+        child = create_task_workspace(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="retarget-child",
+        ).task
+
+        child_file = self.repo_root / child["task_dir"] / "task.json"
+        persisted_child = json.loads(child_file.read_text(encoding="utf-8"))
+        persisted_child["verify_status"] = "passed"
+        persisted_child["status"] = "verified"
+        persisted_child["workflow_phase"] = "promotion_pending"
+        persisted_child["promotion"] = {
+            "required": True,
+            "status": "pr_open",
+            "strategy": "stacked",
+            "parent_task_id": parent["id"],
+            "base_branch": parent["branch"],
+            "head_branch": child["branch"],
+            "pr_number": 88,
+            "pr_url": "https://github.com/jihkang/Sisyphus/pull/88",
+            "receipt_path": persisted_child["docs"]["promotion"],
+        }
+        child_file.write_text(json.dumps(persisted_child, indent=2) + "\n", encoding="utf-8")
+
+        result = record_merged_pull_request(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=parent["id"],
+            branch=parent["branch"],
+            repo_full_name="jihkang/Sisyphus",
+            pr_number=24,
+            title="Merge parent task",
+            changed_files=[{"path": "src/sisyphus/promotion.py", "status": "modified"}],
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.child_retargeted_task_ids, [child["id"]])
+
+        reloaded_child, _ = load_task_record(self.repo_root, self.config.task_dir, child["id"])
+        self.assertTrue(reloaded_child["promotion"]["retarget_required"])
+        self.assertTrue(reloaded_child["promotion"]["reverify_required"])
+        self.assertEqual(reloaded_child["promotion"]["retarget_parent_task_id"], parent["id"])
+        self.assertEqual(reloaded_child["promotion"]["retarget_parent_branch"], parent["branch"])
+        self.assertEqual(reloaded_child["verify_status"], "not_run")
+        self.assertEqual(reloaded_child["status"], "blocked")
+        self.assertEqual(reloaded_child["workflow_phase"], "retarget_required")
+        gate_codes = {gate["code"] for gate in reloaded_child["gates"]}
+        self.assertIn("PARENT_RETARGET_REQUIRED", gate_codes)
+        event_entries = [
+            json.loads(line)
+            for line in event_log_file(self.repo_root).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        self.assertTrue(
+            any(
+                entry.get("event_type") == "task.manual_intervention_required" and
+                entry.get("data", {}).get("task_id") == child["id"] and
+                entry.get("data", {}).get("reason") == "parent_retarget_required"
+                for entry in event_entries
+            )
+        )
+        self.assertTrue(
+            any(
+                entry.get("event_type") == "task.reopened_after_verify" and
+                entry.get("data", {}).get("task_id") == child["id"]
+                for entry in event_entries
+            )
+        )
+
+    def test_build_value_metrics_report_summarizes_minimum_value_metrics(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="value-metrics",
+        )
+        materialize_task_templates(task)
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["verify_status"] = "passed"
+        persisted["last_verified_at"] = "2026-04-21T00:01:00Z"
+        persisted["promotion"] = {
+            "required": True,
+            "status": "recorded",
+            "strategy": "direct",
+            "recorded_at": "2026-04-21T00:06:00Z",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        event_log_file(self.repo_root).write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "event_id": "evt-session-1",
+                            "event_type": "conversation",
+                            "status": "queued",
+                            "timestamp": "2026-04-21T00:00:00Z",
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "event_id": "evt-session-1",
+                            "event_type": "conversation",
+                            "status": "processed",
+                            "timestamp": "2026-04-21T00:00:12Z",
+                        }
+                    ),
+                    new_event_envelope(
+                        "verify.completed",
+                        data={"task_id": task["id"], "status": "passed"},
+                        timestamp="2026-04-21T00:01:00Z",
+                    ).to_json(),
+                    new_event_envelope(
+                        MANUAL_INTERVENTION_REQUIRED_EVENT,
+                        data={"task_id": task["id"], "reason": "promotion_required"},
+                        timestamp="2026-04-21T00:02:00Z",
+                    ).to_json(),
+                    new_event_envelope(
+                        REOPENED_AFTER_VERIFY_EVENT,
+                        data={"task_id": task["id"], "reason": "stacked_parent_merged"},
+                        timestamp="2026-04-21T00:07:00Z",
+                    ).to_json(),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        payload = build_value_metrics_report(self.repo_root, self.config)
+
+        self.assertEqual(payload["metrics"]["session_resume_time"]["sample_count"], 1)
+        self.assertEqual(payload["metrics"]["session_resume_time"]["summary"]["average_seconds"], 12.0)
+        self.assertEqual(payload["metrics"]["reopen_rate_after_verify"]["verified_task_count"], 1)
+        self.assertEqual(payload["metrics"]["reopen_rate_after_verify"]["reopened_task_count"], 1)
+        self.assertEqual(payload["metrics"]["reopen_rate_after_verify"]["rate"], 1.0)
+        self.assertEqual(payload["metrics"]["promotion_lead_time"]["sample_count"], 1)
+        self.assertEqual(payload["metrics"]["promotion_lead_time"]["summary"]["average_seconds"], 300.0)
+        self.assertEqual(payload["metrics"]["manual_intervention_count"]["count"], 1)
+        self.assertEqual(payload["metrics"]["manual_intervention_count"]["by_reason"]["promotion_required"], 1)
+
+    def test_execute_promotion_commits_pushes_and_opens_pull_request(self) -> None:
+        self._init_bare_remote(self.repo_root, remote_name="origin")
+        outcome = create_task_workspace(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="promotion-executor",
+        )
+        task = outcome.task
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["promotion"]["required"] = True
+        persisted["promotion"]["required_source"] = "override"
+        persisted["promotion"]["required_reason"] = "test override"
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        worktree = Path(task["worktree_path"])
+        (worktree / "README.md").write_text("# daemon repo\npromotion executor\n", encoding="utf-8")
+
+        gh_result = subprocess.CompletedProcess(
+            args=["gh", "pr", "create"],
+            returncode=0,
+            stdout="https://github.com/jihkang/Sisyphus/pull/17\n",
+            stderr="",
+        )
+        with mock.patch("sisyphus.promotion._run_gh", return_value=gh_result) as mocked_gh:
+            result = execute_promotion(
+                self.repo_root,
+                config=self.config,
+                task_id=task["id"],
+                repo_full_name="jihkang/Sisyphus",
+                title="Add promotion executor",
+                commit_message="Add promotion executor",
+            )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.status, "pr_open")
+        self.assertEqual(result.task_id, task["id"])
+        self.assertEqual(result.pr_number, 17)
+        self.assertEqual(result.pr_url, "https://github.com/jihkang/Sisyphus/pull/17")
+        self.assertIsNotNone(result.receipt_path)
+        mocked_gh.assert_called_once()
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        promotion = reloaded["promotion"]
+        self.assertEqual(promotion["status"], "pr_open")
+        self.assertEqual(promotion["remote_name"], "origin")
+        self.assertEqual(promotion["commit_message"], "Add promotion executor")
+        self.assertEqual(promotion["pr_number"], 17)
+        self.assertEqual(promotion["pr_url"], "https://github.com/jihkang/Sisyphus/pull/17")
+        self.assertIsNotNone(promotion["head_sha"])
+        self.assertIsNotNone(promotion["execution_receipt_path"])
+
+        receipt_path = self.repo_root / task["task_dir"] / str(promotion["execution_receipt_path"])
+        self.assertTrue(receipt_path.exists())
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        self.assertEqual(receipt["status"], "pr_open")
+        self.assertEqual(receipt["pull_request"]["number"], 17)
+        self.assertEqual(receipt["pull_request"]["url"], "https://github.com/jihkang/Sisyphus/pull/17")
+
+        remote_head = self._run_git(self.repo_root, "ls-remote", "--heads", "origin", task["branch"]).stdout.strip()
+        self.assertIn(f"refs/heads/{task['branch']}", remote_head)
+
+    def test_execute_promotion_can_resume_from_pushed_state_without_new_changes(self) -> None:
+        self._init_bare_remote(self.repo_root, remote_name="origin")
+        outcome = create_task_workspace(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="promotion-resume",
+        )
+        task = outcome.task
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["promotion"]["required"] = True
+        persisted["promotion"]["required_source"] = "override"
+        persisted["promotion"]["required_reason"] = "test override"
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        worktree = Path(task["worktree_path"])
+        (worktree / "README.md").write_text("# daemon repo\nresume promotion\n", encoding="utf-8")
+        self._run_git(worktree, "add", "-A")
+        self._run_git(worktree, "commit", "-m", "Prepare pushed branch")
+        head_sha = self._run_git(worktree, "rev-parse", "HEAD").stdout.strip()
+        self._run_git(worktree, "push", "-u", "origin", task["branch"])
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        reloaded["promotion"]["required"] = True
+        reloaded["promotion"]["status"] = "pushed"
+        reloaded["promotion"]["head_sha"] = head_sha
+        reloaded["promotion"]["remote_name"] = "origin"
+        task_file.write_text(json.dumps(reloaded, indent=2) + "\n", encoding="utf-8")
+
+        gh_result = subprocess.CompletedProcess(
+            args=["gh", "pr", "create"],
+            returncode=0,
+            stdout="https://github.com/jihkang/Sisyphus/pull/18\n",
+            stderr="",
+        )
+        with mock.patch("sisyphus.promotion._run_gh", return_value=gh_result):
+            result = execute_promotion(
+                self.repo_root,
+                config=self.config,
+                task_id=task["id"],
+                repo_full_name="jihkang/Sisyphus",
+                title="Resume promotion executor",
+            )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.status, "pr_open")
+        self.assertEqual(result.commit_sha, head_sha)
+        self.assertEqual(result.pr_number, 18)
+
+    def test_execute_promotion_rejects_non_promotable_task(self) -> None:
+        self._init_bare_remote(self.repo_root, remote_name="origin")
+        outcome = create_task_workspace(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="promotion-reject",
+        )
+
+        result = execute_promotion(
+            self.repo_root,
+            config=self.config,
+            task_id=outcome.task["id"],
+            repo_full_name="jihkang/Sisyphus",
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("does not require promotion", result.error or "")
+
+    def test_execute_promotion_uses_parent_branch_for_stacked_base_resolution(self) -> None:
+        self._init_bare_remote(self.repo_root, remote_name="origin")
+        parent = create_task_workspace(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="stacked-parent-open",
+        ).task
+        child = create_task_workspace(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="stacked-child-open",
+        ).task
+        child_file = self.repo_root / child["task_dir"] / "task.json"
+        persisted = json.loads(child_file.read_text(encoding="utf-8"))
+        persisted["promotion"]["required"] = True
+        persisted["promotion"]["strategy"] = "stacked"
+        persisted["promotion"]["parent_task_id"] = parent["id"]
+        child_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        child_worktree = Path(child["worktree_path"])
+        (child_worktree / "README.md").write_text("# daemon repo\nstacked child open\n", encoding="utf-8")
+
+        gh_result = subprocess.CompletedProcess(
+            args=["gh", "pr", "create"],
+            returncode=0,
+            stdout="https://github.com/jihkang/Sisyphus/pull/21\n",
+            stderr="",
+        )
+        with mock.patch("sisyphus.promotion._run_gh", return_value=gh_result) as mocked_gh:
+            result = execute_promotion(
+                self.repo_root,
+                config=self.config,
+                task_id=child["id"],
+                repo_full_name="jihkang/Sisyphus",
+            )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.base_branch, parent["branch"])
+        gh_args = mocked_gh.call_args.args[1]
+        self.assertEqual(gh_args[gh_args.index("--base") + 1], parent["branch"])
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, child["id"])
+        self.assertEqual(reloaded["promotion"]["base_source"], "parent_task_branch")
+        self.assertEqual(reloaded["promotion"]["resolved_parent_branch"], parent["branch"])
+        self.assertIn(parent["id"], reloaded["promotion"]["base_reason"])
+
+        receipt_path = self.repo_root / child["task_dir"] / str(reloaded["promotion"]["execution_receipt_path"])
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        self.assertEqual(receipt["base_resolution"]["source"], "parent_task_branch")
+        self.assertEqual(receipt["base_resolution"]["parent_task_id"], parent["id"])
+        self.assertEqual(receipt["base_resolution"]["parent_branch"], parent["branch"])
+
+    def test_execute_promotion_uses_parent_merge_target_when_parent_is_recorded(self) -> None:
+        self._init_bare_remote(self.repo_root, remote_name="origin")
+        parent = create_task_workspace(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="stacked-parent-recorded",
+        ).task
+        child = create_task_workspace(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="stacked-child-recorded",
+        ).task
+
+        parent_file = self.repo_root / parent["task_dir"] / "task.json"
+        persisted_parent = json.loads(parent_file.read_text(encoding="utf-8"))
+        persisted_parent["promotion"] = {
+            "required": True,
+            "status": "promotion_recorded",
+            "strategy": "direct",
+            "base_branch": "main",
+            "head_branch": parent["branch"],
+            "receipt_path": persisted_parent["docs"]["promotion"],
+        }
+        parent_file.write_text(json.dumps(persisted_parent, indent=2) + "\n", encoding="utf-8")
+
+        child_file = self.repo_root / child["task_dir"] / "task.json"
+        persisted_child = json.loads(child_file.read_text(encoding="utf-8"))
+        persisted_child["promotion"]["required"] = True
+        persisted_child["promotion"]["strategy"] = "stacked"
+        persisted_child["promotion"]["parent_task_id"] = parent["id"]
+        child_file.write_text(json.dumps(persisted_child, indent=2) + "\n", encoding="utf-8")
+
+        child_worktree = Path(child["worktree_path"])
+        (child_worktree / "README.md").write_text("# daemon repo\nstacked child recorded\n", encoding="utf-8")
+
+        gh_result = subprocess.CompletedProcess(
+            args=["gh", "pr", "create"],
+            returncode=0,
+            stdout="https://github.com/jihkang/Sisyphus/pull/22\n",
+            stderr="",
+        )
+        with mock.patch("sisyphus.promotion._run_gh", return_value=gh_result) as mocked_gh:
+            result = execute_promotion(
+                self.repo_root,
+                config=self.config,
+                task_id=child["id"],
+                repo_full_name="jihkang/Sisyphus",
+            )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.base_branch, "main")
+        gh_args = mocked_gh.call_args.args[1]
+        self.assertEqual(gh_args[gh_args.index("--base") + 1], "main")
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, child["id"])
+        self.assertEqual(reloaded["promotion"]["base_source"], "parent_merge_target")
+        self.assertEqual(reloaded["promotion"]["resolved_parent_branch"], parent["branch"])
+
+    def test_execute_promotion_base_override_beats_stacked_parent_resolution(self) -> None:
+        self._init_bare_remote(self.repo_root, remote_name="origin")
+        parent = create_task_workspace(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="stacked-parent-override",
+        ).task
+        child = create_task_workspace(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="stacked-child-override",
+        ).task
+        child_file = self.repo_root / child["task_dir"] / "task.json"
+        persisted = json.loads(child_file.read_text(encoding="utf-8"))
+        persisted["promotion"]["required"] = True
+        persisted["promotion"]["strategy"] = "stacked"
+        persisted["promotion"]["parent_task_id"] = parent["id"]
+        persisted["promotion"]["base_override"] = "release/2026"
+        child_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        child_worktree = Path(child["worktree_path"])
+        (child_worktree / "README.md").write_text("# daemon repo\nstacked child override\n", encoding="utf-8")
+
+        gh_result = subprocess.CompletedProcess(
+            args=["gh", "pr", "create"],
+            returncode=0,
+            stdout="https://github.com/jihkang/Sisyphus/pull/23\n",
+            stderr="",
+        )
+        with mock.patch("sisyphus.promotion._run_gh", return_value=gh_result) as mocked_gh:
+            result = execute_promotion(
+                self.repo_root,
+                config=self.config,
+                task_id=child["id"],
+                repo_full_name="jihkang/Sisyphus",
+            )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.base_branch, "release/2026")
+        gh_args = mocked_gh.call_args.args[1]
+        self.assertEqual(gh_args[gh_args.index("--base") + 1], "release/2026")
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, child["id"])
+        self.assertEqual(reloaded["promotion"]["base_source"], "explicit_override")
+        self.assertEqual(reloaded["promotion"]["base_override"], "release/2026")
 
     def test_process_inbox_event_persists_discord_source_context_to_task(self) -> None:
         _, event_path = queue_discord_conversation(
@@ -1569,6 +2551,100 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(persisted["workflow_phase"], "execution")
         self.assertEqual(len(persisted["subtasks"]), 3)
         self.assertEqual(persisted["subtasks"][0]["title"], "Happy path works")
+
+    def test_spec_freeze_records_design_anchor(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="design-anchor",
+        )
+        materialize_task_templates(task)
+        task_dir = self.repo_root / task["task_dir"]
+        (task_dir / "PLAN.md").write_text(
+            "\n".join(
+                [
+                    "# Plan",
+                    "",
+                    "## Implementation Plan",
+                    "",
+                    "1. Add a design-aware planner.",
+                    "",
+                    "## Risks",
+                    "",
+                    "- The anchor may drift from the task plan.",
+                    "",
+                    "## Design Evaluation",
+                    "",
+                    "- Design Mode: `light`",
+                    "- Decision Reason: `crosses a few modules`",
+                    "- Confidence: `medium`",
+                    "- Layer Impact: `layer-touching`",
+                    "- Layer Decision Reason: `planning and verify now share a design bundle`",
+                    "- Required Design Artifacts: `connection_diagram`",
+                    "",
+                    "## Design Artifacts",
+                    "",
+                    "- Connection Diagram: `PLAN.md#connection-diagram`",
+                    "- Sequence Diagram: `n/a`",
+                    "- Boundary Note: `n/a`",
+                    "",
+                    "## Test Strategy",
+                    "",
+                    "### Normal Cases",
+                    "",
+                    "- [x] Planner persists design state",
+                    "",
+                    "### Edge Cases",
+                    "",
+                    "- [x] Missing design artifacts are reported",
+                    "",
+                    "### Exception Cases",
+                    "",
+                    "- [x] Existing tasks still verify",
+                    "",
+                    "## Verification Mapping",
+                    "",
+                    "- `Planner persists design state` -> `unit_test`",
+                    "- `Missing design artifacts are reported` -> `integration_test`",
+                    "- `Existing tasks still verify` -> `manual_check`",
+                    "",
+                    "## External LLM Review",
+                    "",
+                    "- Required: `no`",
+                    "- Provider: `n/a`",
+                    "- Purpose: `n/a`",
+                    "- Trigger: `n/a`",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="plan approved",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="spec locked",
+        )
+
+        persisted, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        conformance = summarize_task_conformance(persisted)
+
+        self.assertEqual(persisted["design"]["frozen"]["mode"], "light")
+        self.assertEqual(persisted["design"]["frozen"]["required_artifacts"], ["connection_diagram"])
+        self.assertEqual(persisted["design"]["frozen"]["artifacts"]["connection_diagram"], "PLAN.md#connection-diagram")
+        self.assertIsNotNone(persisted["design"]["frozen"]["frozen_at"])
+        self.assertIsNotNone(conformance["last_design_anchor_at"])
+        self.assertIn("mode=light", conformance["design_anchor_summary"])
 
     def test_run_daemon_once_respects_no_run_events(self) -> None:
         with mock.patch("sisyphus.cli.Path.cwd", return_value=self.repo_root):
@@ -1870,6 +2946,26 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertIn("requested_slug=stt", summary)
         self.assertIn("followup_of=TF-20260405-feature-stt", summary)
 
+    def test_build_task_update_summary_includes_promotion_status(self) -> None:
+        task = {
+            "id": "TF-20260405-feature-promotion",
+            "status": "open",
+            "workflow_phase": "execution",
+            "plan_status": "approved",
+            "spec_status": "frozen",
+            "subtasks": [],
+            "promotion": {
+                "required": True,
+                "status": "pr_open",
+                "strategy": "direct",
+                "pr_number": 23,
+            },
+        }
+
+        summary = build_task_update_summary(task)
+
+        self.assertIn("promotion=pr_open#23", summary)
+
     def test_workflow_cycle_does_not_auto_advance_pending_review_tasks(self) -> None:
         task = create_task_record(
             repo_root=self.repo_root,
@@ -1889,6 +2985,175 @@ class SisyphusDaemonTests(unittest.TestCase):
         reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
         self.assertEqual(reloaded["workflow_phase"], "plan_in_review")
         self.assertEqual(reloaded["plan_status"], "pending_review")
+
+    def test_workflow_cycle_materializes_feature_obligation_queue_before_subtasks(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="workflow-obligation-queue",
+        )
+        materialize_task_templates(task)
+        task_dir = self.repo_root / task["task_dir"]
+        (task_dir / "BRIEF.md").write_text(
+            "\n".join(
+                [
+                    "# Brief",
+                    "",
+                    "## Task",
+                    "",
+                    f"- Task ID: `{task['id']}`",
+                    "",
+                    "## Problem",
+                    "",
+                    "- Need daemon-visible obligations.",
+                    "",
+                    "## Desired Outcome",
+                    "",
+                    "- Workflow materializes a compiled obligation queue.",
+                    "",
+                    "## Acceptance Criteria",
+                    "",
+                    "- [x] Queue is written before subtask generation",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (task_dir / "PLAN.md").write_text(
+            "\n".join(
+                [
+                    "# Plan",
+                    "",
+                    "## Implementation Plan",
+                    "",
+                    "1. Materialize queue.",
+                    "",
+                    "## Risks",
+                    "",
+                    "- Queue updates could loop.",
+                    "",
+                    "## Test Strategy",
+                    "",
+                    "### Normal Cases",
+                    "",
+                    "- [x] Queue is written before subtask generation",
+                    "",
+                    "### Edge Cases",
+                    "",
+                    "- [x] Re-running with identical queue does not count as queue progress",
+                    "",
+                    "### Exception Cases",
+                    "",
+                    "- [x] Missing docs fail clearly",
+                    "",
+                    "## Verification Mapping",
+                    "",
+                    "- `Queue is written before subtask generation` -> `unit_test`",
+                    "- `Re-running with identical queue does not count as queue progress` -> `unit_test`",
+                    "- `Missing docs fail clearly` -> `unit_test`",
+                    "",
+                    "## External LLM Review",
+                    "",
+                    "- Required: `no`",
+                    "- Provider: `n/a`",
+                    "- Purpose: `n/a`",
+                    "- Trigger: `n/a`",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="approved",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="frozen",
+        )
+
+        progressed = run_workflow_cycle(repo_root=self.repo_root, config=self.config)
+
+        queue_path = task_dir / "artifacts" / "obligations" / "compiled.json"
+        self.assertEqual(progressed, 1)
+        self.assertTrue(queue_path.exists())
+        payload = json.loads(queue_path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["obligation_count"], 1)
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded.get("subtasks"), [])
+
+    def test_workflow_cycle_does_not_auto_advance_promotion_pending_tasks(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="promotion-pending-phase",
+        )
+        materialize_task_templates(task)
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "verified"
+        persisted["stage"] = "promotion"
+        persisted["workflow_phase"] = "promotion_pending"
+        persisted["verify_status"] = "passed"
+        persisted["plan_status"] = "approved"
+        persisted["spec_status"] = "frozen"
+        persisted.setdefault("meta", {})["auto_loop_enabled"] = True
+        persisted["promotion"] = {
+            "required": True,
+            "status": "promotion_pending",
+            "strategy": "direct",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        progressed = run_workflow_cycle(repo_root=self.repo_root, config=self.config)
+
+        self.assertEqual(progressed, 0)
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded["workflow_phase"], "promotion_pending")
+        self.assertEqual(reloaded["status"], "verified")
+
+    def test_workflow_cycle_does_not_auto_advance_retarget_required_tasks(self) -> None:
+        task = create_task_record(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_type="feature",
+            slug="retarget-required-phase",
+        )
+        materialize_task_templates(task)
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "blocked"
+        persisted["stage"] = "promotion"
+        persisted["workflow_phase"] = "retarget_required"
+        persisted["verify_status"] = "not_run"
+        persisted["plan_status"] = "approved"
+        persisted["spec_status"] = "frozen"
+        persisted.setdefault("meta", {})["auto_loop_enabled"] = True
+        persisted["promotion"] = {
+            "required": True,
+            "status": "pr_open",
+            "strategy": "stacked",
+            "retarget_required": True,
+            "reverify_required": True,
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        progressed = run_workflow_cycle(repo_root=self.repo_root, config=self.config)
+
+        self.assertEqual(progressed, 0)
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded["workflow_phase"], "retarget_required")
+        self.assertEqual(reloaded["status"], "blocked")
 
     def test_process_inbox_event_moves_failure_to_failed_folder(self) -> None:
         _, event_path = queue_conversation_event(
@@ -2349,12 +3614,14 @@ class SisyphusDaemonTests(unittest.TestCase):
     def test_render_feature_plan_uses_sisyphus_verify_in_verification_mapping(self) -> None:
         rendered = _render_feature_plan({}, "Add dashboard", "Add an agent dashboard")
 
+        self.assertIn("## Design Evaluation", rendered)
         self.assertIn("`Requested conversation workflow succeeds` -> `sisyphus verify`", rendered)
         self.assertNotIn("`Requested conversation workflow succeeds` -> `taskflow verify`", rendered)
 
     def test_render_issue_fix_plan_uses_sisyphus_verify_in_verification_mapping(self) -> None:
         rendered = _render_issue_fix_plan({}, "Fix dashboard", "Fix the broken dashboard")
 
+        self.assertIn("## Design Evaluation", rendered)
         self.assertIn("`Regression scenario now passes` -> `sisyphus verify`", rendered)
         self.assertNotIn("`Regression scenario now passes` -> `taskflow verify`", rendered)
 
@@ -2372,6 +3639,12 @@ class SisyphusDaemonTests(unittest.TestCase):
         self._run_git(repo_root, "config", "user.name", "Test User")
         self._run_git(repo_root, "add", ".")
         self._run_git(repo_root, "commit", "-m", "initial")
+
+    def _init_bare_remote(self, repo_root: Path, *, remote_name: str) -> Path:
+        remote_path = Path(self.tempdir.name) / f"{remote_name}.git"
+        self._run_git(remote_path.parent, "init", "--bare", str(remote_path))
+        self._run_git(repo_root, "remote", "add", remote_name, str(remote_path))
+        return remote_path
 
     def _run_git(self, cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
