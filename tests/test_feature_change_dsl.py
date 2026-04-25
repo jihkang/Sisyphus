@@ -199,6 +199,7 @@ class FeatureChangeDslTests(unittest.TestCase):
         self.assertIsNotNone(persisted)
         assert persisted is not None
         self.assertEqual(persisted["obligation_count"], 1)
+        self.assertIn("witness_default", persisted["execution_policies"]["policies"])
         obligation = persisted["compiled_obligations"][0]
         self.assertEqual(obligation["spec_ref"], OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE)
         self.assertTrue(obligation["materialized_input_set"]["fingerprint"].startswith("sha256:"))
@@ -233,7 +234,10 @@ class FeatureChangeDslTests(unittest.TestCase):
         assert persisted is not None
         obligation = persisted["compiled_obligations"][0]
         self.assertEqual(obligation["status"], OBLIGATION_STATUS_PASSED)
+        self.assertEqual(obligation["execution_receipts"][-1]["execution_policy_ref"], "witness_default")
         self.assertEqual(obligation["execution_receipts"][-1]["runner"], "sisyphus.verify")
+        self.assertEqual(obligation["execution_receipts"][-1]["role"], "witness")
+        self.assertEqual(obligation["execution_receipts"][-1]["provider"], "local")
 
 
 if __name__ == "__main__":

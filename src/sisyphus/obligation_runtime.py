@@ -13,6 +13,12 @@ from .feature_change_dsl import (
     default_feature_change_protocol_spec,
     obligation_intents_from_feature_change_evaluation,
 )
+from .execution_policy import (
+    EXECUTION_RUNNER_SISYPHUS_VERIFY,
+    execution_policy_receipt_fields,
+    execution_policy_registry_to_dict,
+    resolve_execution_policy,
+)
 from .state import load_task_record, utc_now
 
 
@@ -64,6 +70,7 @@ def build_feature_change_compiled_obligation_queue(
         "feature_id": projection.feature_id,
         "source_artifact_id": projection.feature_change_artifact.artifact_id,
         "protocol": protocol.to_dict(),
+        "execution_policies": execution_policy_registry_to_dict(),
         "evaluation": evaluation.to_dict(),
         "intents": [intent.to_dict() for intent in intents],
         "compiled_obligations": [obligation.to_dict() for obligation in compiled],
@@ -150,6 +157,28 @@ def execute_next_feature_change_obligation(
     obligation = obligations[selected_index]
     obligation_id = str(obligation.get("id") or "")
     spec_ref = str(obligation.get("spec_ref") or "")
+    execution_policy_ref = _obligation_execution_policy_ref(obligation)
+    execution_policy = resolve_execution_policy(execution_policy_ref)
+    if execution_policy is None:
+        receipt = {
+            "status": OBLIGATION_STATUS_BLOCKED,
+            "finished_at": utc_now(),
+            "spec_ref": spec_ref,
+            "execution_policy_ref": execution_policy_ref or "",
+            "reason": "execution policy not found",
+        }
+        _update_queue_obligation(queue=queue, index=selected_index, status=OBLIGATION_STATUS_BLOCKED, receipt=receipt)
+        _write_json_if_changed(materialized.queue_path, queue)
+        return ObligationExecutionResult(
+            task_id=task_id,
+            obligation_id=obligation_id,
+            executed=True,
+            status=OBLIGATION_STATUS_BLOCKED,
+            queue_path=materialized.queue_path,
+            message=f"execution policy not found: {execution_policy_ref or '<none>'}",
+        )
+
+    policy_receipt = execution_policy_receipt_fields(execution_policy)
     _update_queue_obligation(
         queue=queue,
         index=selected_index,
@@ -158,11 +187,12 @@ def execute_next_feature_change_obligation(
             "status": OBLIGATION_STATUS_RUNNING,
             "started_at": utc_now(),
             "spec_ref": spec_ref,
+            **policy_receipt,
         },
     )
     _write_json_if_changed(materialized.queue_path, queue)
 
-    if spec_ref in _VERIFY_OBLIGATION_SPECS:
+    if spec_ref in _VERIFY_OBLIGATION_SPECS and execution_policy.runner == EXECUTION_RUNNER_SISYPHUS_VERIFY:
         from .audit import run_verify
 
         outcome = run_verify(repo_root=repo_root, config=config, task_id=task_id)
@@ -171,7 +201,7 @@ def execute_next_feature_change_obligation(
             "status": status,
             "finished_at": utc_now(),
             "spec_ref": spec_ref,
-            "runner": "sisyphus.verify",
+            **policy_receipt,
             "verify_status": outcome.status,
             "verify_stage": outcome.stage,
             "gate_count": len(outcome.gates),
@@ -192,7 +222,8 @@ def execute_next_feature_change_obligation(
         "status": OBLIGATION_STATUS_BLOCKED,
         "finished_at": utc_now(),
         "spec_ref": spec_ref,
-        "reason": "unsupported compiled obligation spec",
+        **policy_receipt,
+        "reason": "unsupported compiled obligation runner",
     }
     _update_queue_obligation(queue=queue, index=selected_index, status=OBLIGATION_STATUS_BLOCKED, receipt=receipt)
     _write_json_if_changed(materialized.queue_path, queue)
@@ -202,7 +233,7 @@ def execute_next_feature_change_obligation(
         executed=True,
         status=OBLIGATION_STATUS_BLOCKED,
         queue_path=materialized.queue_path,
-        message=f"unsupported compiled obligation spec: {spec_ref}",
+        message=f"unsupported compiled obligation runner: {execution_policy.runner} for {spec_ref}",
     )
 
 
@@ -244,6 +275,14 @@ def _obligation_state_key(obligation: dict[str, object]) -> tuple[str, str] | No
     if not fingerprint:
         return None
     return (obligation_id, fingerprint)
+
+
+def _obligation_execution_policy_ref(obligation: dict[str, object]) -> str | None:
+    value = obligation.get("execution_policy_ref")
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
 
 
 def _queue_obligations(queue: dict[str, object]) -> list[dict[str, object]]:
