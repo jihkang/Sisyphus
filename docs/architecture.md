@@ -1,6 +1,6 @@
 # Sisyphus Architecture
 
-This document describes the current architecture of Sisyphus as of 2026-04-14.
+This document describes the current architecture of Sisyphus as of 2026-04-26.
 
 Sisyphus is a graph-native work system that runs inside a target Git repository and manages repository-local work state, task documents, worktrees, execution, verification, and closeout.
 
@@ -18,7 +18,7 @@ This means:
 - runtime intelligence is an operator over that state rather than the source of truth
 - reconstructability matters as much as execution convenience
 
-The current task runtime is still task-shaped, but the long-term architectural direction is artifact-centric.
+The task runtime is still the operator-facing control surface, but feature work now passes through an artifact projection, DSL, obligation queue, and convergence loop before verification and promotion decisions are considered closed.
 
 ## Hard State And Soft Cognition
 
@@ -64,7 +64,8 @@ The intended model is:
 - `Artifact`: a durable state object
 - `CompositeArtifact`: a higher-order artifact whose validity depends on typed relationships among child artifacts
 - `VerificationArtifact`: evidence for a specific claim
-- `PromotionDecision`: the recorded decision that an artifact obligation is closed
+- `ArtifactPromotionDecision`: the recorded decision that an artifact obligation is closed or blocked
+- `RepositoryPromotionExecution`: the branch, commit, push, and pull-request execution path that publishes verified repository work
 
 This implies two important boundaries:
 
@@ -89,6 +90,37 @@ For that reason, a final artifact should be understood as having two layers:
 
 This reconstructability requirement is stronger than simple lineage tracking. It is a design constraint for persistence, verification, invalidation, and promotion.
 
+## Artifact DSL And Obligation Runtime
+
+The first implemented artifact-governed slice is the `FeatureChangeArtifact` protocol.
+
+The authoritative DSL boundary is intentionally about meaning, not provider selection:
+
+- `ProtocolSpec` defines the artifact type, slots, invariants, required claim scopes, and obligation specs.
+- `ObligationSpec` defines reusable obligation templates.
+- `InputContract` defines the evidence boundary for an obligation: required, optional, forbidden, and closure rules.
+- `ObligationIntent` is the runtime signal emitted by evaluation for the current world state.
+- `CompiledObligation` is the executable obligation instance after current slots are bound to concrete artifact refs.
+- `MaterializedInputSet` records the concrete input refs and fingerprint used by a compiled obligation.
+- `ExecutionPolicy` is a replaceable overlay that chooses the runner, role, provider, tool, timeout, retry, or budget.
+
+The key boundary is:
+
+> what to read, what to produce, and what to verify is DSL authority; who or what executes it is execution policy
+
+Feature-change DSL declarations live in packaged JSON so the protocol is data-declared instead of hard-coded:
+
+- `src/sisyphus/declarations/feature_change_protocol.json`
+- `src/sisyphus/declarations/execution_policies.json`
+
+At runtime, evaluation emits `ObligationIntent` records, the compiler binds them through `slot://` selectors into concrete `artifact://` refs, and the daemon materializes a compiled queue at:
+
+```text
+.planning/tasks/<task-id>/artifacts/obligations/compiled.json
+```
+
+The queue stores the protocol declaration, execution policy registry, evaluation result, intents, compiled obligations, materialized input fingerprints, statuses, and execution receipts. Existing obligation state is preserved by `(obligation_id, input_fingerprint)`, so changing inputs naturally creates a new obligation instance instead of mutating the meaning of a previous one.
+
 ## Verification, Promotion, And Invalidation
 
 Verification is not a generic boolean. It is proof for a claim over a scope with explicit dependencies and evidence.
@@ -101,7 +133,7 @@ The system should reason about verification in three layers:
 
 Higher-layer verification is not implied by lower-layer verification.
 
-Promotion is likewise not task completion. Promotion is obligation closure for an artifact. A promoted artifact should have:
+Promotion is likewise not task completion. Artifact promotion is obligation closure for an artifact. A promoted artifact should have:
 
 - required slots filled
 - invariants satisfied
@@ -111,6 +143,8 @@ Promotion is likewise not task completion. Promotion is obligation closure for a
 - required approvals or evidence recorded
 
 Invalidation must precede operational change requests. When an input changes, the system first computes which composites or verification claims are stale, and only then decides whether to reverify, reassemble, replan, or issue a new change request.
+
+Repository promotion is a separate execution layer. `promotion.py` handles commit, push, PR, merge receipt, and changeset recording through `RepositoryPromotionExecution` and merge receipt outcomes. Artifact promotion decisions and repository promotion execution are connected, but they are not the same concept.
 
 ## Authority Boundary For Intelligence
 
@@ -132,26 +166,15 @@ The architectural rule is therefore:
 - external or embedded agent intelligence remains an optional cognition module
 - hard-state persistence, receipts, verification, promotion, and invalidation stay inside Sisyphus
 
-## Next Design Lock
+## Implemented Design Lock
 
-The most productive next step is not a universal composition engine. It is a concrete protocol for one representative composite artifact type.
+The first concrete protocol is now the feature-change composite. Common composition kernels and reusable graph machinery should be extracted only after this protocol continues to survive real task, verification, invalidation, and promotion pressure.
 
-That design pass should lock:
+### Feature-Change Protocol
 
-1. the artifact type and its named or collection slots
-2. the key invariants across those slots
-3. the verification obligations at `local`, `cross`, and `composite` layers
-4. the promotion gate
-5. the invalidation matrix for changed inputs
-6. the reconstruction envelope fields
+The locked first protocol is a repository-change composite for feature delivery.
 
-Once one representative protocol is fixed, common composition kernels and reusable graph machinery can be extracted from it.
-
-### Recommended First Protocol
-
-The best first protocol to lock is a repository-change composite for feature delivery.
-
-The concrete definition now lives in [docs/feature-change-artifact.md](./feature-change-artifact.md).
+The protocol description lives in [docs/feature-change-artifact.md](./feature-change-artifact.md), and the executable declaration lives in `src/sisyphus/declarations/feature_change_protocol.json`.
 
 One practical shape is:
 
@@ -159,7 +182,7 @@ One practical shape is:
   - `spec` slot
   - `implementation_candidates[]` collection slot
   - `selected_implementation` slot
-  - `tests[]` collection slot
+  - `test_obligations[]` collection slot
   - `verification_claims[]` collection slot
   - optional `approvals[]` collection slot
 
@@ -171,6 +194,28 @@ This is the right first candidate because it matches the repository's current wo
 - promotion rules for when a change is actually ready
 - invalidation behavior when spec, implementation, or tests move independently
 - a reconstructable envelope that can later map to branch, PR, and merge decisions
+
+### Current Feature-Change Pipeline
+
+```text
+Task record + task docs
+-> project_feature_task_record()
+-> persisted artifact snapshot
+-> evaluate_feature_task_projection()
+-> ObligationIntent
+-> compile_feature_change_obligations()
+-> compiled obligation queue
+-> converge_feature_change_obligations()
+-> verify execution receipts and refreshed projection snapshot
+```
+
+The persisted snapshot lives at:
+
+```text
+.planning/tasks/<task-id>/artifacts/projection/feature-change.json
+```
+
+Snapshot fingerprints allow the daemon to detect stale projected inputs. When a persisted feature-change snapshot no longer matches the current projection, the obligation runtime emits a `reverify_stale_inputs` intent and recompiles a repair obligation against the current bound inputs.
 
 ## System Shape
 
@@ -202,11 +247,16 @@ At a high level, the current implementation is organized as a layered orchestrat
 | Strategy extraction, audits, verify commands, close gates         |
 | src/sisyphus/strategy.py, audit.py, closeout.py                   |
 +------------------------------------------------------------------+
-| Layer 7. Core Integration Services                                |
+| Layer 7. Artifact DSL and Obligation Runtime                      |
+| Artifact records, projection snapshots, evaluation, DSL compiler  |
+| src/sisyphus/artifacts.py, artifact_projection.py, dsl.py         |
+| src/sisyphus/feature_change_dsl.py, obligation_runtime.py         |
++------------------------------------------------------------------+
+| Layer 8. Core Integration Services                                |
 | Event bus, MCP core service, shared adapter logic                 |
 | src/sisyphus/bus.py, bus_jsonl.py, events.py, mcp_core.py         |
 +------------------------------------------------------------------+
-| Layer 8. MCP Gateway                                              |
+| Layer 9. MCP Gateway                                              |
 | Official MCP SDK stdio gateway, tool/resource binding             |
 | src/sisyphus/mcp_server.py                                        |
 +------------------------------------------------------------------+
@@ -224,6 +274,7 @@ flowchart TD
     D[Execution Adapters\nprovider wrapper / prompt / agent runtime]
     E[Persistence and Workspace\nstate / agents / templates / gitops]
     F[Verification and Closeout\nstrategy / audit / closeout]
+    I[Artifact DSL and Obligations\nprojection / evaluation / compiler / queue]
 
     A --> B
     A --> C
@@ -232,13 +283,17 @@ flowchart TD
     C --> D
     C --> E
     C --> F
+    C --> I
     D --> E
     F --> E
+    F --> I
+    I --> E
     G[Core Integration Services\nbus / events / MCP core]
     H[MCP Gateway\nMCP SDK stdio transport]
     B --> G
     C --> G
     F --> G
+    I --> G
     H --> G
 ```
 
@@ -290,8 +345,9 @@ The current implemented slices are:
 The following pieces are still future work:
 
 - follow-up task handoff into the Sisyphus lifecycle
-- MCP evolution tools/resources
-- promotion and invalidation envelopes backed by receipts
+- richer MCP evolution tools/resources beyond the current read surfaces
+- broader artifact protocols beyond feature-change
+- agent/tool execution policies beyond the current local verifier runner
 
 ### Evolution Authority Boundary
 

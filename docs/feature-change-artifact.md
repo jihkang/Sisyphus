@@ -15,7 +15,13 @@ This document defines the first concrete composite artifact protocol for Sisyphu
 - invalidation behavior
 - a reconstructable envelope
 
-It is the bridge between the current task-oriented runtime and the target artifact-centric work graph.
+It is the bridge between the task-oriented runtime and the artifact-centric work graph now being implemented.
+
+The executable protocol declaration lives at:
+
+```text
+src/sisyphus/declarations/feature_change_protocol.json
+```
 
 ## Protocol Summary
 
@@ -32,10 +38,12 @@ The protocol intentionally uses both named slots and collection slots.
 | `spec` | named | exactly 1 | yes | Canonical feature intent, scope, and acceptance criteria. |
 | `implementation_candidates[]` | collection | 1..n | yes | Candidate implementations capable of satisfying the spec. |
 | `selected_implementation` | named | 0..1 | yes | The implementation candidate currently bound as the promotable change. |
-| `tests[]` | collection | 1..n | yes | Test artifacts covering normal, edge, exception, and regression obligations. |
+| `test_obligations[]` | collection | 1..n | yes | Test artifacts covering normal, edge, exception, and regression obligations. The implementation accepts `tests` as a slot alias. |
 | `verification_claims[]` | collection | 0..n | yes | Verification artifacts carrying local, cross, or composite claims and evidence. |
 | `approvals[]` | collection | 0..n | policy-dependent | Human or policy approvals bound to the current candidate. |
 | `execution_receipts[]` | collection | 0..n | yes | Receipts for the task runs, tool executions, and command invocations that produced or checked bound artifacts. |
+
+The DSL uses `slot://` selectors at protocol level and binds them to concrete `artifact://` refs only when compiling a runtime obligation. This keeps reusable protocol templates separate from current task instance state.
 
 ## Artifact States
 
@@ -110,6 +118,81 @@ Composite verification checks the higher-order contract.
 
 Passing local verification does not imply passing cross or composite verification.
 
+The packaged protocol declares three verification obligation specs:
+
+- `verify_local_feature`
+- `verify_cross_feature`
+- `verify_composite_feature`
+
+Evaluation maps missing claim scopes into these specs in `local`, `cross`, `composite` order. Required actions such as `verify_required_claims` and `reverify_required_claims` are not executed as raw strings; they become `ObligationIntent` records and then compile into scoped `CompiledObligation` instances.
+
+## DSL Boundary
+
+The protocol is split into six runtime shapes:
+
+| Shape | Responsibility |
+| --- | --- |
+| `ProtocolSpec` | Defines artifact type, slots, invariants, required claim scopes, and obligation specs. |
+| `ObligationSpec` | Defines a reusable obligation template. |
+| `InputContract` | Defines the evidence boundary: required inputs, optional inputs, forbidden inputs, and closure rules. |
+| `ObligationIntent` | Records what the evaluator says must happen for the current world state. |
+| `CompiledObligation` | Records an executable obligation instance after slots are bound to concrete artifact refs. |
+| `ExecutionPolicy` | Selects the replaceable runner/tool/provider overlay without changing obligation meaning. |
+
+The boundary rule is:
+
+> what to read, what to produce, and what to verify belongs to the DSL; who or what executes it belongs to execution policy
+
+For example, the protocol-level input contract uses slot selectors:
+
+```json
+{
+  "required": [
+    {"ref": "slot://spec#acceptance_criteria"},
+    {"ref": "slot://selected_implementation"},
+    {"ref": "slot://test_obligations"}
+  ],
+  "optional": [
+    {"ref": "slot://execution_receipts/*"}
+  ],
+  "forbidden": [
+    {"ref": "external://unrelated_prior_outputs/*"}
+  ],
+  "closure": {
+    "dependency_rule": "current_bound_slots_only",
+    "stale_on": [
+      "spec_revision_changed",
+      "selected_implementation_changed",
+      "test_obligation_changed"
+    ]
+  }
+}
+```
+
+At compile time, the runtime binds those selectors to concrete refs and records a materialized input fingerprint:
+
+```json
+{
+  "spec_ref": "verify_composite_feature",
+  "bound_inputs": [
+    "artifact://artifact-spec-task-123#acceptance_criteria",
+    "artifact://artifact-implementation-task-123",
+    "artifact://artifact-tests-task-123"
+  ],
+  "materialized_input_set": {
+    "refs": [
+      "artifact://artifact-spec-task-123#acceptance_criteria",
+      "artifact://artifact-implementation-task-123",
+      "artifact://artifact-tests-task-123"
+    ],
+    "fingerprint": "sha256:..."
+  },
+  "execution_policy_ref": "witness_default"
+}
+```
+
+That fingerprint is the recoverable evidence boundary for the obligation. If the inputs change, the meaning of the old verdict is not silently updated; a new compiled obligation is produced for the new input set.
+
 ## Promotion Gate
 
 A `FeatureChangeArtifact` becomes `promotable` only when all of the following are true:
@@ -156,7 +239,7 @@ The minimum fields are:
     "spec": "artifact-spec-123",
     "implementation_candidates": ["artifact-impl-201", "artifact-impl-202"],
     "selected_implementation": "artifact-impl-202",
-    "tests": ["artifact-test-310", "artifact-test-311"],
+    "test_obligations": ["artifact-test-310", "artifact-test-311"],
     "verification_claims": ["artifact-verify-401", "artifact-verify-402"],
     "approvals": ["artifact-approval-501"],
     "execution_receipts": ["receipt-601", "receipt-602"]
@@ -194,23 +277,44 @@ The envelope does not replace payload artifacts. It explains the contract that m
 
 ## Mapping To Current Sisyphus Runtime
 
-The current repository does not yet implement this artifact graph directly. The nearest existing runtime pieces are:
+The current repository implements a first vertical slice of this artifact graph for feature tasks.
 
-- task docs and `task.json` as partial spec and lifecycle records
-- task worktrees and receipts as execution evidence
-- verify outputs as early verification artifacts
-- branch, PR, and merge operations as early promotion-adjacent decisions
+Implemented pieces:
 
-This protocol should therefore be treated as the next design lock for future implementation, not as a claim that the runtime already persists all of these structures.
+- `artifacts.py` defines artifact records, composite records, slot bindings, verification claims, and refs.
+- `artifact_projection.py` projects feature task records and docs into a `FeatureChangeArtifact` view.
+- `artifact_snapshot.py` persists reconstructable feature-change projection snapshots at `artifacts/projection/feature-change.json`.
+- `artifact_evaluator.py` derives artifact state, `ArtifactPromotionDecision`, `InvalidationRecord`, and `ObligationIntent` records.
+- `dsl.py` defines `ProtocolSpec`, `ObligationSpec`, `InputContract`, `ExecutionPolicy`, `ObligationIntent`, `CompiledObligation`, and `MaterializedInputSet`.
+- `feature_change_dsl.py` loads the packaged protocol declaration and compiles intents into bound obligations.
+- `execution_policy.py` loads replaceable policy declarations from `declarations/execution_policies.json`.
+- `obligation_runtime.py` materializes `artifacts/obligations/compiled.json`, executes supported obligations, records receipts, and converges until idle, blocked, failed, or step-limited.
+- `promotion.py` separately handles repository promotion execution and merge receipts.
 
-## Implementation Follow-Up
+Current limits:
 
-The next concrete step after this document is to define the storage shape for:
+- Only the feature-change protocol is implemented.
+- The supported execution runner is currently `sisyphus.verify`.
+- Agent/provider/tool execution policies are represented but not yet broadly executed.
+- Local, cross, and composite claim scopes are modeled and compiled separately, but the concrete verifier still routes through the existing Sisyphus verification command path.
+- The task runtime remains the operator-facing lifecycle surface while artifact snapshots and obligation queues are the emerging hard-state layer.
 
-- artifact identifiers and typed artifact records
-- slot-binding records
-- verification claim records
-- promotion decision records
-- invalidation state
+## Runtime Flow
 
-That work can start with a repository-local schema draft or typed Python model layer, but it should preserve this protocol unchanged unless the protocol itself is explicitly revised.
+The implemented flow is:
+
+```text
+task.json + task docs
+-> project_feature_task_record()
+-> evaluate_feature_task_projection()
+-> persist artifacts/projection/feature-change.json
+-> emit ObligationIntent records
+-> compile through ProtocolSpec + ObligationSpec + InputContract
+-> persist artifacts/obligations/compiled.json
+-> execute supported obligations via ExecutionPolicy
+-> record execution receipts
+-> refresh projection snapshot
+-> repeat until idle, blocked, failed, or max steps reached
+```
+
+Snapshot stale detection happens before the projection is overwritten. If the previous persisted snapshot fingerprint differs from the current projection fingerprint, the runtime emits a `reverify_stale_inputs` intent so stale evidence becomes explicit repair work instead of hidden drift.
