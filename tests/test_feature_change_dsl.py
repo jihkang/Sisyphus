@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from importlib import resources
 import sys
 import tempfile
 import unittest
@@ -16,6 +18,7 @@ from sisyphus.artifact_evaluator import evaluate_feature_task_projection
 from sisyphus.artifact_snapshot import materialize_feature_task_artifact_snapshot
 from sisyphus.config import load_config
 from sisyphus.feature_change_dsl import (
+    DEFAULT_FEATURE_CHANGE_PROTOCOL_DECLARATION,
     OBLIGATION_SPEC_REVERIFY_STALE_INPUTS,
     OBLIGATION_SPEC_VERIFY_CROSS_FEATURE,
     OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE,
@@ -23,6 +26,7 @@ from sisyphus.feature_change_dsl import (
     compile_feature_change_obligations,
     default_feature_change_protocol_spec,
     feature_change_obligation_specs_by_id,
+    load_feature_change_protocol_spec_declaration,
     obligation_intents_from_feature_change_evaluation,
 )
 from sisyphus.obligation_runtime import (
@@ -186,6 +190,15 @@ class FeatureChangeDslTests(unittest.TestCase):
         self.assertEqual(local_spec.execution_policy_ref, "witness_default")
         self.assertEqual(cross_spec.execution_policy_ref, "witness_default")
         self.assertEqual(composite_spec.execution_policy_ref, "witness_default")
+
+    def test_default_protocol_loads_from_packaged_declaration(self) -> None:
+        raw = json.loads(
+            resources.files("sisyphus").joinpath(DEFAULT_FEATURE_CHANGE_PROTOCOL_DECLARATION).read_text(encoding="utf-8")
+        )
+        protocol = load_feature_change_protocol_spec_declaration()
+
+        self.assertEqual(protocol.to_dict(), raw)
+        self.assertEqual(default_feature_change_protocol_spec(), protocol)
 
     def test_evaluation_required_actions_compile_to_bound_obligations(self) -> None:
         task = self._new_feature_task("feature-change-dsl")

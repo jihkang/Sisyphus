@@ -26,4 +26,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-sisyphus = ["py.typed", "templates_data/*/*.md"]
+sisyphus = ["py.typed", "templates_data/*/*.md", "declarations/*.json"]
