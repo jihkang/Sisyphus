@@ -1,0 +1,531 @@
+{
+  "schema_version": "sisyphus.dsl.v1",
+  "kind": "protocol_spec",
+  "artifact_type": "feature_change",
+  "slots": [
+    "spec",
+    "implementation_candidates",
+    "selected_implementation",
+    "test_obligations",
+    "verification_claims",
+    "approvals",
+    "execution_receipts"
+  ],
+  "invariants": [
+    "same_feature_id",
+    "selected_implementation_is_candidate",
+    "claims_bind_current_inputs"
+  ],
+  "required_claim_scopes": [
+    "local",
+    "cross",
+    "composite"
+  ],
+  "obligations": [
+    {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "obligation_spec",
+      "id": "bind_implementation_candidates",
+      "obligation_kind": "composition",
+      "input_contract": {
+        "schema_version": "sisyphus.dsl.v1",
+        "kind": "input_contract",
+        "required": [
+          {
+            "ref": "slot://spec",
+            "mode": "required"
+          }
+        ],
+        "optional": [],
+        "forbidden": [],
+        "closure": {
+          "dependency_rule": "current_bound_slots_only",
+          "stale_on": [
+            "spec_revision_changed",
+            "selected_implementation_changed",
+            "test_obligation_changed"
+          ]
+        }
+      },
+      "produces": [
+        {
+          "artifact_type": "implementation_candidate"
+        }
+      ]
+    },
+    {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "obligation_spec",
+      "id": "select_implementation",
+      "obligation_kind": "composition",
+      "input_contract": {
+        "schema_version": "sisyphus.dsl.v1",
+        "kind": "input_contract",
+        "required": [
+          {
+            "ref": "slot://implementation_candidates",
+            "mode": "required"
+          }
+        ],
+        "optional": [],
+        "forbidden": [],
+        "closure": {
+          "dependency_rule": "current_bound_slots_only",
+          "stale_on": [
+            "spec_revision_changed",
+            "selected_implementation_changed",
+            "test_obligation_changed"
+          ]
+        }
+      },
+      "produces": [
+        {
+          "artifact_type": "slot_binding",
+          "claim": "selected_implementation"
+        }
+      ]
+    },
+    {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "obligation_spec",
+      "id": "reselect_implementation",
+      "obligation_kind": "composition",
+      "input_contract": {
+        "schema_version": "sisyphus.dsl.v1",
+        "kind": "input_contract",
+        "required": [
+          {
+            "ref": "slot://implementation_candidates",
+            "mode": "required"
+          },
+          {
+            "ref": "slot://selected_implementation",
+            "mode": "required"
+          }
+        ],
+        "optional": [],
+        "forbidden": [],
+        "closure": {
+          "dependency_rule": "current_bound_slots_only",
+          "stale_on": [
+            "spec_revision_changed",
+            "selected_implementation_changed",
+            "test_obligation_changed"
+          ]
+        }
+      },
+      "produces": [
+        {
+          "artifact_type": "slot_binding",
+          "claim": "selected_implementation"
+        }
+      ]
+    },
+    {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "obligation_spec",
+      "id": "bind_required_tests",
+      "obligation_kind": "composition",
+      "input_contract": {
+        "schema_version": "sisyphus.dsl.v1",
+        "kind": "input_contract",
+        "required": [
+          {
+            "ref": "slot://spec#acceptance_criteria",
+            "mode": "required"
+          }
+        ],
+        "optional": [
+          {
+            "ref": "slot://selected_implementation",
+            "mode": "optional"
+          }
+        ],
+        "forbidden": [],
+        "closure": {
+          "dependency_rule": "current_bound_slots_only",
+          "stale_on": [
+            "spec_revision_changed",
+            "selected_implementation_changed",
+            "test_obligation_changed"
+          ]
+        }
+      },
+      "produces": [
+        {
+          "artifact_type": "test_obligation"
+        }
+      ]
+    },
+    {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "obligation_spec",
+      "id": "verify_local_feature",
+      "obligation_kind": "verification",
+      "input_contract": {
+        "schema_version": "sisyphus.dsl.v1",
+        "kind": "input_contract",
+        "required": [
+          {
+            "ref": "slot://spec#acceptance_criteria",
+            "mode": "required"
+          },
+          {
+            "ref": "slot://test_obligations",
+            "mode": "required"
+          }
+        ],
+        "optional": [
+          {
+            "ref": "slot://execution_receipts/*",
+            "mode": "optional"
+          }
+        ],
+        "forbidden": [
+          {
+            "ref": "external://unrelated_prior_outputs/*",
+            "mode": "forbidden"
+          }
+        ],
+        "closure": {
+          "dependency_rule": "current_bound_slots_only",
+          "stale_on": [
+            "spec_revision_changed",
+            "selected_implementation_changed",
+            "test_obligation_changed"
+          ]
+        }
+      },
+      "produces": [
+        {
+          "artifact_type": "verification_claim",
+          "claim": "local_spec_and_tests_satisfied",
+          "scope": "local"
+        }
+      ],
+      "execution_policy_ref": "witness_default"
+    },
+    {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "obligation_spec",
+      "id": "verify_cross_feature",
+      "obligation_kind": "verification",
+      "input_contract": {
+        "schema_version": "sisyphus.dsl.v1",
+        "kind": "input_contract",
+        "required": [
+          {
+            "ref": "slot://spec#acceptance_criteria",
+            "mode": "required"
+          },
+          {
+            "ref": "slot://selected_implementation",
+            "mode": "required"
+          }
+        ],
+        "optional": [
+          {
+            "ref": "slot://execution_receipts/*",
+            "mode": "optional"
+          }
+        ],
+        "forbidden": [
+          {
+            "ref": "external://unrelated_prior_outputs/*",
+            "mode": "forbidden"
+          }
+        ],
+        "closure": {
+          "dependency_rule": "current_bound_slots_only",
+          "stale_on": [
+            "spec_revision_changed",
+            "selected_implementation_changed",
+            "test_obligation_changed"
+          ]
+        }
+      },
+      "produces": [
+        {
+          "artifact_type": "verification_claim",
+          "claim": "selected_implementation_binds_spec",
+          "scope": "cross"
+        }
+      ],
+      "execution_policy_ref": "witness_default"
+    },
+    {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "obligation_spec",
+      "id": "verify_composite_feature",
+      "obligation_kind": "verification",
+      "input_contract": {
+        "schema_version": "sisyphus.dsl.v1",
+        "kind": "input_contract",
+        "required": [
+          {
+            "ref": "slot://spec#acceptance_criteria",
+            "mode": "required"
+          },
+          {
+            "ref": "slot://selected_implementation",
+            "mode": "required"
+          },
+          {
+            "ref": "slot://test_obligations",
+            "mode": "required"
+          }
+        ],
+        "optional": [
+          {
+            "ref": "slot://execution_receipts/*",
+            "mode": "optional"
+          }
+        ],
+        "forbidden": [
+          {
+            "ref": "external://unrelated_prior_outputs/*",
+            "mode": "forbidden"
+          }
+        ],
+        "closure": {
+          "dependency_rule": "current_bound_slots_only",
+          "stale_on": [
+            "spec_revision_changed",
+            "selected_implementation_changed",
+            "test_obligation_changed"
+          ]
+        }
+      },
+      "produces": [
+        {
+          "artifact_type": "verification_claim",
+          "claim": "acceptance_criteria_satisfied",
+          "scope": "composite"
+        }
+      ],
+      "execution_policy_ref": "witness_default"
+    },
+    {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "obligation_spec",
+      "id": "reverify_required_claims",
+      "obligation_kind": "verification",
+      "input_contract": {
+        "schema_version": "sisyphus.dsl.v1",
+        "kind": "input_contract",
+        "required": [
+          {
+            "ref": "slot://spec#acceptance_criteria",
+            "mode": "required"
+          },
+          {
+            "ref": "slot://selected_implementation",
+            "mode": "required"
+          },
+          {
+            "ref": "slot://test_obligations",
+            "mode": "required"
+          }
+        ],
+        "optional": [
+          {
+            "ref": "slot://verification_claims",
+            "mode": "optional"
+          },
+          {
+            "ref": "slot://execution_receipts/*",
+            "mode": "optional"
+          }
+        ],
+        "forbidden": [],
+        "closure": {
+          "dependency_rule": "current_bound_slots_only",
+          "stale_on": [
+            "spec_revision_changed",
+            "selected_implementation_changed",
+            "test_obligation_changed"
+          ]
+        }
+      },
+      "produces": [
+        {
+          "artifact_type": "verification_claim",
+          "scope": "composite"
+        }
+      ],
+      "execution_policy_ref": "witness_default"
+    },
+    {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "obligation_spec",
+      "id": "collect_approvals",
+      "obligation_kind": "approval",
+      "input_contract": {
+        "schema_version": "sisyphus.dsl.v1",
+        "kind": "input_contract",
+        "required": [
+          {
+            "ref": "slot://spec",
+            "mode": "required"
+          },
+          {
+            "ref": "slot://selected_implementation",
+            "mode": "required"
+          }
+        ],
+        "optional": [],
+        "forbidden": [],
+        "closure": {
+          "dependency_rule": "current_bound_slots_only",
+          "stale_on": [
+            "spec_revision_changed",
+            "selected_implementation_changed",
+            "test_obligation_changed"
+          ]
+        }
+      },
+      "produces": [
+        {
+          "artifact_type": "approval"
+        }
+      ]
+    },
+    {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "obligation_spec",
+      "id": "recompose_feature_change",
+      "obligation_kind": "composition",
+      "input_contract": {
+        "schema_version": "sisyphus.dsl.v1",
+        "kind": "input_contract",
+        "required": [
+          {
+            "ref": "slot://spec",
+            "mode": "required"
+          },
+          {
+            "ref": "slot://selected_implementation",
+            "mode": "required"
+          }
+        ],
+        "optional": [
+          {
+            "ref": "slot://test_obligations",
+            "mode": "optional"
+          },
+          {
+            "ref": "slot://verification_claims",
+            "mode": "optional"
+          },
+          {
+            "ref": "slot://execution_receipts/*",
+            "mode": "optional"
+          }
+        ],
+        "forbidden": [],
+        "closure": {
+          "dependency_rule": "current_bound_slots_only",
+          "stale_on": [
+            "spec_revision_changed",
+            "selected_implementation_changed",
+            "test_obligation_changed"
+          ]
+        }
+      },
+      "produces": [
+        {
+          "artifact_type": "feature_change"
+        }
+      ]
+    },
+    {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "obligation_spec",
+      "id": "replace_invalid_inputs",
+      "obligation_kind": "invalidation_repair",
+      "input_contract": {
+        "schema_version": "sisyphus.dsl.v1",
+        "kind": "input_contract",
+        "required": [
+          {
+            "ref": "slot://spec",
+            "mode": "required"
+          },
+          {
+            "ref": "slot://selected_implementation",
+            "mode": "required"
+          }
+        ],
+        "optional": [
+          {
+            "ref": "slot://test_obligations",
+            "mode": "optional"
+          }
+        ],
+        "forbidden": [],
+        "closure": {
+          "dependency_rule": "current_bound_slots_only",
+          "stale_on": [
+            "spec_revision_changed",
+            "selected_implementation_changed",
+            "test_obligation_changed"
+          ]
+        }
+      },
+      "produces": [
+        {
+          "artifact_type": "feature_change"
+        }
+      ]
+    },
+    {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "obligation_spec",
+      "id": "reverify_stale_inputs",
+      "obligation_kind": "verification",
+      "input_contract": {
+        "schema_version": "sisyphus.dsl.v1",
+        "kind": "input_contract",
+        "required": [
+          {
+            "ref": "slot://spec",
+            "mode": "required"
+          },
+          {
+            "ref": "slot://selected_implementation",
+            "mode": "required"
+          }
+        ],
+        "optional": [
+          {
+            "ref": "slot://test_obligations",
+            "mode": "optional"
+          },
+          {
+            "ref": "slot://verification_claims",
+            "mode": "optional"
+          },
+          {
+            "ref": "slot://execution_receipts/*",
+            "mode": "optional"
+          }
+        ],
+        "forbidden": [],
+        "closure": {
+          "dependency_rule": "current_bound_slots_only",
+          "stale_on": [
+            "spec_revision_changed",
+            "selected_implementation_changed",
+            "test_obligation_changed"
+          ]
+        }
+      },
+      "produces": [
+        {
+          "artifact_type": "verification_claim"
+        }
+      ],
+      "execution_policy_ref": "witness_default"
+    }
+  ]
+}

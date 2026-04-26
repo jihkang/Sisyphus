@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 import hashlib
+from importlib import resources
 import json
 
 from .artifact_evaluator import FeatureChangeEvaluation
@@ -9,17 +10,15 @@ from .artifact_projection import FeatureTaskArtifactProjection
 from .artifacts import ArtifactRef
 from .dsl import (
     CompiledObligation,
-    InputContract,
     MaterializedInputSet,
     ObligationIntent,
     ObligationSpec,
-    ProducedArtifactSpec,
     ProtocolSpec,
-    RefSelector,
 )
 
 
 FEATURE_CHANGE_ARTIFACT_TYPE = "feature_change"
+DEFAULT_FEATURE_CHANGE_PROTOCOL_DECLARATION = "declarations/feature_change_protocol.json"
 
 OBLIGATION_SPEC_BIND_IMPLEMENTATION_CANDIDATES = "bind_implementation_candidates"
 OBLIGATION_SPEC_SELECT_IMPLEMENTATION = "select_implementation"
@@ -57,146 +56,13 @@ _VERIFICATION_SCOPE_ORDER = ("local", "cross", "composite")
 
 
 def default_feature_change_protocol_spec() -> ProtocolSpec:
-    return ProtocolSpec(
-        artifact_type=FEATURE_CHANGE_ARTIFACT_TYPE,
-        slots=(
-            "spec",
-            "implementation_candidates",
-            "selected_implementation",
-            "test_obligations",
-            "verification_claims",
-            "approvals",
-            "execution_receipts",
-        ),
-        invariants=(
-            "same_feature_id",
-            "selected_implementation_is_candidate",
-            "claims_bind_current_inputs",
-        ),
-        required_claim_scopes=("local", "cross", "composite"),
-        obligations=(
-            _obligation_spec(
-                id=OBLIGATION_SPEC_BIND_IMPLEMENTATION_CANDIDATES,
-                obligation_kind="composition",
-                required=("slot://spec",),
-                produces=(ProducedArtifactSpec("implementation_candidate"),),
-            ),
-            _obligation_spec(
-                id=OBLIGATION_SPEC_SELECT_IMPLEMENTATION,
-                obligation_kind="composition",
-                required=("slot://implementation_candidates",),
-                produces=(ProducedArtifactSpec("slot_binding", claim="selected_implementation"),),
-            ),
-            _obligation_spec(
-                id=OBLIGATION_SPEC_RESELECT_IMPLEMENTATION,
-                obligation_kind="composition",
-                required=("slot://implementation_candidates", "slot://selected_implementation"),
-                produces=(ProducedArtifactSpec("slot_binding", claim="selected_implementation"),),
-            ),
-            _obligation_spec(
-                id=OBLIGATION_SPEC_BIND_REQUIRED_TESTS,
-                obligation_kind="composition",
-                required=("slot://spec#acceptance_criteria",),
-                optional=("slot://selected_implementation",),
-                produces=(ProducedArtifactSpec("test_obligation"),),
-            ),
-            _obligation_spec(
-                id=OBLIGATION_SPEC_VERIFY_LOCAL_FEATURE,
-                obligation_kind="verification",
-                required=(
-                    "slot://spec#acceptance_criteria",
-                    "slot://test_obligations",
-                ),
-                optional=("slot://execution_receipts/*",),
-                forbidden=("external://unrelated_prior_outputs/*",),
-                produces=(
-                    ProducedArtifactSpec(
-                        "verification_claim",
-                        claim="local_spec_and_tests_satisfied",
-                        scope="local",
-                    ),
-                ),
-                execution_policy_ref="witness_default",
-            ),
-            _obligation_spec(
-                id=OBLIGATION_SPEC_VERIFY_CROSS_FEATURE,
-                obligation_kind="verification",
-                required=(
-                    "slot://spec#acceptance_criteria",
-                    "slot://selected_implementation",
-                ),
-                optional=("slot://execution_receipts/*",),
-                forbidden=("external://unrelated_prior_outputs/*",),
-                produces=(
-                    ProducedArtifactSpec(
-                        "verification_claim",
-                        claim="selected_implementation_binds_spec",
-                        scope="cross",
-                    ),
-                ),
-                execution_policy_ref="witness_default",
-            ),
-            _obligation_spec(
-                id=OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE,
-                obligation_kind="verification",
-                required=(
-                    "slot://spec#acceptance_criteria",
-                    "slot://selected_implementation",
-                    "slot://test_obligations",
-                ),
-                optional=("slot://execution_receipts/*",),
-                forbidden=("external://unrelated_prior_outputs/*",),
-                produces=(
-                    ProducedArtifactSpec(
-                        "verification_claim",
-                        claim="acceptance_criteria_satisfied",
-                        scope="composite",
-                    ),
-                ),
-                execution_policy_ref="witness_default",
-            ),
-            _obligation_spec(
-                id=OBLIGATION_SPEC_REVERIFY_REQUIRED_CLAIMS,
-                obligation_kind="verification",
-                required=(
-                    "slot://spec#acceptance_criteria",
-                    "slot://selected_implementation",
-                    "slot://test_obligations",
-                ),
-                optional=("slot://verification_claims", "slot://execution_receipts/*"),
-                produces=(ProducedArtifactSpec("verification_claim", scope="composite"),),
-                execution_policy_ref="witness_default",
-            ),
-            _obligation_spec(
-                id=OBLIGATION_SPEC_COLLECT_APPROVALS,
-                obligation_kind="approval",
-                required=("slot://spec", "slot://selected_implementation"),
-                produces=(ProducedArtifactSpec("approval"),),
-            ),
-            _obligation_spec(
-                id=OBLIGATION_SPEC_RECOMPOSE_FEATURE_CHANGE,
-                obligation_kind="composition",
-                required=("slot://spec", "slot://selected_implementation"),
-                optional=("slot://test_obligations", "slot://verification_claims", "slot://execution_receipts/*"),
-                produces=(ProducedArtifactSpec("feature_change"),),
-            ),
-            _obligation_spec(
-                id=OBLIGATION_SPEC_REPLACE_INVALID_INPUTS,
-                obligation_kind="invalidation_repair",
-                required=("slot://spec", "slot://selected_implementation"),
-                optional=("slot://test_obligations",),
-                produces=(ProducedArtifactSpec("feature_change"),),
-            ),
-            _obligation_spec(
-                id=OBLIGATION_SPEC_REVERIFY_STALE_INPUTS,
-                obligation_kind="verification",
-                required=("slot://spec", "slot://selected_implementation"),
-                optional=("slot://test_obligations", "slot://verification_claims", "slot://execution_receipts/*"),
-                produces=(ProducedArtifactSpec("verification_claim"),),
-                execution_policy_ref="witness_default",
-            ),
-        ),
-    )
+    return load_feature_change_protocol_spec_declaration()
+
+
+def load_feature_change_protocol_spec_declaration(
+    relative_path: str = DEFAULT_FEATURE_CHANGE_PROTOCOL_DECLARATION,
+) -> ProtocolSpec:
+    return ProtocolSpec.from_dict(_load_json_declaration(relative_path))
 
 
 def feature_change_obligation_specs_by_id(
@@ -285,37 +151,6 @@ def fingerprint_materialized_inputs(refs: Iterable[str]) -> str:
     return f"sha256:{hashlib.sha256(payload.encode('utf-8')).hexdigest()}"
 
 
-def _obligation_spec(
-    *,
-    id: str,
-    obligation_kind: str,
-    required: tuple[str, ...],
-    optional: tuple[str, ...] = (),
-    forbidden: tuple[str, ...] = (),
-    produces: tuple[ProducedArtifactSpec, ...],
-    execution_policy_ref: str | None = None,
-) -> ObligationSpec:
-    return ObligationSpec(
-        id=id,
-        obligation_kind=obligation_kind,
-        input_contract=InputContract(
-            required=tuple(RefSelector(ref) for ref in required),
-            optional=tuple(RefSelector(ref) for ref in optional),
-            forbidden=tuple(RefSelector(ref) for ref in forbidden),
-            closure={
-                "dependency_rule": "current_bound_slots_only",
-                "stale_on": [
-                    "spec_revision_changed",
-                    "selected_implementation_changed",
-                    "test_obligation_changed",
-                ],
-            },
-        ),
-        produces=produces,
-        execution_policy_ref=execution_policy_ref,
-    )
-
-
 def _bind_input_contract(
     input_contract: InputContract,
     projection: FeatureTaskArtifactProjection,
@@ -378,8 +213,17 @@ def _artifact_uri(artifact_id: str, *, fragment: str | None = None) -> str:
     return uri
 
 
+def _load_json_declaration(relative_path: str) -> dict[str, object]:
+    resource = resources.files("sisyphus").joinpath(relative_path)
+    raw = json.loads(resource.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"DSL declaration must be a JSON object: {relative_path}")
+    return {str(key): value for key, value in raw.items()}
+
+
 __all__ = [
     "FEATURE_CHANGE_ARTIFACT_TYPE",
+    "DEFAULT_FEATURE_CHANGE_PROTOCOL_DECLARATION",
     "OBLIGATION_SPEC_BIND_IMPLEMENTATION_CANDIDATES",
     "OBLIGATION_SPEC_BIND_REQUIRED_TESTS",
     "OBLIGATION_SPEC_COLLECT_APPROVALS",
@@ -397,5 +241,6 @@ __all__ = [
     "default_feature_change_protocol_spec",
     "feature_change_obligation_specs_by_id",
     "fingerprint_materialized_inputs",
+    "load_feature_change_protocol_spec_declaration",
     "obligation_intents_from_feature_change_evaluation",
 ]

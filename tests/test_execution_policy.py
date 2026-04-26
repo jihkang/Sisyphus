@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from importlib import resources
 import sys
 import unittest
 
@@ -11,6 +13,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from sisyphus.execution_policy import (
+    DEFAULT_EXECUTION_POLICY_REGISTRY_DECLARATION,
     EXECUTION_POLICY_REGISTRY_SCHEMA_VERSION,
     EXECUTION_POLICY_WITNESS_DEFAULT,
     EXECUTION_RUNNER_SISYPHUS_VERIFY,
@@ -18,6 +21,7 @@ from sisyphus.execution_policy import (
     execution_policy_receipt_fields,
     execution_policy_registry_from_dict,
     execution_policy_registry_to_dict,
+    load_execution_policy_registry_declaration,
     resolve_execution_policy,
 )
 
@@ -40,6 +44,17 @@ class ExecutionPolicyRegistryTests(unittest.TestCase):
 
         self.assertEqual(rendered["schema_version"], EXECUTION_POLICY_REGISTRY_SCHEMA_VERSION)
         self.assertEqual(restored, registry)
+
+    def test_default_registry_loads_from_packaged_declaration(self) -> None:
+        raw = json.loads(
+            resources.files("sisyphus")
+            .joinpath(DEFAULT_EXECUTION_POLICY_REGISTRY_DECLARATION)
+            .read_text(encoding="utf-8")
+        )
+        registry = load_execution_policy_registry_declaration()
+
+        self.assertEqual(execution_policy_registry_to_dict(registry), raw)
+        self.assertEqual(default_execution_policy_registry(), registry)
 
     def test_receipt_fields_preserve_resolved_execution_boundary(self) -> None:
         policy = default_execution_policy_registry()[EXECUTION_POLICY_WITNESS_DEFAULT]

@@ -1,0 +1,17 @@
+{
+  "schema_version": "sisyphus.execution_policy_registry.v1",
+  "policies": {
+    "witness_default": {
+      "schema_version": "sisyphus.dsl.v1",
+      "kind": "execution_policy",
+      "id": "witness_default",
+      "runner": "sisyphus.verify",
+      "role": "witness",
+      "provider": "local",
+      "tool": "sisyphus.verify",
+      "timeout_seconds": 600,
+      "retry": 0,
+      "budget": {}
+    }
+  }
+}

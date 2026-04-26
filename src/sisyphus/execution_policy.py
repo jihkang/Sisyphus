@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from importlib import resources
+import json
 
 from .dsl import ExecutionPolicy
 
@@ -9,19 +11,17 @@ EXECUTION_POLICY_REGISTRY_SCHEMA_VERSION = "sisyphus.execution_policy_registry.v
 
 EXECUTION_POLICY_WITNESS_DEFAULT = "witness_default"
 EXECUTION_RUNNER_SISYPHUS_VERIFY = "sisyphus.verify"
+DEFAULT_EXECUTION_POLICY_REGISTRY_DECLARATION = "declarations/execution_policies.json"
 
 
 def default_execution_policy_registry() -> dict[str, ExecutionPolicy]:
-    policy = ExecutionPolicy(
-        id=EXECUTION_POLICY_WITNESS_DEFAULT,
-        runner=EXECUTION_RUNNER_SISYPHUS_VERIFY,
-        role="witness",
-        provider="local",
-        tool=EXECUTION_RUNNER_SISYPHUS_VERIFY,
-        timeout_seconds=600,
-        retry=0,
-    )
-    return {policy.id: policy}
+    return load_execution_policy_registry_declaration()
+
+
+def load_execution_policy_registry_declaration(
+    relative_path: str = DEFAULT_EXECUTION_POLICY_REGISTRY_DECLARATION,
+) -> dict[str, ExecutionPolicy]:
+    return execution_policy_registry_from_dict(_load_json_declaration(relative_path))
 
 
 def resolve_execution_policy(
@@ -75,7 +75,16 @@ def supported_execution_runners() -> tuple[str, ...]:
     return (EXECUTION_RUNNER_SISYPHUS_VERIFY,)
 
 
+def _load_json_declaration(relative_path: str) -> dict[str, object]:
+    resource = resources.files("sisyphus").joinpath(relative_path)
+    raw = json.loads(resource.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"execution policy declaration must be a JSON object: {relative_path}")
+    return {str(key): value for key, value in raw.items()}
+
+
 __all__ = [
+    "DEFAULT_EXECUTION_POLICY_REGISTRY_DECLARATION",
     "EXECUTION_POLICY_REGISTRY_SCHEMA_VERSION",
     "EXECUTION_POLICY_WITNESS_DEFAULT",
     "EXECUTION_RUNNER_SISYPHUS_VERIFY",
@@ -83,6 +92,7 @@ __all__ = [
     "execution_policy_receipt_fields",
     "execution_policy_registry_from_dict",
     "execution_policy_registry_to_dict",
+    "load_execution_policy_registry_declaration",
     "resolve_execution_policy",
     "supported_execution_runners",
 ]
