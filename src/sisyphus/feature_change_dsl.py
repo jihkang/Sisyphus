@@ -209,27 +209,7 @@ def feature_change_obligation_specs_by_id(
 def obligation_intents_from_feature_change_evaluation(
     evaluation: FeatureChangeEvaluation,
 ) -> tuple[ObligationIntent, ...]:
-    missing_scopes = tuple(
-        item.split(":", 1)[1]
-        for item in evaluation.missing_requirements
-        if item.startswith("verification_scope:") and ":" in item
-    )
-    reasons = tuple(dict.fromkeys((*evaluation.missing_requirements, *evaluation.promotion.blocking_reasons)))
-    intents: list[ObligationIntent] = []
-    for action in evaluation.promotion.required_actions:
-        data: dict[str, object] = {"required_action": action}
-        if missing_scopes and action in {"verify_required_claims", "reverify_required_claims"}:
-            data["missing_scopes"] = list(missing_scopes)
-        intents.append(
-            ObligationIntent(
-                intent_kind=action,
-                target_artifact=_artifact_uri(evaluation.artifact_id),
-                missing_scopes=missing_scopes if action in {"verify_required_claims", "reverify_required_claims"} else (),
-                reasons=reasons,
-                data=data,
-            )
-        )
-    return tuple(intents)
+    return evaluation.obligation_intents
 
 
 def compile_feature_change_obligation(

@@ -21,6 +21,7 @@ from .artifacts import (
     VERIFICATION_CLAIM_STATUS_FAILED,
     VERIFICATION_CLAIM_STATUS_PASSED,
 )
+from .dsl import ObligationIntent
 
 INVALIDATION_STATUS_FRESH = "fresh"
 INVALIDATION_STATUS_STALE = "stale"
@@ -142,6 +143,7 @@ class FeatureChangeEvaluation:
     missing_requirements: tuple[str, ...] = ()
     failing_invariants: tuple[str, ...] = ()
     pending_invariants: tuple[str, ...] = ()
+    obligation_intents: tuple[ObligationIntent, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "artifact_id", _require_string(self.artifact_id, "artifact_id"))
@@ -161,6 +163,11 @@ class FeatureChangeEvaluation:
             "pending_invariants",
             _normalize_string_tuple(self.pending_invariants, "pending_invariants"),
         )
+        object.__setattr__(
+            self,
+            "obligation_intents",
+            _normalize_obligation_intent_tuple(self.obligation_intents, "obligation_intents"),
+        )
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -169,6 +176,7 @@ class FeatureChangeEvaluation:
             "missing_requirements": list(self.missing_requirements),
             "failing_invariants": list(self.failing_invariants),
             "pending_invariants": list(self.pending_invariants),
+            "obligation_intents": [intent.to_dict() for intent in self.obligation_intents],
             "promotion": self.promotion.to_dict(),
             "invalidation": self.invalidation.to_dict(),
         }
@@ -335,12 +343,15 @@ def evaluate_feature_change_artifact(
     elif stale_inputs:
         invalidation_status = INVALIDATION_STATUS_STALE
 
+    unique_missing_requirements = tuple(dict.fromkeys(missing_requirements))
+    unique_blocking_reasons = tuple(dict.fromkeys(blocking_reasons))
+    unique_required_actions = tuple(dict.fromkeys(required_actions))
     promotion = PromotionDecision(
         artifact_id=feature_change_artifact.artifact_id,
         decision=derived_state,
-        missing_requirements=tuple(dict.fromkeys(missing_requirements)),
-        blocking_reasons=tuple(dict.fromkeys(blocking_reasons)),
-        required_actions=tuple(dict.fromkeys(required_actions)),
+        missing_requirements=unique_missing_requirements,
+        blocking_reasons=unique_blocking_reasons,
+        required_actions=unique_required_actions,
         evidence_refs=feature_change_artifact.evidence_refs,
     )
     invalidation = InvalidationRecord(
@@ -349,16 +360,22 @@ def evaluate_feature_change_artifact(
         stale_inputs=tuple(_unique_refs(stale_inputs)),
         invalid_inputs=tuple(_unique_refs(invalid_inputs)),
         reasons=tuple(dict.fromkeys(invalidation_reasons)),
-        required_actions=tuple(dict.fromkeys(required_actions)),
+        required_actions=unique_required_actions,
     )
     return FeatureChangeEvaluation(
         artifact_id=feature_change_artifact.artifact_id,
         derived_state=derived_state,
         promotion=promotion,
         invalidation=invalidation,
-        missing_requirements=tuple(dict.fromkeys(missing_requirements)),
+        missing_requirements=unique_missing_requirements,
         failing_invariants=tuple(dict.fromkeys(failing_invariants)),
         pending_invariants=tuple(dict.fromkeys(pending_invariants)),
+        obligation_intents=_build_obligation_intents(
+            artifact_id=feature_change_artifact.artifact_id,
+            required_actions=unique_required_actions,
+            missing_requirements=unique_missing_requirements,
+            blocking_reasons=unique_blocking_reasons,
+        ),
     )
 
 
@@ -496,6 +513,50 @@ def _normalize_ref_tuple(values: Sequence[ArtifactRef], field_name: str) -> tupl
             raise TypeError(f"{field_name}[{index}] must be ArtifactRef, got {type(value).__name__}")
         normalized.append(value)
     return tuple(normalized)
+
+
+def _normalize_obligation_intent_tuple(
+    values: Sequence[ObligationIntent],
+    field_name: str,
+) -> tuple[ObligationIntent, ...]:
+    normalized: list[ObligationIntent] = []
+    for index, value in enumerate(values):
+        if not isinstance(value, ObligationIntent):
+            raise TypeError(f"{field_name}[{index}] must be ObligationIntent, got {type(value).__name__}")
+        normalized.append(value)
+    return tuple(normalized)
+
+
+def _build_obligation_intents(
+    *,
+    artifact_id: str,
+    required_actions: Sequence[str],
+    missing_requirements: Sequence[str],
+    blocking_reasons: Sequence[str],
+) -> tuple[ObligationIntent, ...]:
+    missing_scopes = tuple(
+        item.split(":", 1)[1]
+        for item in missing_requirements
+        if item.startswith("verification_scope:") and ":" in item
+    )
+    reasons = tuple(dict.fromkeys((*missing_requirements, *blocking_reasons)))
+    intents: list[ObligationIntent] = []
+    for action in required_actions:
+        data: dict[str, object] = {"required_action": action}
+        intent_missing_scopes: tuple[str, ...] = ()
+        if missing_scopes and action in {"verify_required_claims", "reverify_required_claims"}:
+            data["missing_scopes"] = list(missing_scopes)
+            intent_missing_scopes = missing_scopes
+        intents.append(
+            ObligationIntent(
+                intent_kind=action,
+                target_artifact=f"artifact://{artifact_id}",
+                missing_scopes=intent_missing_scopes,
+                reasons=reasons,
+                data=data,
+            )
+        )
+    return tuple(intents)
 
 
 def _unique_refs(values: Sequence[ArtifactRef]) -> list[ArtifactRef]:
