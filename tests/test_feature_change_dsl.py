@@ -15,7 +15,9 @@ from sisyphus.artifact_evaluator import evaluate_feature_task_projection
 from sisyphus.artifact_projection import project_feature_task
 from sisyphus.config import load_config
 from sisyphus.feature_change_dsl import (
+    OBLIGATION_SPEC_VERIFY_CROSS_FEATURE,
     OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE,
+    OBLIGATION_SPEC_VERIFY_LOCAL_FEATURE,
     compile_feature_change_obligations,
     default_feature_change_protocol_spec,
     feature_change_obligation_specs_by_id,
@@ -151,17 +153,37 @@ class FeatureChangeDslTests(unittest.TestCase):
         specs = feature_change_obligation_specs_by_id(protocol)
 
         self.assertEqual(protocol.artifact_type, "feature_change")
+        self.assertIn(OBLIGATION_SPEC_VERIFY_LOCAL_FEATURE, specs)
+        self.assertIn(OBLIGATION_SPEC_VERIFY_CROSS_FEATURE, specs)
         self.assertIn(OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE, specs)
-        verify_spec = specs[OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE]
+        local_spec = specs[OBLIGATION_SPEC_VERIFY_LOCAL_FEATURE]
+        cross_spec = specs[OBLIGATION_SPEC_VERIFY_CROSS_FEATURE]
+        composite_spec = specs[OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE]
         self.assertEqual(
-            [selector.ref for selector in verify_spec.input_contract.required],
+            [selector.ref for selector in local_spec.input_contract.required],
+            [
+                "slot://spec#acceptance_criteria",
+                "slot://test_obligations",
+            ],
+        )
+        self.assertEqual(
+            [selector.ref for selector in cross_spec.input_contract.required],
+            [
+                "slot://spec#acceptance_criteria",
+                "slot://selected_implementation",
+            ],
+        )
+        self.assertEqual(
+            [selector.ref for selector in composite_spec.input_contract.required],
             [
                 "slot://spec#acceptance_criteria",
                 "slot://selected_implementation",
                 "slot://test_obligations",
             ],
         )
-        self.assertEqual(verify_spec.execution_policy_ref, "witness_default")
+        self.assertEqual(local_spec.execution_policy_ref, "witness_default")
+        self.assertEqual(cross_spec.execution_policy_ref, "witness_default")
+        self.assertEqual(composite_spec.execution_policy_ref, "witness_default")
 
     def test_evaluation_required_actions_compile_to_bound_obligations(self) -> None:
         task = self._new_feature_task("feature-change-dsl")
@@ -173,17 +195,25 @@ class FeatureChangeDslTests(unittest.TestCase):
         compiled = compile_feature_change_obligations(intents, projection)
 
         self.assertEqual([intent.intent_kind for intent in intents], ["verify_required_claims"])
-        self.assertEqual(len(compiled), 1)
-        obligation = compiled[0]
-        self.assertEqual(obligation.spec_ref, OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE)
-        self.assertEqual(obligation.target_artifact, f"artifact://{projection.feature_change_artifact.artifact_id}")
-        self.assertTrue(obligation.materialized_input_set.fingerprint.startswith("sha256:"))
-        self.assertIn(f"artifact://{projection.spec_artifact.artifact_id}#acceptance_criteria", obligation.bound_inputs)
-        self.assertIn(f"artifact://{projection.implementation_artifact.artifact_id}", obligation.bound_inputs)
         self.assertEqual(
-            [item for item in obligation.bound_inputs if item.startswith("artifact://")],
-            list(obligation.materialized_input_set.refs),
+            [obligation.spec_ref for obligation in compiled],
+            [
+                OBLIGATION_SPEC_VERIFY_LOCAL_FEATURE,
+                OBLIGATION_SPEC_VERIFY_CROSS_FEATURE,
+                OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE,
+            ],
         )
+        for obligation in compiled:
+            self.assertEqual(obligation.target_artifact, f"artifact://{projection.feature_change_artifact.artifact_id}")
+            self.assertTrue(obligation.materialized_input_set.fingerprint.startswith("sha256:"))
+            self.assertIn(f"artifact://{projection.spec_artifact.artifact_id}#acceptance_criteria", obligation.bound_inputs)
+            self.assertEqual(
+                [item for item in obligation.bound_inputs if item.startswith("artifact://")],
+                list(obligation.materialized_input_set.refs),
+            )
+        self.assertNotIn(f"artifact://{projection.implementation_artifact.artifact_id}", compiled[0].bound_inputs)
+        self.assertIn(f"artifact://{projection.implementation_artifact.artifact_id}", compiled[1].bound_inputs)
+        self.assertIn(f"artifact://{projection.implementation_artifact.artifact_id}", compiled[2].bound_inputs)
 
     def test_compiled_obligation_queue_persists_task_local_runtime_instances(self) -> None:
         task = self._new_feature_task("feature-change-obligation-queue")
@@ -195,15 +225,26 @@ class FeatureChangeDslTests(unittest.TestCase):
         materialized = materialize_feature_change_obligation_queue(self.repo_root, self.config, task["id"])
         persisted = read_feature_change_obligation_queue(self.repo_root / task["task_dir"])
 
-        self.assertEqual(payload["obligation_count"], 1)
+        self.assertEqual(payload["obligation_count"], 3)
         self.assertTrue(materialized.changed)
         self.assertIsNotNone(persisted)
         assert persisted is not None
-        self.assertEqual(persisted["obligation_count"], 1)
+        self.assertEqual(persisted["obligation_count"], 3)
         self.assertIn("witness_default", persisted["execution_policies"]["policies"])
-        obligation = persisted["compiled_obligations"][0]
-        self.assertEqual(obligation["spec_ref"], OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE)
-        self.assertTrue(obligation["materialized_input_set"]["fingerprint"].startswith("sha256:"))
+        self.assertEqual(
+            [obligation["spec_ref"] for obligation in persisted["compiled_obligations"]],
+            [
+                OBLIGATION_SPEC_VERIFY_LOCAL_FEATURE,
+                OBLIGATION_SPEC_VERIFY_CROSS_FEATURE,
+                OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE,
+            ],
+        )
+        self.assertTrue(
+            all(
+                obligation["materialized_input_set"]["fingerprint"].startswith("sha256:")
+                for obligation in persisted["compiled_obligations"]
+            )
+        )
 
     def test_pending_verification_obligation_executes_via_verify_runner(self) -> None:
         task = self._new_feature_task("feature-change-obligation-execute")
