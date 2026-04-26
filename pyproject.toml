@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "taskflow-kit"
+name = "sisyphus"
 version = "0.1.0"
 description = "Shared git worktree task lifecycle utility"
 readme = "README.md"

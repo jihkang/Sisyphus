@@ -310,7 +310,7 @@ uv run python -m unittest discover -s tests -v
 - `sisyphus` is the preferred command surface.
 - The direct MCP launcher is `python -m sisyphus.mcp_server`.
 - For durable local registration, include `PYTHONPATH=/absolute/path/to/Sisyphus/src` in the MCP server environment.
-- The package name is currently `taskflow-kit`.
+- The package name is `sisyphus`.
 - Project philosophy: see `docs/philosophy.md`.
 - LinkedIn weekly summary example: see `docs/linkedin-weekly-main-summary-2026-04-17.md`.
 - Phone-first automation proposal: see `docs/mobile-automation-spec.md`.
