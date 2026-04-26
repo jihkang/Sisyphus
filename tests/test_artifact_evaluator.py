@@ -13,10 +13,12 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from sisyphus.artifact_evaluator import (
+    ArtifactPromotionDecision,
     FeatureChangePolicy,
     INVALIDATION_STATUS_FRESH,
     INVALIDATION_STATUS_INVALID,
     INVALIDATION_STATUS_STALE,
+    PromotionDecision,
     evaluate_feature_change_artifact,
     evaluate_feature_task_projection,
 )
@@ -170,6 +172,8 @@ class ArtifactEvaluatorTests(unittest.TestCase):
         evaluation = evaluate_feature_task_projection(projection)
 
         self.assertEqual(evaluation.derived_state, ARTIFACT_STATE_PROMOTABLE)
+        self.assertIsInstance(evaluation.promotion, ArtifactPromotionDecision)
+        self.assertIs(evaluation.promotion.__class__, PromotionDecision)
         self.assertEqual(evaluation.promotion.decision, ARTIFACT_STATE_PROMOTABLE)
         self.assertEqual(evaluation.invalidation.status, INVALIDATION_STATUS_FRESH)
         self.assertFalse(evaluation.missing_requirements)

@@ -70,7 +70,7 @@ class MergeRecordResult:
 
 
 @dataclass(slots=True)
-class PromotionExecutionResult:
+class RepositoryPromotionExecutionResult:
     task_id: str | None
     status: str | None
     branch: str | None
@@ -318,7 +318,7 @@ def execute_promotion(
     base_branch: str | None = None,
     head_branch: str | None = None,
     draft: bool = True,
-) -> PromotionExecutionResult:
+) -> RepositoryPromotionExecutionResult:
     effective_config = config or load_config(repo_root)
     try:
         outcome = run_promotion_execution(
@@ -335,7 +335,7 @@ def execute_promotion(
             draft=draft,
         )
     except Exception as exc:
-        return PromotionExecutionResult(
+        return RepositoryPromotionExecutionResult(
             task_id=task_id,
             status=None,
             branch=None,
@@ -348,7 +348,7 @@ def execute_promotion(
             error=str(exc),
         )
 
-    return PromotionExecutionResult(
+    return RepositoryPromotionExecutionResult(
         task_id=outcome.task_id,
         status=outcome.status,
         branch=outcome.branch,
@@ -381,6 +381,9 @@ def get_task(repo_root: Path, task_id: str, *, config: SisyphusConfig | None = N
 def list_tasks(repo_root: Path, *, config: SisyphusConfig | None = None) -> list[dict]:
     effective_config = config or load_config(repo_root)
     return list_task_records(repo_root=repo_root, task_dir_name=effective_config.task_dir)
+
+
+PromotionExecutionResult = RepositoryPromotionExecutionResult
 
 
 def _processed_event_path(*, repo_root: Path, event_id: str, status: str) -> Path:

@@ -51,7 +51,7 @@ class FeatureChangePolicy:
 
 
 @dataclass(frozen=True, slots=True)
-class PromotionDecision:
+class ArtifactPromotionDecision:
     artifact_id: str
     decision: str
     missing_requirements: tuple[str, ...] = ()
@@ -138,7 +138,7 @@ class InvalidationRecord:
 class FeatureChangeEvaluation:
     artifact_id: str
     derived_state: str
-    promotion: PromotionDecision
+    promotion: ArtifactPromotionDecision
     invalidation: InvalidationRecord
     missing_requirements: tuple[str, ...] = ()
     failing_invariants: tuple[str, ...] = ()
@@ -346,7 +346,7 @@ def evaluate_feature_change_artifact(
     unique_missing_requirements = tuple(dict.fromkeys(missing_requirements))
     unique_blocking_reasons = tuple(dict.fromkeys(blocking_reasons))
     unique_required_actions = tuple(dict.fromkeys(required_actions))
-    promotion = PromotionDecision(
+    promotion = ArtifactPromotionDecision(
         artifact_id=feature_change_artifact.artifact_id,
         decision=derived_state,
         missing_requirements=unique_missing_requirements,
@@ -579,6 +579,7 @@ def _require_string(value: str, field_name: str) -> str:
 
 
 __all__ = [
+    "ArtifactPromotionDecision",
     "FeatureChangeEvaluation",
     "FeatureChangePolicy",
     "INVALIDATION_STATUS_FRESH",
@@ -589,3 +590,6 @@ __all__ = [
     "evaluate_feature_change_artifact",
     "evaluate_feature_task_projection",
 ]
+
+
+PromotionDecision = ArtifactPromotionDecision
