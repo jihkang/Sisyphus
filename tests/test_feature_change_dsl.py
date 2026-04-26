@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 from importlib import resources
@@ -17,6 +18,7 @@ from sisyphus.artifact_projection import project_feature_task
 from sisyphus.artifact_evaluator import evaluate_feature_task_projection
 from sisyphus.artifact_snapshot import materialize_feature_task_artifact_snapshot
 from sisyphus.config import load_config
+from sisyphus.dsl import InputContract, ProtocolSpec, RefSelector
 from sisyphus.feature_change_dsl import (
     DEFAULT_FEATURE_CHANGE_PROTOCOL_DECLARATION,
     OBLIGATION_SPEC_REVERIFY_STALE_INPUTS,
@@ -231,6 +233,52 @@ class FeatureChangeDslTests(unittest.TestCase):
         self.assertIn(f"artifact://{projection.implementation_artifact.artifact_id}", compiled[1].bound_inputs)
         self.assertIn(f"artifact://{projection.implementation_artifact.artifact_id}", compiled[2].bound_inputs)
 
+    def test_compiler_rejects_forbidden_inputs_that_overlap_bound_slots(self) -> None:
+        task = self._new_feature_task("feature-change-forbidden-input")
+        self._fill_feature_docs(task)
+        projection = project_feature_task(self.repo_root, self.config, task["id"])
+        evaluation = evaluate_feature_task_projection(projection)
+        protocol = _protocol_with_composite_input_contract(
+            InputContract(
+                required=(
+                    RefSelector("slot://spec#acceptance_criteria"),
+                    RefSelector("slot://selected_implementation"),
+                    RefSelector("slot://test_obligations"),
+                ),
+                forbidden=(RefSelector("slot://selected_implementation"),),
+                closure={
+                    "dependency_rule": "current_bound_slots_only",
+                    "stale_on": ["selected_implementation_changed"],
+                },
+            )
+        )
+
+        intents = obligation_intents_from_feature_change_evaluation(evaluation)
+
+        with self.assertRaisesRegex(ValueError, "forbidden selector matched bound inputs"):
+            compile_feature_change_obligations(intents, projection, protocol=protocol)
+
+    def test_compiler_rejects_unsupported_closure_dependency_rule(self) -> None:
+        task = self._new_feature_task("feature-change-unsupported-closure")
+        self._fill_feature_docs(task)
+        projection = project_feature_task(self.repo_root, self.config, task["id"])
+        evaluation = evaluate_feature_task_projection(projection)
+        protocol = _protocol_with_composite_input_contract(
+            InputContract(
+                required=(
+                    RefSelector("slot://spec#acceptance_criteria"),
+                    RefSelector("slot://selected_implementation"),
+                    RefSelector("slot://test_obligations"),
+                ),
+                closure={"dependency_rule": "all_prior_outputs"},
+            )
+        )
+
+        intents = obligation_intents_from_feature_change_evaluation(evaluation)
+
+        with self.assertRaisesRegex(ValueError, "unsupported input contract closure dependency_rule"):
+            compile_feature_change_obligations(intents, projection, protocol=protocol)
+
     def test_compiled_obligation_queue_persists_task_local_runtime_instances(self) -> None:
         task = self._new_feature_task("feature-change-obligation-queue")
         self._fill_feature_docs(task)
@@ -373,6 +421,17 @@ class FeatureChangeDslTests(unittest.TestCase):
         self.assertIsNotNone(persisted)
         assert persisted is not None
         self.assertEqual(persisted["obligation_count"], 0)
+
+
+def _protocol_with_composite_input_contract(input_contract: InputContract) -> ProtocolSpec:
+    protocol = default_feature_change_protocol_spec()
+    obligations = []
+    for obligation in protocol.obligations:
+        if obligation.id == OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE:
+            obligations.append(replace(obligation, input_contract=input_contract))
+        else:
+            obligations.append(obligation)
+    return replace(protocol, obligations=tuple(obligations))
 
 
 if __name__ == "__main__":
