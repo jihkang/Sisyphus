@@ -10,6 +10,7 @@ from .artifact_projection import FeatureTaskArtifactProjection
 from .artifacts import ArtifactRef
 from .dsl import (
     CompiledObligation,
+    InputContract,
     MaterializedInputSet,
     ObligationIntent,
     ObligationSpec,
@@ -97,7 +98,7 @@ def _compile_feature_change_obligation_for_spec_id(
 ) -> CompiledObligation:
     specs = feature_change_obligation_specs_by_id(protocol)
     spec = specs[spec_id]
-    bound_inputs = tuple(_bind_input_contract(spec.input_contract, projection))
+    bound_inputs = _bind_input_contract(spec.input_contract, projection)
     materialized_input_set = MaterializedInputSet(
         refs=bound_inputs,
         fingerprint=fingerprint_materialized_inputs(bound_inputs),
@@ -154,17 +155,39 @@ def fingerprint_materialized_inputs(refs: Iterable[str]) -> str:
 def _bind_input_contract(
     input_contract: InputContract,
     projection: FeatureTaskArtifactProjection,
-) -> Iterable[str]:
-    for selector in (*input_contract.required, *input_contract.optional):
-        yield from _bind_slot_selector(selector.ref, projection)
+) -> tuple[str, ...]:
+    _enforce_supported_closure(input_contract)
+    bound: list[str] = []
+    for selector in input_contract.required:
+        refs = _bind_slot_selector(selector.ref, projection, required=True)
+        if not refs:
+            raise ValueError(f"required input selector did not bind: {selector.ref}")
+        bound.extend(refs)
+    for selector in input_contract.optional:
+        bound.extend(_bind_slot_selector(selector.ref, projection, required=False))
+
+    bound_inputs = tuple(dict.fromkeys(bound))
+    forbidden_refs = tuple(
+        ref
+        for selector in input_contract.forbidden
+        for ref in _bind_forbidden_selector(selector.ref, projection)
+    )
+    overlap = sorted(set(bound_inputs).intersection(forbidden_refs))
+    if overlap:
+        raise ValueError(f"input contract forbidden selector matched bound inputs: {', '.join(overlap)}")
+    return bound_inputs
 
 
 def _bind_slot_selector(
     selector: str,
     projection: FeatureTaskArtifactProjection,
+    *,
+    required: bool,
 ) -> tuple[str, ...]:
     scheme, remainder = selector.split("://", 1)
     if scheme != "slot":
+        if required:
+            raise ValueError(f"required feature change input selector must use slot://, got {selector}")
         return ()
     slot_name, fragment = _split_fragment(remainder)
     wildcard = slot_name.endswith("/*")
@@ -176,6 +199,23 @@ def _bind_slot_selector(
     if not wildcard and len(refs) > 1:
         return tuple(_artifact_uri(ref.artifact_id, fragment=fragment) for ref in refs)
     return tuple(_artifact_uri(ref.artifact_id, fragment=fragment) for ref in refs)
+
+
+def _bind_forbidden_selector(
+    selector: str,
+    projection: FeatureTaskArtifactProjection,
+) -> tuple[str, ...]:
+    scheme, _ = selector.split("://", 1)
+    if scheme != "slot":
+        return ()
+    return _bind_slot_selector(selector, projection, required=False)
+
+
+def _enforce_supported_closure(input_contract: InputContract) -> None:
+    dependency_rule = input_contract.closure.get("dependency_rule")
+    if dependency_rule in (None, "current_bound_slots_only"):
+        return
+    raise ValueError(f"unsupported input contract closure dependency_rule: {dependency_rule!s}")
 
 
 def _slot_refs(slot_name: str, projection: FeatureTaskArtifactProjection) -> tuple[ArtifactRef, ...]:
