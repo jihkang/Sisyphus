@@ -24,6 +24,7 @@ from sisyphus.feature_change_dsl import (
 from sisyphus.obligation_runtime import (
     OBLIGATION_STATUS_PASSED,
     build_feature_change_compiled_obligation_queue,
+    converge_feature_change_obligations,
     execute_next_feature_change_obligation,
     materialize_feature_change_obligation_queue,
     read_feature_change_obligation_queue,
@@ -238,6 +239,36 @@ class FeatureChangeDslTests(unittest.TestCase):
         self.assertEqual(obligation["execution_receipts"][-1]["runner"], "sisyphus.verify")
         self.assertEqual(obligation["execution_receipts"][-1]["role"], "witness")
         self.assertEqual(obligation["execution_receipts"][-1]["provider"], "local")
+
+    def test_convergence_loop_executes_and_reprojects_until_idle(self) -> None:
+        task = self._new_feature_task("feature-change-obligation-converge")
+        self._fill_feature_docs(task)
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="approved",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="frozen",
+        )
+
+        result = converge_feature_change_obligations(self.repo_root, self.config, task["id"])
+        persisted = read_feature_change_obligation_queue(self.repo_root / task["task_dir"])
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+
+        self.assertTrue(result.progressed)
+        self.assertTrue(result.converged)
+        self.assertEqual(result.executed_count, 1)
+        self.assertEqual(reloaded["verify_status"], "passed")
+        self.assertIsNotNone(persisted)
+        assert persisted is not None
+        self.assertEqual(persisted["obligation_count"], 0)
 
 
 if __name__ == "__main__":

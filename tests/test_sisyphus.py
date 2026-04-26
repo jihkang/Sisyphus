@@ -3089,8 +3089,9 @@ class SisyphusDaemonTests(unittest.TestCase):
         snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
         self.assertEqual(snapshot["composite"]["artifact_type"], "feature_change")
         payload = json.loads(queue_path.read_text(encoding="utf-8"))
-        self.assertEqual(payload["obligation_count"], 1)
+        self.assertEqual(payload["obligation_count"], 0)
         reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded["verify_status"], "passed")
         self.assertEqual(reloaded.get("subtasks"), [])
 
     def test_workflow_cycle_does_not_auto_advance_promotion_pending_tasks(self) -> None:

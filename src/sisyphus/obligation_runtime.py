@@ -7,6 +7,7 @@ from typing import Any
 
 from .artifact_evaluator import FeatureChangeEvaluation, evaluate_feature_task_projection
 from .artifact_projection import FeatureTaskArtifactProjection, project_feature_task_record
+from .artifact_snapshot import materialize_feature_task_artifact_snapshot
 from .config import SisyphusConfig
 from .feature_change_dsl import (
     compile_feature_change_obligations,
@@ -54,6 +55,17 @@ class ObligationExecutionResult:
     executed: bool
     status: str
     queue_path: Path
+    message: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationConvergenceResult:
+    task_id: str
+    progressed: bool
+    converged: bool
+    step_count: int
+    executed_count: int
+    last_status: str
     message: str | None = None
 
 
@@ -237,6 +249,61 @@ def execute_next_feature_change_obligation(
     )
 
 
+def converge_feature_change_obligations(
+    repo_root: Path,
+    config: SisyphusConfig,
+    task_id: str,
+    *,
+    max_steps: int = 8,
+) -> ObligationConvergenceResult:
+    if max_steps < 1:
+        raise ValueError("max_steps must be positive")
+
+    progressed = False
+    executed_count = 0
+    last_status = "idle"
+    for step in range(1, max_steps + 1):
+        snapshot = materialize_feature_task_artifact_snapshot(repo_root=repo_root, config=config, task_id=task_id)
+        queue = materialize_feature_change_obligation_queue(repo_root=repo_root, config=config, task_id=task_id)
+        progressed = progressed or snapshot.changed or queue.changed
+
+        execution = execute_next_feature_change_obligation(repo_root=repo_root, config=config, task_id=task_id)
+        last_status = execution.status
+        if not execution.executed:
+            return ObligationConvergenceResult(
+                task_id=task_id,
+                progressed=progressed,
+                converged=True,
+                step_count=step,
+                executed_count=executed_count,
+                last_status=last_status,
+                message=execution.message,
+            )
+
+        progressed = True
+        executed_count += 1
+        if execution.status in {OBLIGATION_STATUS_BLOCKED, OBLIGATION_STATUS_FAILED}:
+            return ObligationConvergenceResult(
+                task_id=task_id,
+                progressed=True,
+                converged=False,
+                step_count=step,
+                executed_count=executed_count,
+                last_status=last_status,
+                message=execution.message,
+            )
+
+    return ObligationConvergenceResult(
+        task_id=task_id,
+        progressed=progressed,
+        converged=False,
+        step_count=max_steps,
+        executed_count=executed_count,
+        last_status=last_status,
+        message="maximum obligation convergence steps reached",
+    )
+
+
 def _write_json_if_changed(path: Path, payload: dict[str, object]) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     rendered = json.dumps(_json_safe(payload), indent=2, sort_keys=True) + "\n"
@@ -330,9 +397,11 @@ __all__ = [
     "OBLIGATION_STATUS_PASSED",
     "OBLIGATION_STATUS_PENDING",
     "OBLIGATION_STATUS_RUNNING",
+    "ObligationConvergenceResult",
     "ObligationExecutionResult",
     "ObligationQueueMaterialization",
     "build_feature_change_compiled_obligation_queue",
+    "converge_feature_change_obligations",
     "execute_next_feature_change_obligation",
     "materialize_feature_change_obligation_queue",
     "materialize_feature_change_obligation_queue_record",
