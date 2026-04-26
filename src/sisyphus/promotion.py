@@ -51,7 +51,7 @@ class MergeReceiptOutcome:
 
 
 @dataclass(slots=True)
-class PromotionExecutionOutcome:
+class RepositoryPromotionExecution:
     task_id: str
     branch: str
     base_branch: str
@@ -86,7 +86,7 @@ def execute_promotion(
     base_branch: str | None = None,
     head_branch: str | None = None,
     draft: bool = True,
-) -> PromotionExecutionOutcome:
+) -> RepositoryPromotionExecution:
     task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
     ensure_task_promotion_defaults(task)
     promotion = task["promotion"]
@@ -204,7 +204,7 @@ def execute_promotion(
             draft=draft,
         )
 
-    return PromotionExecutionOutcome(
+    return RepositoryPromotionExecution(
         task_id=str(task["id"]),
         branch=str(task.get("branch") or resolved_head_branch),
         base_branch=resolved_base_branch,
@@ -923,3 +923,6 @@ def _repo_full_name_from_remote_url(value: str | None) -> str | None:
     if repo.endswith(".git"):
         repo = repo[:-4]
     return repo or None
+
+
+PromotionExecutionOutcome = RepositoryPromotionExecution
