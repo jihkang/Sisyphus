@@ -33,6 +33,8 @@ OBLIGATION_STATUS_BLOCKED = "blocked"
 
 _VERIFY_OBLIGATION_SPECS = frozenset(
     {
+        "verify_local_feature",
+        "verify_cross_feature",
         "verify_composite_feature",
         "reverify_required_claims",
         "reverify_stale_inputs",

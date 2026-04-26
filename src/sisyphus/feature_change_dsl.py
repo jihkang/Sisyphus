@@ -25,6 +25,8 @@ OBLIGATION_SPEC_BIND_IMPLEMENTATION_CANDIDATES = "bind_implementation_candidates
 OBLIGATION_SPEC_SELECT_IMPLEMENTATION = "select_implementation"
 OBLIGATION_SPEC_RESELECT_IMPLEMENTATION = "reselect_implementation"
 OBLIGATION_SPEC_BIND_REQUIRED_TESTS = "bind_required_tests"
+OBLIGATION_SPEC_VERIFY_LOCAL_FEATURE = "verify_local_feature"
+OBLIGATION_SPEC_VERIFY_CROSS_FEATURE = "verify_cross_feature"
 OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE = "verify_composite_feature"
 OBLIGATION_SPEC_REVERIFY_REQUIRED_CLAIMS = "reverify_required_claims"
 OBLIGATION_SPEC_COLLECT_APPROVALS = "collect_approvals"
@@ -44,6 +46,14 @@ _ACTION_TO_SPEC_ID = {
     "replace_invalid_inputs": OBLIGATION_SPEC_REPLACE_INVALID_INPUTS,
     "reverify_stale_inputs": OBLIGATION_SPEC_REVERIFY_STALE_INPUTS,
 }
+
+_VERIFICATION_SCOPE_TO_SPEC_ID = {
+    "local": OBLIGATION_SPEC_VERIFY_LOCAL_FEATURE,
+    "cross": OBLIGATION_SPEC_VERIFY_CROSS_FEATURE,
+    "composite": OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE,
+}
+
+_VERIFICATION_SCOPE_ORDER = ("local", "cross", "composite")
 
 
 def default_feature_change_protocol_spec() -> ProtocolSpec:
@@ -89,6 +99,42 @@ def default_feature_change_protocol_spec() -> ProtocolSpec:
                 required=("slot://spec#acceptance_criteria",),
                 optional=("slot://selected_implementation",),
                 produces=(ProducedArtifactSpec("test_obligation"),),
+            ),
+            _obligation_spec(
+                id=OBLIGATION_SPEC_VERIFY_LOCAL_FEATURE,
+                obligation_kind="verification",
+                required=(
+                    "slot://spec#acceptance_criteria",
+                    "slot://test_obligations",
+                ),
+                optional=("slot://execution_receipts/*",),
+                forbidden=("external://unrelated_prior_outputs/*",),
+                produces=(
+                    ProducedArtifactSpec(
+                        "verification_claim",
+                        claim="local_spec_and_tests_satisfied",
+                        scope="local",
+                    ),
+                ),
+                execution_policy_ref="witness_default",
+            ),
+            _obligation_spec(
+                id=OBLIGATION_SPEC_VERIFY_CROSS_FEATURE,
+                obligation_kind="verification",
+                required=(
+                    "slot://spec#acceptance_criteria",
+                    "slot://selected_implementation",
+                ),
+                optional=("slot://execution_receipts/*",),
+                forbidden=("external://unrelated_prior_outputs/*",),
+                produces=(
+                    ProducedArtifactSpec(
+                        "verification_claim",
+                        claim="selected_implementation_binds_spec",
+                        scope="cross",
+                    ),
+                ),
+                execution_policy_ref="witness_default",
             ),
             _obligation_spec(
                 id=OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE,
@@ -192,10 +238,18 @@ def compile_feature_change_obligation(
     *,
     protocol: ProtocolSpec | None = None,
 ) -> CompiledObligation:
+    spec_id = _spec_ids_for_intent(intent)[0]
+    return _compile_feature_change_obligation_for_spec_id(intent, projection, spec_id, protocol=protocol)
+
+
+def _compile_feature_change_obligation_for_spec_id(
+    intent: ObligationIntent,
+    projection: FeatureTaskArtifactProjection,
+    spec_id: str,
+    *,
+    protocol: ProtocolSpec | None = None,
+) -> CompiledObligation:
     specs = feature_change_obligation_specs_by_id(protocol)
-    spec_id = _ACTION_TO_SPEC_ID.get(intent.intent_kind)
-    if spec_id is None:
-        raise ValueError(f"unsupported feature change obligation intent: {intent.intent_kind}")
     spec = specs[spec_id]
     bound_inputs = tuple(_bind_input_contract(spec.input_contract, projection))
     materialized_input_set = MaterializedInputSet(
@@ -218,10 +272,32 @@ def compile_feature_change_obligations(
     *,
     protocol: ProtocolSpec | None = None,
 ) -> tuple[CompiledObligation, ...]:
-    return tuple(
-        compile_feature_change_obligation(intent, projection, protocol=protocol)
-        for intent in intents
-    )
+    obligations: list[CompiledObligation] = []
+    for intent in intents:
+        obligations.extend(
+            _compile_feature_change_obligation_for_spec_id(intent, projection, spec_id, protocol=protocol)
+            for spec_id in _spec_ids_for_intent(intent)
+        )
+    return tuple(obligations)
+
+
+def _spec_ids_for_intent(intent: ObligationIntent) -> tuple[str, ...]:
+    if intent.intent_kind in {"verify_required_claims", "reverify_required_claims"}:
+        scopes = _ordered_verification_scopes(intent.missing_scopes or _VERIFICATION_SCOPE_ORDER)
+        return tuple(_VERIFICATION_SCOPE_TO_SPEC_ID[scope] for scope in scopes)
+    spec_id = _ACTION_TO_SPEC_ID.get(intent.intent_kind)
+    if spec_id is None:
+        raise ValueError(f"unsupported feature change obligation intent: {intent.intent_kind}")
+    return (spec_id,)
+
+
+def _ordered_verification_scopes(scopes: Iterable[str]) -> tuple[str, ...]:
+    normalized = tuple(dict.fromkeys(str(scope).strip() for scope in scopes if str(scope).strip()))
+    unknown = [scope for scope in normalized if scope not in _VERIFICATION_SCOPE_TO_SPEC_ID]
+    if unknown:
+        raise ValueError(f"unsupported verification claim scopes: {', '.join(unknown)}")
+    scope_set = set(normalized)
+    return tuple(scope for scope in _VERIFICATION_SCOPE_ORDER if scope in scope_set)
 
 
 def fingerprint_materialized_inputs(refs: Iterable[str]) -> str:
@@ -333,7 +409,9 @@ __all__ = [
     "OBLIGATION_SPEC_REVERIFY_REQUIRED_CLAIMS",
     "OBLIGATION_SPEC_REVERIFY_STALE_INPUTS",
     "OBLIGATION_SPEC_SELECT_IMPLEMENTATION",
+    "OBLIGATION_SPEC_VERIFY_CROSS_FEATURE",
     "OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE",
+    "OBLIGATION_SPEC_VERIFY_LOCAL_FEATURE",
     "compile_feature_change_obligation",
     "compile_feature_change_obligations",
     "default_feature_change_protocol_spec",
