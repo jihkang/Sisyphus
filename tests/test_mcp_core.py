@@ -528,8 +528,43 @@ class McpCoreTests(unittest.TestCase):
         promotion_payload = self.core.read_resource(f"task://{task['id']}/promotion-summary")
 
         self.assertEqual(graph_payload["schema_version"], "sisyphus.feature_task_artifact_snapshot.v1")
+        self.assertEqual(graph_payload["snapshot_status"]["status"], "unavailable")
         self.assertEqual(graph_payload["task_id"], task["id"])
+        self.assertEqual(promotion_payload["snapshot_status"]["status"], "unavailable")
         self.assertEqual(promotion_payload["promotion"]["decision"], "promotable")
+
+    def test_artifact_graph_resource_surfaces_stale_persisted_snapshot(self) -> None:
+        task = self._new_task("artifact-graph-stale-snapshot")
+        self._fill_feature_docs(task)
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="approved",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="frozen",
+        )
+        run_verify(self.repo_root, self.config, task["id"])
+        materialize_feature_task_artifact_snapshot(self.repo_root, self.config, task["id"])
+        task_dir = self.repo_root / task["task_dir"]
+        (task_dir / "BRIEF.md").write_text(
+            (task_dir / "BRIEF.md").read_text(encoding="utf-8") + "\n- Drift after snapshot\n",
+            encoding="utf-8",
+        )
+
+        graph_payload = self.core.read_resource(f"task://{task['id']}/artifact-graph")
+
+        self.assertEqual(graph_payload["snapshot_status"]["status"], "stale")
+        self.assertNotEqual(
+            graph_payload["snapshot_status"]["fingerprint"],
+            graph_payload["snapshot_status"]["current_fingerprint"],
+        )
 
     def test_reads_repo_status_and_schema_resources(self) -> None:
         task = self._new_task("board")

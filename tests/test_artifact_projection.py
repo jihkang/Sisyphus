@@ -15,6 +15,7 @@ from sisyphus.artifact_projection import project_feature_task, project_feature_t
 from sisyphus.artifact_snapshot import (
     DEFAULT_FEATURE_TASK_ARTIFACT_SNAPSHOT_PATH,
     FEATURE_TASK_ARTIFACT_SNAPSHOT_SCHEMA_VERSION,
+    evaluate_feature_task_artifact_snapshot_status,
     materialize_feature_task_artifact_snapshot,
     read_feature_task_artifact_snapshot,
 )
@@ -201,6 +202,8 @@ class ArtifactProjectionTests(unittest.TestCase):
         self.assertIsNotNone(persisted)
         assert persisted is not None
         self.assertEqual(persisted["schema_version"], FEATURE_TASK_ARTIFACT_SNAPSHOT_SCHEMA_VERSION)
+        self.assertTrue(str(persisted["snapshot_fingerprint"]).startswith("sha256:"))
+        self.assertEqual(persisted["snapshot_status"]["status"], "current")
         self.assertEqual(persisted["task_id"], task["id"])
         self.assertEqual(persisted["composite"]["artifact_type"], "feature_change")
         self.assertEqual(persisted["evaluation"]["promotion"]["decision"], "promotable")
@@ -208,6 +211,26 @@ class ArtifactProjectionTests(unittest.TestCase):
             [claim["scope"] for claim in persisted["verification_claims"]],
             ["local", "cross", "composite"],
         )
+
+    def test_feature_task_projection_snapshot_status_marks_doc_drift_stale(self) -> None:
+        task = self._new_feature_task("artifact-projection-snapshot-stale")
+        self._fill_feature_docs(task)
+        approve_task_plan(self.repo_root, self.config, task["id"], reviewer="reviewer", notes="approved")
+        freeze_task_spec(self.repo_root, self.config, task["id"], reviewer="reviewer", notes="frozen")
+        run_verify(self.repo_root, self.config, task["id"])
+        materialize_feature_task_artifact_snapshot(self.repo_root, self.config, task["id"])
+        task_dir = self.repo_root / task["task_dir"]
+        persisted = read_feature_task_artifact_snapshot(task_dir)
+        assert persisted is not None
+        (task_dir / "BRIEF.md").write_text(
+            (task_dir / "BRIEF.md").read_text(encoding="utf-8") + "\n- Drift after snapshot\n",
+            encoding="utf-8",
+        )
+
+        status = evaluate_feature_task_artifact_snapshot_status(persisted, task=task, task_dir=task_dir)
+
+        self.assertEqual(status.status, "stale")
+        self.assertNotEqual(status.fingerprint, status.current_fingerprint)
 
     def test_pre_verify_feature_task_projects_candidate_with_pending_verification_sections(self) -> None:
         task = self._new_feature_task("artifact-projection-candidate")
