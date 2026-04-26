@@ -20,6 +20,8 @@ This means:
 
 The task runtime is still the operator-facing control surface, but feature work now passes through an artifact projection, DSL, obligation queue, and convergence loop before verification and promotion decisions are considered closed.
 
+For visual diagrams of the current task runtime, artifact-governed feature-change path, target artifact authority, and adapter boundaries, see [runtime-relationship-diagrams.md](./runtime-relationship-diagrams.md).
+
 ## Hard State And Soft Cognition
 
 The architecture separates two categories of system responsibility.
