@@ -1,6 +1,6 @@
 # Sisyphus
 
-Sisyphus is a Python task orchestration tool for repository-local planning, spec review, subtask execution, verification, and closeout. It is designed to be installed once and then run inside any target project repository.
+Sisyphus is a Python work orchestration tool for repository-local planning, artifact projection, obligation execution, verification, promotion, and closeout. It is designed to be installed once and then run inside any target project repository.
 
 Preferred command:
 
@@ -159,7 +159,7 @@ sisyphus close <task-id>
 
 ## Workflow
 
-The current workflow is:
+The operator-facing workflow is:
 
 1. Intake a request.
 2. Create a repository-local task workspace.
@@ -171,6 +171,26 @@ The current workflow is:
 8. Close the task.
 
 The orchestration loop can pause in `needs_user_input` when review limits are hit or human guidance is required.
+
+Internally, feature work is also projected into an artifact-governed path:
+
+```text
+Feature task record
+-> FeatureChangeArtifact projection snapshot
+-> FeatureChange evaluation
+-> ObligationIntent
+-> ProtocolSpec + ObligationSpec + InputContract
+-> CompiledObligation queue
+-> ExecutionPolicy-backed daemon convergence
+-> VerificationClaim / promotion decision
+```
+
+The DSL owns what must be read, produced, and verified. Execution policy owns who or what performs the work, such as a local Sisyphus verifier, tool runner, or future agent/provider overlay.
+
+Key persisted artifact outputs currently include:
+
+- `.planning/tasks/<task-id>/artifacts/projection/feature-change.json`
+- `.planning/tasks/<task-id>/artifacts/obligations/compiled.json`
 
 ## Discord Bot
 
