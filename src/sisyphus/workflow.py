@@ -15,9 +15,8 @@ from .conformance import (
 )
 from .config import SisyphusConfig
 from .events import new_event_envelope
-from .artifact_snapshot import materialize_feature_task_artifact_snapshot
 from .metrics import publish_manual_intervention_required
-from .obligation_runtime import execute_next_feature_change_obligation, materialize_feature_change_obligation_queue
+from .obligation_runtime import converge_feature_change_obligations
 from .planning import (
     PLAN_APPROVED,
     current_plan_status,
@@ -70,24 +69,12 @@ def _advance_task(repo_root: Path, config: SisyphusConfig, task_id: str) -> bool
         return True
 
     if task.get("type") == "feature":
-        snapshot = materialize_feature_task_artifact_snapshot(
+        convergence = converge_feature_change_obligations(
             repo_root=repo_root,
             config=config,
             task_id=task_id,
         )
-        materialized = materialize_feature_change_obligation_queue(
-            repo_root=repo_root,
-            config=config,
-            task_id=task_id,
-        )
-        if snapshot.changed or materialized.changed:
-            return True
-        execution = execute_next_feature_change_obligation(
-            repo_root=repo_root,
-            config=config,
-            task_id=task_id,
-        )
-        if execution.executed:
+        if convergence.progressed:
             return True
         latest_task, _ = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
         latest_phase = str(latest_task.get("workflow_phase") or "")
