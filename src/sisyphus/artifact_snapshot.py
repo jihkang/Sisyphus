@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -22,11 +23,29 @@ class FeatureTaskArtifactSnapshotMaterialization:
     changed: bool
 
 
+@dataclass(frozen=True, slots=True)
+class FeatureTaskArtifactSnapshotStatus:
+    status: str
+    fingerprint: str | None
+    current_fingerprint: str | None = None
+    reason: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        data: dict[str, object] = {"status": self.status}
+        if self.fingerprint is not None:
+            data["fingerprint"] = self.fingerprint
+        if self.current_fingerprint is not None:
+            data["current_fingerprint"] = self.current_fingerprint
+        if self.reason is not None:
+            data["reason"] = self.reason
+        return data
+
+
 def build_feature_task_artifact_snapshot(
     projection: FeatureTaskArtifactProjection,
     evaluation: FeatureChangeEvaluation,
 ) -> dict[str, object]:
-    return {
+    payload: dict[str, object] = {
         "schema_version": FEATURE_TASK_ARTIFACT_SNAPSHOT_SCHEMA_VERSION,
         "task_id": projection.task_id,
         "feature_id": projection.feature_id,
@@ -42,6 +61,16 @@ def build_feature_task_artifact_snapshot(
         "verification_claims": [claim.to_dict() for claim in projection.verification_claims],
         "task_runs": [run.to_dict() for run in projection.task_run_refs],
         "evaluation": evaluation.to_dict(),
+    }
+    fingerprint = fingerprint_feature_task_artifact_snapshot(payload)
+    return {
+        **payload,
+        "snapshot_fingerprint": fingerprint,
+        "snapshot_status": FeatureTaskArtifactSnapshotStatus(
+            status="current",
+            fingerprint=fingerprint,
+            current_fingerprint=fingerprint,
+        ).to_dict(),
     }
 
 
@@ -81,6 +110,54 @@ def read_feature_task_artifact_snapshot(task_dir: Path) -> dict[str, object] | N
     return {str(key): value for key, value in raw.items()}
 
 
+def evaluate_feature_task_artifact_snapshot_status(
+    snapshot: dict[str, object],
+    *,
+    task: dict,
+    task_dir: Path,
+) -> FeatureTaskArtifactSnapshotStatus:
+    fingerprint = _optional_string(snapshot.get("snapshot_fingerprint"))
+    try:
+        projection = project_feature_task_record(task, task_dir)
+        evaluation = evaluate_feature_task_projection(projection)
+        current = build_feature_task_artifact_snapshot(projection, evaluation)
+    except Exception as exc:
+        return FeatureTaskArtifactSnapshotStatus(
+            status="unavailable",
+            fingerprint=fingerprint,
+            reason=str(exc),
+        )
+    current_fingerprint = _optional_string(current.get("snapshot_fingerprint"))
+    if fingerprint is not None and fingerprint == current_fingerprint:
+        return FeatureTaskArtifactSnapshotStatus(
+            status="current",
+            fingerprint=fingerprint,
+            current_fingerprint=current_fingerprint,
+        )
+    return FeatureTaskArtifactSnapshotStatus(
+        status="stale",
+        fingerprint=fingerprint,
+        current_fingerprint=current_fingerprint,
+    )
+
+
+def feature_task_artifact_snapshot_with_status(
+    snapshot: dict[str, object],
+    status: FeatureTaskArtifactSnapshotStatus,
+) -> dict[str, object]:
+    return {**snapshot, "snapshot_status": status.to_dict()}
+
+
+def fingerprint_feature_task_artifact_snapshot(snapshot: dict[str, object]) -> str:
+    payload = {
+        key: value
+        for key, value in snapshot.items()
+        if key not in {"snapshot_fingerprint", "snapshot_status"}
+    }
+    rendered = json.dumps(_json_safe(payload), separators=(",", ":"), sort_keys=True)
+    return f"sha256:{hashlib.sha256(rendered.encode('utf-8')).hexdigest()}"
+
+
 def _write_json_if_changed(path: Path, payload: dict[str, object]) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     rendered = json.dumps(_json_safe(payload), indent=2, sort_keys=True) + "\n"
@@ -98,11 +175,22 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+def _optional_string(value: object) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
 __all__ = [
     "DEFAULT_FEATURE_TASK_ARTIFACT_SNAPSHOT_PATH",
     "FEATURE_TASK_ARTIFACT_SNAPSHOT_SCHEMA_VERSION",
     "FeatureTaskArtifactSnapshotMaterialization",
+    "FeatureTaskArtifactSnapshotStatus",
     "build_feature_task_artifact_snapshot",
+    "evaluate_feature_task_artifact_snapshot_status",
+    "feature_task_artifact_snapshot_with_status",
+    "fingerprint_feature_task_artifact_snapshot",
     "materialize_feature_task_artifact_snapshot",
     "materialize_feature_task_artifact_snapshot_record",
     "read_feature_task_artifact_snapshot",
