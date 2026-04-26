@@ -7,8 +7,13 @@ from typing import Any
 
 from .artifact_evaluator import FeatureChangeEvaluation, evaluate_feature_task_projection
 from .artifact_projection import FeatureTaskArtifactProjection, project_feature_task_record
-from .artifact_snapshot import materialize_feature_task_artifact_snapshot
+from .artifact_snapshot import (
+    evaluate_feature_task_artifact_snapshot_status,
+    materialize_feature_task_artifact_snapshot,
+    read_feature_task_artifact_snapshot,
+)
 from .config import SisyphusConfig
+from .dsl import ObligationIntent
 from .feature_change_dsl import (
     compile_feature_change_obligations,
     default_feature_change_protocol_spec,
@@ -74,9 +79,14 @@ class ObligationConvergenceResult:
 def build_feature_change_compiled_obligation_queue(
     projection: FeatureTaskArtifactProjection,
     evaluation: FeatureChangeEvaluation,
+    *,
+    additional_intents: tuple[ObligationIntent, ...] = (),
 ) -> dict[str, object]:
     protocol = default_feature_change_protocol_spec()
-    intents = obligation_intents_from_feature_change_evaluation(evaluation)
+    intents = _merge_obligation_intents(
+        obligation_intents_from_feature_change_evaluation(evaluation),
+        additional_intents,
+    )
     compiled = compile_feature_change_obligations(intents, projection, protocol=protocol)
     return {
         "schema_version": COMPILED_OBLIGATION_QUEUE_SCHEMA_VERSION,
@@ -108,7 +118,18 @@ def materialize_feature_change_obligation_queue_record(
 ) -> ObligationQueueMaterialization:
     projection = project_feature_task_record(task, task_dir)
     evaluation = evaluate_feature_task_projection(projection)
-    payload = build_feature_change_compiled_obligation_queue(projection, evaluation)
+    snapshot_status, snapshot_intents = _snapshot_invalidation_obligation_intents(
+        task=task,
+        task_dir=task_dir,
+        projection=projection,
+    )
+    payload = build_feature_change_compiled_obligation_queue(
+        projection,
+        evaluation,
+        additional_intents=snapshot_intents,
+    )
+    if snapshot_status is not None:
+        payload["snapshot_status"] = snapshot_status
     queue_path = task_dir / DEFAULT_COMPILED_OBLIGATION_QUEUE_PATH
     previous = read_feature_change_obligation_queue(task_dir)
     if previous is not None:
@@ -265,11 +286,14 @@ def converge_feature_change_obligations(
     executed_count = 0
     last_status = "idle"
     for step in range(1, max_steps + 1):
-        snapshot = materialize_feature_task_artifact_snapshot(repo_root=repo_root, config=config, task_id=task_id)
+        # Build obligations before refreshing the persisted snapshot; otherwise a stale snapshot
+        # can be overwritten before it regenerates invalidation repair work.
         queue = materialize_feature_change_obligation_queue(repo_root=repo_root, config=config, task_id=task_id)
-        progressed = progressed or snapshot.changed or queue.changed
+        progressed = progressed or queue.changed
 
         execution = execute_next_feature_change_obligation(repo_root=repo_root, config=config, task_id=task_id)
+        snapshot = materialize_feature_task_artifact_snapshot(repo_root=repo_root, config=config, task_id=task_id)
+        progressed = progressed or snapshot.changed
         last_status = execution.status
         if not execution.executed:
             return ObligationConvergenceResult(
@@ -333,6 +357,50 @@ def _merge_existing_obligation_state(payload: dict[str, object], previous: dict[
             if field_name in previous_obligation:
                 obligation[field_name] = previous_obligation[field_name]
     return payload
+
+
+def _snapshot_invalidation_obligation_intents(
+    *,
+    task: dict,
+    task_dir: Path,
+    projection: FeatureTaskArtifactProjection,
+) -> tuple[dict[str, object] | None, tuple[ObligationIntent, ...]]:
+    snapshot = read_feature_task_artifact_snapshot(task_dir)
+    if snapshot is None:
+        return None, ()
+    status = evaluate_feature_task_artifact_snapshot_status(snapshot, task=task, task_dir=task_dir).to_dict()
+    if status.get("status") != "stale":
+        return status, ()
+    fingerprint = str(status.get("fingerprint") or "")
+    current_fingerprint = str(status.get("current_fingerprint") or "")
+    return status, (
+        ObligationIntent(
+            intent_kind="reverify_stale_inputs",
+            target_artifact=f"artifact://{projection.feature_change_artifact.artifact_id}",
+            reasons=("snapshot_stale",),
+            data={
+                "required_action": "reverify_stale_inputs",
+                "stale_source": "feature_task_artifact_snapshot",
+                "snapshot_fingerprint": fingerprint,
+                "current_fingerprint": current_fingerprint,
+            },
+        ),
+    )
+
+
+def _merge_obligation_intents(
+    base: tuple[ObligationIntent, ...],
+    additional: tuple[ObligationIntent, ...],
+) -> tuple[ObligationIntent, ...]:
+    merged = list(base)
+    seen = {(intent.intent_kind, intent.target_artifact) for intent in merged}
+    for intent in additional:
+        key = (intent.intent_kind, intent.target_artifact)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(intent)
+    return tuple(merged)
 
 
 def _obligation_state_key(obligation: dict[str, object]) -> tuple[str, str] | None:

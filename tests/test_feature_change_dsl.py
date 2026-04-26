@@ -11,10 +11,12 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from sisyphus.artifact_evaluator import evaluate_feature_task_projection
 from sisyphus.artifact_projection import project_feature_task
+from sisyphus.artifact_evaluator import evaluate_feature_task_projection
+from sisyphus.artifact_snapshot import materialize_feature_task_artifact_snapshot
 from sisyphus.config import load_config
 from sisyphus.feature_change_dsl import (
+    OBLIGATION_SPEC_REVERIFY_STALE_INPUTS,
     OBLIGATION_SPEC_VERIFY_CROSS_FEATURE,
     OBLIGATION_SPEC_VERIFY_COMPOSITE_FEATURE,
     OBLIGATION_SPEC_VERIFY_LOCAL_FEATURE,
@@ -245,6 +247,53 @@ class FeatureChangeDslTests(unittest.TestCase):
                 obligation["materialized_input_set"]["fingerprint"].startswith("sha256:")
                 for obligation in persisted["compiled_obligations"]
             )
+        )
+
+    def test_stale_projection_snapshot_regenerates_invalidation_obligation(self) -> None:
+        task = self._new_feature_task("feature-change-stale-snapshot-obligation")
+        self._fill_feature_docs(task)
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="approved",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="frozen",
+        )
+        execute_next_feature_change_obligation(self.repo_root, self.config, task["id"])
+        execute_next_feature_change_obligation(self.repo_root, self.config, task["id"])
+        execute_next_feature_change_obligation(self.repo_root, self.config, task["id"])
+        materialize_feature_task_artifact_snapshot(self.repo_root, self.config, task["id"])
+        task_dir = self.repo_root / task["task_dir"]
+        (task_dir / "BRIEF.md").write_text(
+            (task_dir / "BRIEF.md").read_text(encoding="utf-8") + "\n- Snapshot drift after verify\n",
+            encoding="utf-8",
+        )
+
+        materialized = materialize_feature_change_obligation_queue(self.repo_root, self.config, task["id"])
+        persisted = read_feature_change_obligation_queue(task_dir)
+
+        self.assertTrue(materialized.changed)
+        self.assertIsNotNone(persisted)
+        assert persisted is not None
+        self.assertEqual(persisted["snapshot_status"]["status"], "stale")
+        self.assertEqual(
+            [intent["intent_kind"] for intent in persisted["intents"]],
+            ["reverify_stale_inputs"],
+        )
+        self.assertEqual(
+            [obligation["spec_ref"] for obligation in persisted["compiled_obligations"]],
+            [OBLIGATION_SPEC_REVERIFY_STALE_INPUTS],
+        )
+        self.assertEqual(
+            persisted["intents"][0]["data"]["stale_source"],
+            "feature_task_artifact_snapshot",
         )
 
     def test_pending_verification_obligation_executes_via_verify_runner(self) -> None:
