@@ -182,6 +182,13 @@ class ArtifactEvaluatorTests(unittest.TestCase):
         self.assertEqual(evaluation.derived_state, "candidate")
         self.assertIn("verification_scope:composite", evaluation.missing_requirements)
         self.assertIn("verify_required_claims", evaluation.promotion.required_actions)
+        self.assertEqual([intent.intent_kind for intent in evaluation.obligation_intents], ["verify_required_claims"])
+        self.assertEqual(
+            evaluation.obligation_intents[0].target_artifact,
+            f"artifact://{projection.feature_change_artifact.artifact_id}",
+        )
+        self.assertEqual(evaluation.obligation_intents[0].missing_scopes, ("composite", "cross", "local"))
+        self.assertIn("verification_scope:composite", evaluation.obligation_intents[0].reasons)
         self.assertEqual(evaluation.invalidation.status, INVALIDATION_STATUS_FRESH)
 
     def test_stale_child_artifact_or_lineage_mismatch_marks_projection_stale(self) -> None:

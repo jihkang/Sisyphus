@@ -194,6 +194,7 @@ class FeatureChangeDslTests(unittest.TestCase):
         intents = obligation_intents_from_feature_change_evaluation(evaluation)
         compiled = compile_feature_change_obligations(intents, projection)
 
+        self.assertEqual(intents, evaluation.obligation_intents)
         self.assertEqual([intent.intent_kind for intent in intents], ["verify_required_claims"])
         self.assertEqual(
             [obligation.spec_ref for obligation in compiled],
