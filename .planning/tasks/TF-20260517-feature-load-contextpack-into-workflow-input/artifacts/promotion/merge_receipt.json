@@ -1,0 +1,123 @@
+{
+  "recorded_at": "2026-05-17T07:52:42Z",
+  "task_id": "TF-20260517-feature-load-contextpack-into-workflow-input",
+  "task_branch": "feat/load-contextpack-into-workflow-input",
+  "base_branch": "main",
+  "repo_full_name": "jihkang/Sisyphus",
+  "pull_request": {
+    "number": 44,
+    "title": "Load ContextPack into Codex workflow input",
+    "url": "https://github.com/jihkang/Sisyphus/pull/44",
+    "head_branch": "feat/load-contextpack-into-workflow-input",
+    "head_sha": "b555f8d0de21c15090630a9a83f576b808287b35",
+    "merge_commit_sha": "5bcc13a6ca51d2505fd31e1767eac2b896e1871a",
+    "merged_at": "2026-05-17T07:52:02Z",
+    "merged_by": "jihkang",
+    "merge_method": "squash"
+  },
+  "base_resolution": {
+    "strategy": "direct",
+    "source": null,
+    "reason": null,
+    "parent_task_id": null,
+    "parent_artifact_id": null,
+    "parent_branch": null
+  },
+  "changes": {
+    "file_count": 15,
+    "additions": 1193,
+    "deletions": 9,
+    "files": [
+      {
+        "path": ".planning/tasks/TF-20260517-feature-load-contextpack-into-workflow-input/BRIEF.md",
+        "status": "added",
+        "additions": 37,
+        "deletions": 0
+      },
+      {
+        "path": ".planning/tasks/TF-20260517-feature-load-contextpack-into-workflow-input/CHANGESET.md",
+        "status": "added",
+        "additions": 12,
+        "deletions": 0
+      },
+      {
+        "path": ".planning/tasks/TF-20260517-feature-load-contextpack-into-workflow-input/LOG.md",
+        "status": "added",
+        "additions": 22,
+        "deletions": 0
+      },
+      {
+        "path": ".planning/tasks/TF-20260517-feature-load-contextpack-into-workflow-input/PLAN.md",
+        "status": "added",
+        "additions": 65,
+        "deletions": 0
+      },
+      {
+        "path": ".planning/tasks/TF-20260517-feature-load-contextpack-into-workflow-input/VERIFY.md",
+        "status": "added",
+        "additions": 40,
+        "deletions": 0
+      },
+      {
+        "path": ".planning/tasks/TF-20260517-feature-load-contextpack-into-workflow-input/task.json",
+        "status": "added",
+        "additions": 291,
+        "deletions": 0
+      },
+      {
+        "path": ".planning/tasks/TF-20260517-issue-bound-agent-review-accept-finding-authority/BRIEF.md",
+        "status": "added",
+        "additions": 33,
+        "deletions": 0
+      },
+      {
+        "path": ".planning/tasks/TF-20260517-issue-bound-agent-review-accept-finding-authority/FIX_PLAN.md",
+        "status": "added",
+        "additions": 64,
+        "deletions": 0
+      },
+      {
+        "path": ".planning/tasks/TF-20260517-issue-bound-agent-review-accept-finding-authority/LOG.md",
+        "status": "added",
+        "additions": 17,
+        "deletions": 0
+      },
+      {
+        "path": ".planning/tasks/TF-20260517-issue-bound-agent-review-accept-finding-authority/REPRO.md",
+        "status": "added",
+        "additions": 18,
+        "deletions": 0
+      },
+      {
+        "path": ".planning/tasks/TF-20260517-issue-bound-agent-review-accept-finding-authority/VERIFY.md",
+        "status": "added",
+        "additions": 43,
+        "deletions": 0
+      },
+      {
+        "path": ".planning/tasks/TF-20260517-issue-bound-agent-review-accept-finding-authority/task.json",
+        "status": "added",
+        "additions": 258,
+        "deletions": 0
+      },
+      {
+        "path": "src/sisyphus/codex_prompt.py",
+        "status": "modified",
+        "additions": 64,
+        "deletions": 0
+      },
+      {
+        "path": "src/sisyphus/context_pack.py",
+        "status": "modified",
+        "additions": 98,
+        "deletions": 1
+      },
+      {
+        "path": "tests/test_search_context.py",
+        "status": "modified",
+        "additions": 131,
+        "deletions": 8
+      }
+    ]
+  }
+}
