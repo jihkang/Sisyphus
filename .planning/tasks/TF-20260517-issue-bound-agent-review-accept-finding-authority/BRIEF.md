@@ -6,6 +6,7 @@
 - Type: `issue`
 - Slug: `bound-agent-review-accept-finding-authority`
 - Branch: `fix/bound-agent-review-accept-finding-authority`
+- Backlog Order: `3/5`
 
 ## Symptom
 
@@ -30,4 +31,5 @@
 ## Notes
 
 - This is a follow-up design/implementation task, not part of the ContextPack prompt-loading slice.
+- Run after verify hardening and MCP runtime surface repair.
 - Prefer ContextPack and source refs as inputs, but keep frozen task docs and verification records as authority.

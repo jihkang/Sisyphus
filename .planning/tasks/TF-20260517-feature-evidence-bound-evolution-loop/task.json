@@ -1,13 +1,13 @@
 {
-  "id": "TF-20260517-issue-bound-agent-review-accept-finding-authority",
-  "type": "issue",
-  "slug": "bound-agent-review-accept-finding-authority",
+  "id": "TF-20260517-feature-evidence-bound-evolution-loop",
+  "type": "feature",
+  "slug": "evidence-bound-evolution-loop",
   "status": "open",
   "stage": "plan_review",
   "plan_status": "pending_review",
-  "plan_reviewed_at": "2026-05-17T08:00:59Z",
+  "plan_reviewed_at": "2026-05-17T08:00:56Z",
   "plan_reviewed_by": "codex",
-  "plan_review_notes": "Updated backlog placement for agent review/finding/acceptance authority as item 3/5, after verify hardening and MCP runtime repair.",
+  "plan_review_notes": "Revised future evolution spec with prerequisite order, evidence-bound stage contract, no self-approval constraint, review/promotion authority, and full-design requirement. Marked backlog order 5/5.",
   "plan_review_round": 1,
   "max_plan_review_rounds": 3,
   "plan_review_history": [
@@ -15,22 +15,15 @@
       "round": 1,
       "action": "request_changes",
       "actor": "codex",
-      "notes": "Default generated issue plan is too generic. Narrow it to a future audit/design task for separating agent review, finding, acceptance, and promotion authority, with evidence-bound inputs and ContextPack/source-ref constraints.",
-      "timestamp": "2026-05-17T07:49:14Z"
+      "notes": "Generated plan is too generic. Revise into future evidence-bound evolution loop spec: prerequisites, dataset/candidate/evaluation stages, review gates, promotion authority, and no self-approval constraint.",
+      "timestamp": "2026-05-17T07:58:59Z"
     },
     {
       "round": 1,
       "action": "revise",
       "actor": "codex",
-      "notes": "Revised issue docs into a bounded agent authority follow-up: role/stage separation, evidence-ref requirements, ContextPack as non-authoritative input, and promotion/acceptance gate constraints.",
-      "timestamp": "2026-05-17T07:49:40Z"
-    },
-    {
-      "round": 1,
-      "action": "revise",
-      "actor": "codex",
-      "notes": "Updated backlog placement for agent review/finding/acceptance authority as item 3/5, after verify hardening and MCP runtime repair.",
-      "timestamp": "2026-05-17T08:00:59Z"
+      "notes": "Revised future evolution spec with prerequisite order, evidence-bound stage contract, no self-approval constraint, review/promotion authority, and full-design requirement. Marked backlog order 5/5.",
+      "timestamp": "2026-05-17T08:00:56Z"
     }
   ],
   "workflow_phase": "plan_in_review",
@@ -40,13 +33,13 @@
   "spec_review_notes": null,
   "audit_attempts": 0,
   "max_audit_attempts": 10,
-  "created_at": "2026-05-17T07:20:18Z",
-  "updated_at": "2026-05-17T08:00:59Z",
+  "created_at": "2026-05-17T07:58:16Z",
+  "updated_at": "2026-05-17T08:00:56Z",
   "closed_at": null,
   "repo_root": "/Users/jihokang/Documents/Sisyphus",
-  "task_dir": ".planning/tasks/TF-20260517-issue-bound-agent-review-accept-finding-authority",
-  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-issue-bound-agent-review-accept-finding-authority",
-  "branch": "fix/bound-agent-review-accept-finding-authority",
+  "task_dir": ".planning/tasks/TF-20260517-feature-evidence-bound-evolution-loop",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-evidence-bound-evolution-loop",
+  "branch": "feat/evidence-bound-evolution-loop",
   "base_branch": "main",
   "verify_profile": "default",
   "verify_commands": [],
@@ -56,78 +49,74 @@
   "test_strategy": {
     "normal_cases": [
       {
-        "name": "Evidence-cited review findings are accepted into the review record.",
+        "name": "Bounded candidate completes isolated evaluation and records evidence.",
         "checked": false
       },
       {
-        "name": "Acceptance decisions pass when mapped obligations cite verified artifacts/receipts.",
-        "checked": false
-      },
-      {
-        "name": "Promotion remains eligible when execution, verification, review, and evidence refs align.",
+        "name": "Review gate approval plus verified evidence makes promotion eligible.",
         "checked": false
       }
     ],
     "edge_cases": [
       {
-        "name": "Broad ContextPack evidence cannot override frozen task docs.",
+        "name": "Candidate with partial metrics remains pending, not fabricated.",
         "checked": false
       },
       {
-        "name": "Multiple reviewers can add findings without one model owning all authority.",
+        "name": "Search/ContextPack inputs are supporting evidence, not promotion authority.",
         "checked": false
       },
       {
-        "name": "Superseded or stale evidence cannot satisfy a new acceptance decision.",
+        "name": "Multiple candidates do not overwrite each other's evidence.",
         "checked": false
       }
     ],
     "exception_cases": [
       {
-        "name": "Uncited findings are rejected or marked non-authoritative.",
+        "name": "Failed evaluation records invalidation evidence.",
         "checked": false
       },
       {
-        "name": "Acceptance without verification evidence fails closed.",
+        "name": "Missing review gate blocks promotion.",
         "checked": false
       },
       {
-        "name": "Promotion judgment fails when evidence refs point outside the current task/artifact lineage.",
+        "name": "Live repo mutation attempt fails closed.",
         "checked": false
       }
     ],
     "verification_methods": [
       {
-        "target": "Evidence-cited review findings are accepted",
-        "method": "targeted unit/integration test"
+        "target": "Evidence-bound happy path",
+        "method": "python -m unittest tests.test_evolution -v"
       },
       {
-        "target": "Acceptance decisions require verified artifacts/receipts",
-        "method": "targeted unit/integration test"
+        "target": "Invalidation path",
+        "method": "python -m unittest tests.test_evolution -v"
       },
       {
-        "target": "Promotion remains evidence-bound",
-        "method": "targeted promotion gate test"
+        "target": "No live repo mutation",
+        "method": "python -m unittest tests.test_evolution.EvolutionHarnessTests -v"
       },
       {
-        "target": "Uncited findings are rejected",
-        "method": "targeted negative test"
+        "target": "Operator/MCP surface",
+        "method": "python -m unittest tests.test_sisyphus tests.test_mcp_core -v"
       }
     ],
     "external_llm": {
       "required": true,
       "provider": "tbd",
-      "purpose": "review authority matrix and evidence contract for hallucination and privilege-boundary risks",
+      "purpose": "review closed-loop safety, authority separation, and promotion constraints",
       "trigger": "before implementation approval",
       "status": "pending"
     }
   },
   "design": {
     "mode": "full",
-    "decision_reason": "changes review and promotion authority boundaries across agent, verification, and promotion layers",
+    "decision_reason": "adds a closed automation loop across dataset, candidate execution, review, verification, and promotion",
     "confidence": "medium",
     "layer_impact": "layer-reshaping",
-    "layer_decision_reason": "redefines authority flow between agent output, review findings, acceptance decisions, and promotion gates",
+    "layer_decision_reason": "reshapes evolution from read-only planning into evidence-bound execution orchestration",
     "required_artifacts": [],
     "artifacts": {
       "connection_diagram": "pending",
@@ -155,11 +144,11 @@
     }
   },
   "promotion": {
-    "required": false,
+    "required": true,
     "required_override": null,
-    "required_reason": "non-feature tasks are not promotable by default",
+    "required_reason": "feature tasks are promotable by default",
     "required_source": "classified",
-    "status": "not_required",
+    "status": "promotion_pending",
     "strategy": "direct",
     "remote_name": null,
     "parent_artifact_id": null,
@@ -175,7 +164,7 @@
     "retarget_parent_task_id": null,
     "retarget_parent_branch": null,
     "retarget_merge_target": null,
-    "head_branch": "fix/bound-agent-review-accept-finding-authority",
+    "head_branch": "feat/evidence-bound-evolution-loop",
     "pr_number": null,
     "pr_url": null,
     "receipt_path": "artifacts/promotion/merge_receipt.json",
@@ -221,20 +210,19 @@
     "log": "LOG.md",
     "changeset": "CHANGESET.md",
     "promotion": "artifacts/promotion/merge_receipt.json",
-    "repro": "REPRO.md",
-    "fix_plan": "FIX_PLAN.md"
+    "plan": "PLAN.md"
   },
   "meta": {
     "sequence": null,
     "close_override_used": false,
     "promotion": {
-      "status": "not_required",
+      "status": "promotion_pending",
       "recorded_at": null,
       "repo_full_name": null,
       "pr_number": null,
       "title": null,
       "url": null,
-      "head_branch": "fix/bound-agent-review-accept-finding-authority",
+      "head_branch": "feat/evidence-bound-evolution-loop",
       "base_branch": "main",
       "head_sha": null,
       "merge_commit_sha": null,
@@ -246,19 +234,18 @@
       "parent_artifact_id": null,
       "parent_task_id": null
     },
-    "source_event_id": "evt-f884df3220a6",
+    "source_event_id": "evt-0eb87e39470b",
     "source_event_type": "conversation",
     "default_provider": "codex",
     "auto_loop_enabled": false,
-    "requested_slug": "bound-agent-review-accept-finding-authority",
+    "requested_slug": "evidence-bound-evolution-loop",
     "owned_paths": [
-      "src/sisyphus/agents.py",
-      "src/sisyphus/agent_runtime.py",
-      "src/sisyphus/conformance.py",
-      "src/sisyphus/promotion.py",
-      "src/sisyphus/context_pack.py",
-      "docs",
-      "tests"
+      "src/sisyphus/evolution",
+      "src/sisyphus/cli.py",
+      "src/sisyphus/mcp_core.py",
+      "src/sisyphus/workflow.py",
+      "tests/test_evolution.py",
+      "tests/test_sisyphus.py"
     ],
     "requested_adopt_paths": []
   }

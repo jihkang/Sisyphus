@@ -4,6 +4,7 @@
 
 - Created issue task.
 - Narrowed issue scope to bounded agent review/finding/acceptance authority and evidence-bound promotion design.
+- Marked as backlog item `3/5`, after verify hardening and MCP runtime repair.
 
 ## Notes
 

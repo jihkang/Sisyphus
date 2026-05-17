@@ -1,0 +1,267 @@
+{
+  "id": "TF-20260517-feature-harden-verify-defaults-and-strategy-gates",
+  "type": "feature",
+  "slug": "harden-verify-defaults-and-strategy-gates",
+  "status": "open",
+  "stage": "spec",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-05-17T08:01:04Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approve backlog item 1/5 for immediate implementation. Scope is verify hardening only: empty command fail-closed behavior, evidence/waiver-backed strategy checks, design/docs-only exception, and focused tests.",
+  "plan_review_round": 1,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 1,
+      "action": "request_changes",
+      "actor": "codex",
+      "notes": "Generated plan is too generic. Revise into concrete verify-hardening spec: empty verify command failure policy, test-strategy evidence/waiver rules, design-only exception, lifecycle impacts, and focused regression tests.",
+      "timestamp": "2026-05-17T07:58:41Z"
+    },
+    {
+      "round": 1,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised verify hardening spec with concrete empty-command failure policy, evidence/waiver requirements, strategy gate behavior, and regression test mapping. Marked backlog order 1/5.",
+      "timestamp": "2026-05-17T08:00:47Z"
+    },
+    {
+      "round": 1,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approve backlog item 1/5 for immediate implementation. Scope is verify hardening only: empty command fail-closed behavior, evidence/waiver-backed strategy checks, design/docs-only exception, and focused tests.",
+      "timestamp": "2026-05-17T08:01:04Z"
+    }
+  ],
+  "workflow_phase": "subtask_planning",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-05-17T08:01:06Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze verify hardening spec before implementation. This task is prerequisite for MCP repair, authority ranking, and evolution work.",
+  "audit_attempts": 0,
+  "max_audit_attempts": 10,
+  "created_at": "2026-05-17T07:58:02Z",
+  "updated_at": "2026-05-17T08:01:06Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260517-feature-harden-verify-defaults-and-strategy-gates",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-harden-verify-defaults-and-strategy-gates",
+  "branch": "feat/harden-verify-defaults-and-strategy-gates",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "not_run",
+  "last_verified_at": null,
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Implementation task with configured verify commands passes and records command evidence.",
+        "checked": false
+      },
+      {
+        "name": "Test strategy items are marked checked when mapped command/evidence succeeds.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Design/docs-only task with explicit waiver can verify without commands.",
+        "checked": false
+      },
+      {
+        "name": "Existing closeout flow accepts a task verified under the stronger policy.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Implementation task with empty resolved verify commands fails closed.",
+        "checked": false
+      },
+      {
+        "name": "Strategy items without evidence or waiver stay unchecked and block verification.",
+        "checked": false
+      },
+      {
+        "name": "Invalid waiver metadata fails with an actionable gate.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Command-backed verification passes",
+        "method": "python -m unittest tests.test_sisyphus.SisyphusVerifyTests -v"
+      },
+      {
+        "target": "Empty command implementation task fails",
+        "method": "python -m unittest tests.test_sisyphus.SisyphusVerifyTests -v"
+      },
+      {
+        "target": "Design/docs-only waiver passes",
+        "method": "python -m unittest tests.test_sisyphus.SisyphusVerifyTests -v"
+      },
+      {
+        "target": "Golden lifecycle fixtures stay coherent",
+        "method": "python -m unittest tests.test_golden -v"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "design": {
+    "mode": "light",
+    "decision_reason": "tightens existing verification authority without adding a new subsystem",
+    "confidence": "high",
+    "layer_impact": "layer-touching",
+    "layer_decision_reason": "changes audit/verification gates used by lifecycle and closeout",
+    "required_artifacts": [],
+    "artifacts": {
+      "connection_diagram": null,
+      "sequence_diagram": null,
+      "boundary_note": null
+    },
+    "frozen": {
+      "mode": "light",
+      "layer_impact": "layer-touching",
+      "required_artifacts": [],
+      "artifacts": {
+        "connection_diagram": null,
+        "sequence_diagram": null,
+        "boundary_note": null
+      },
+      "anchor_summary": "mode=light, layer=layer-touching",
+      "frozen_at": "2026-05-17T08:01:06Z"
+    },
+    "assessment": {
+      "status": "not_assessed",
+      "summary": null,
+      "replan_required": false,
+      "escalation_reason": null,
+      "missing_artifacts": []
+    }
+  },
+  "promotion": {
+    "required": true,
+    "required_override": null,
+    "required_reason": "feature tasks are promotable by default",
+    "required_source": "classified",
+    "status": "promotion_pending",
+    "strategy": "direct",
+    "remote_name": null,
+    "parent_artifact_id": null,
+    "parent_task_id": null,
+    "base_override": null,
+    "base_branch": "main",
+    "base_source": null,
+    "base_reason": null,
+    "resolved_parent_branch": null,
+    "retarget_required": false,
+    "reverify_required": false,
+    "retarget_required_at": null,
+    "retarget_parent_task_id": null,
+    "retarget_parent_branch": null,
+    "retarget_merge_target": null,
+    "head_branch": "feat/harden-verify-defaults-and-strategy-gates",
+    "pr_number": null,
+    "pr_url": null,
+    "receipt_path": "artifacts/promotion/merge_receipt.json",
+    "execution_receipt_path": null,
+    "changeset_path": "CHANGESET.md",
+    "commit_message": null,
+    "repo_full_name": null,
+    "title": null,
+    "head_sha": null,
+    "merge_commit_sha": null,
+    "committed_at": null,
+    "pushed_at": null,
+    "pr_opened_at": null,
+    "merged_at": null,
+    "merged_by": null,
+    "merge_method": null,
+    "recorded_at": null
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": "mode=light, layer=layer-touching",
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_design_anchor_at": "2026-05-17T08:01:06Z",
+    "last_design_anchor_source": "planning.freeze_task_spec",
+    "last_checkpoint_type": "design_anchor",
+    "last_checkpoint_source": "planning.freeze_task_spec",
+    "last_checkpoint_at": "2026-05-17T08:01:06Z",
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": [
+      {
+        "id": "c08b8523473f484ebc631b5a10c6a162",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=light, layer=layer-touching",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-05-17T08:01:06Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      }
+    ]
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "promotion": {
+      "status": "promotion_pending",
+      "recorded_at": null,
+      "repo_full_name": null,
+      "pr_number": null,
+      "title": null,
+      "url": null,
+      "head_branch": "feat/harden-verify-defaults-and-strategy-gates",
+      "base_branch": "main",
+      "head_sha": null,
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "merged_by": null,
+      "merge_method": null,
+      "receipt_path": "artifacts/promotion/merge_receipt.json",
+      "changeset_path": "CHANGESET.md",
+      "parent_artifact_id": null,
+      "parent_task_id": null
+    },
+    "source_event_id": "evt-f9ba4223ea83",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "harden-verify-defaults-and-strategy-gates",
+    "owned_paths": [
+      "src/sisyphus/audit.py",
+      "src/sisyphus/config.py",
+      "src/sisyphus/state.py",
+      "src/sisyphus/templates",
+      "tests/test_sisyphus.py",
+      "tests/test_golden.py"
+    ],
+    "requested_adopt_paths": []
+  }
+}
