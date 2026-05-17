@@ -20,6 +20,7 @@ from .agent_runtime import run_tracked_agent
 from .audit import run_verify
 from .closeout import run_close
 from .config import load_config
+from .context_pack import build_and_persist_context_pack
 from .creation import TaskCreationError, create_task_workspace
 from .daemon import run_daemon
 from .discovery import detect_repo_root
@@ -49,6 +50,8 @@ from .service import (
     run_service,
     summarize_subtask_conformance,
 )
+from .retrieval import retrieve_documents
+from .search_index import SearchIndexError, read_search_index, rebuild_search_index
 from .state import list_task_records, load_task_record
 
 
@@ -129,6 +132,24 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--blocked", dest="only_blocked", action="store_true")
     status_parser.add_argument("--agents", action="store_true")
     status_parser.add_argument("--stale-after-seconds", type=int, default=DEFAULT_STALE_AFTER_SECONDS)
+
+    index_parser = subparsers.add_parser("index")
+    index_subparsers = index_parser.add_subparsers(dest="index_command", required=True)
+    index_rebuild_parser = index_subparsers.add_parser("rebuild")
+    index_rebuild_parser.add_argument("--json", action="store_true")
+
+    search_parser = subparsers.add_parser("search")
+    search_parser.add_argument("query")
+    search_parser.add_argument("--limit", type=int, default=10)
+    search_parser.add_argument("--json", action="store_true")
+
+    context_parser = subparsers.add_parser("context")
+    context_subparsers = context_parser.add_subparsers(dest="context_command", required=True)
+    context_build_parser = context_subparsers.add_parser("build")
+    context_build_parser.add_argument("query")
+    context_build_parser.add_argument("--limit", type=int, default=5)
+    context_build_parser.add_argument("--max-excerpt-chars", type=int, default=800)
+    context_build_parser.add_argument("--json", action="store_true")
 
     evolution_parser = subparsers.add_parser("evolution")
     evolution_subparsers = evolution_parser.add_subparsers(dest="evolution_command", required=True)
@@ -1036,6 +1057,93 @@ def handle_status(
     return 0
 
 
+def handle_index_rebuild(as_json: bool, repo_root: str | Path | None = None) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    result = rebuild_search_index(repo_root, config)
+    payload = result.to_dict()
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    print(f"index_path: {result.index_path}")
+    print(f"documents: {result.document_count}")
+    print(f"changed: {'yes' if result.changed else 'no'}")
+    return 0
+
+
+def handle_search(
+    query: str,
+    limit: int,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    try:
+        documents = read_search_index(repo_root)
+    except FileNotFoundError as exc:
+        print(f"error: {exc}; run `sisyphus index rebuild` first", file=sys.stderr)
+        return 1
+    except SearchIndexError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    results = retrieve_documents(query, documents, limit=limit)
+    payload = {
+        "query": query,
+        "result_count": len(results),
+        "results": [result.to_dict() for result in results],
+    }
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    if not results:
+        print("no results")
+        return 0
+    for result in results:
+        document = result.document
+        print(f"{result.rank}. score={result.score} source={document.source_ref}")
+        print(f"   title: {document.title}")
+        if document.freshness_status:
+            print(f"   freshness: {document.freshness_status}")
+        print(f"   excerpt: {result.excerpt}")
+    return 0
+
+
+def handle_context_build(
+    query: str,
+    limit: int,
+    max_excerpt_chars: int,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    try:
+        pack, path = build_and_persist_context_pack(
+            repo_root,
+            config,
+            query=query,
+            limit=limit,
+            max_excerpt_chars=max_excerpt_chars,
+            rebuild_if_missing=True,
+        )
+    except SearchIndexError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    payload = {
+        "pack_path": str(path),
+        "context_pack": pack,
+    }
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    print(f"context_pack: {pack['pack_id']}")
+    print(f"pack_path: {path}")
+    print(f"results: {pack['result_count']}")
+    print(f"fingerprint: {pack['fingerprint']}")
+    return 0
+
+
 def handle_evolution_run(run_id: str, repo_root: str | Path | None = None) -> int:
     repo_root = _resolve_repo_root(repo_root)
     try:
@@ -1356,6 +1464,25 @@ def main() -> int:
             channel_ids=args.channel_ids,
             repo_root=args.repo_root,
         )
+    if args.command == "index":
+        if args.index_command == "rebuild":
+            return handle_index_rebuild(as_json=args.json, repo_root=args.repo_root)
+    if args.command == "search":
+        return handle_search(
+            query=args.query,
+            limit=args.limit,
+            as_json=args.json,
+            repo_root=args.repo_root,
+        )
+    if args.command == "context":
+        if args.context_command == "build":
+            return handle_context_build(
+                query=args.query,
+                limit=args.limit,
+                max_excerpt_chars=args.max_excerpt_chars,
+                as_json=args.json,
+                repo_root=args.repo_root,
+            )
     if args.command == "evolution":
         if args.evolution_command == "execute":
             return handle_evolution_execute(
