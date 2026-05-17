@@ -1,0 +1,258 @@
+{
+  "id": "TF-20260517-issue-bound-agent-review-accept-finding-authority",
+  "type": "issue",
+  "slug": "bound-agent-review-accept-finding-authority",
+  "status": "open",
+  "stage": "plan_review",
+  "plan_status": "pending_review",
+  "plan_reviewed_at": "2026-05-17T07:49:40Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Revised issue docs into a bounded agent authority follow-up: role/stage separation, evidence-ref requirements, ContextPack as non-authoritative input, and promotion/acceptance gate constraints.",
+  "plan_review_round": 1,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 1,
+      "action": "request_changes",
+      "actor": "codex",
+      "notes": "Default generated issue plan is too generic. Narrow it to a future audit/design task for separating agent review, finding, acceptance, and promotion authority, with evidence-bound inputs and ContextPack/source-ref constraints.",
+      "timestamp": "2026-05-17T07:49:14Z"
+    },
+    {
+      "round": 1,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised issue docs into a bounded agent authority follow-up: role/stage separation, evidence-ref requirements, ContextPack as non-authoritative input, and promotion/acceptance gate constraints.",
+      "timestamp": "2026-05-17T07:49:40Z"
+    }
+  ],
+  "workflow_phase": "plan_in_review",
+  "spec_status": "draft",
+  "spec_frozen_at": null,
+  "spec_reviewed_by": null,
+  "spec_review_notes": null,
+  "audit_attempts": 0,
+  "max_audit_attempts": 10,
+  "created_at": "2026-05-17T07:20:18Z",
+  "updated_at": "2026-05-17T07:49:40Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260517-issue-bound-agent-review-accept-finding-authority",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-issue-bound-agent-review-accept-finding-authority",
+  "branch": "fix/bound-agent-review-accept-finding-authority",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "not_run",
+  "last_verified_at": null,
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Evidence-cited review findings are accepted into the review record.",
+        "checked": false
+      },
+      {
+        "name": "Acceptance decisions pass when mapped obligations cite verified artifacts/receipts.",
+        "checked": false
+      },
+      {
+        "name": "Promotion remains eligible when execution, verification, review, and evidence refs align.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Broad ContextPack evidence cannot override frozen task docs.",
+        "checked": false
+      },
+      {
+        "name": "Multiple reviewers can add findings without one model owning all authority.",
+        "checked": false
+      },
+      {
+        "name": "Superseded or stale evidence cannot satisfy a new acceptance decision.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Uncited findings are rejected or marked non-authoritative.",
+        "checked": false
+      },
+      {
+        "name": "Acceptance without verification evidence fails closed.",
+        "checked": false
+      },
+      {
+        "name": "Promotion judgment fails when evidence refs point outside the current task/artifact lineage.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Evidence-cited review findings are accepted",
+        "method": "targeted unit/integration test"
+      },
+      {
+        "target": "Acceptance decisions require verified artifacts/receipts",
+        "method": "targeted unit/integration test"
+      },
+      {
+        "target": "Promotion remains evidence-bound",
+        "method": "targeted promotion gate test"
+      },
+      {
+        "target": "Uncited findings are rejected",
+        "method": "targeted negative test"
+      }
+    ],
+    "external_llm": {
+      "required": true,
+      "provider": "tbd",
+      "purpose": "review authority matrix and evidence contract for hallucination and privilege-boundary risks",
+      "trigger": "before implementation approval",
+      "status": "pending"
+    }
+  },
+  "design": {
+    "mode": "full",
+    "decision_reason": "changes review and promotion authority boundaries across agent, verification, and promotion layers",
+    "confidence": "medium",
+    "layer_impact": "layer-reshaping",
+    "layer_decision_reason": "redefines authority flow between agent output, review findings, acceptance decisions, and promotion gates",
+    "required_artifacts": [],
+    "artifacts": {
+      "connection_diagram": "pending",
+      "sequence_diagram": "pending",
+      "boundary_note": "pending"
+    },
+    "frozen": {
+      "mode": "none",
+      "layer_impact": "layer-preserving",
+      "required_artifacts": [],
+      "artifacts": {
+        "connection_diagram": null,
+        "sequence_diagram": null,
+        "boundary_note": null
+      },
+      "anchor_summary": null,
+      "frozen_at": null
+    },
+    "assessment": {
+      "status": "not_assessed",
+      "summary": null,
+      "replan_required": false,
+      "escalation_reason": null,
+      "missing_artifacts": []
+    }
+  },
+  "promotion": {
+    "required": false,
+    "required_override": null,
+    "required_reason": "non-feature tasks are not promotable by default",
+    "required_source": "classified",
+    "status": "not_required",
+    "strategy": "direct",
+    "remote_name": null,
+    "parent_artifact_id": null,
+    "parent_task_id": null,
+    "base_override": null,
+    "base_branch": "main",
+    "base_source": null,
+    "base_reason": null,
+    "resolved_parent_branch": null,
+    "retarget_required": false,
+    "reverify_required": false,
+    "retarget_required_at": null,
+    "retarget_parent_task_id": null,
+    "retarget_parent_branch": null,
+    "retarget_merge_target": null,
+    "head_branch": "fix/bound-agent-review-accept-finding-authority",
+    "pr_number": null,
+    "pr_url": null,
+    "receipt_path": "artifacts/promotion/merge_receipt.json",
+    "execution_receipt_path": null,
+    "changeset_path": "CHANGESET.md",
+    "commit_message": null,
+    "repo_full_name": null,
+    "title": null,
+    "head_sha": null,
+    "merge_commit_sha": null,
+    "committed_at": null,
+    "pushed_at": null,
+    "pr_opened_at": null,
+    "merged_at": null,
+    "merged_by": null,
+    "merge_method": null,
+    "recorded_at": null
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_design_anchor_at": null,
+    "last_design_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "repro": "REPRO.md",
+    "fix_plan": "FIX_PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "promotion": {
+      "status": "not_required",
+      "recorded_at": null,
+      "repo_full_name": null,
+      "pr_number": null,
+      "title": null,
+      "url": null,
+      "head_branch": "fix/bound-agent-review-accept-finding-authority",
+      "base_branch": "main",
+      "head_sha": null,
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "merged_by": null,
+      "merge_method": null,
+      "receipt_path": "artifacts/promotion/merge_receipt.json",
+      "changeset_path": "CHANGESET.md",
+      "parent_artifact_id": null,
+      "parent_task_id": null
+    },
+    "source_event_id": "evt-f884df3220a6",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "bound-agent-review-accept-finding-authority",
+    "owned_paths": [
+      "src/sisyphus/agents.py",
+      "src/sisyphus/agent_runtime.py",
+      "src/sisyphus/conformance.py",
+      "src/sisyphus/promotion.py",
+      "src/sisyphus/context_pack.py",
+      "docs",
+      "tests"
+    ],
+    "requested_adopt_paths": []
+  }
+}

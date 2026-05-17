@@ -6,6 +6,7 @@ import json
 
 from .conformance import build_execution_contract
 from .config import SisyphusConfig
+from .context_pack import build_task_execution_context_pack
 from .discipline import build_sisyphus_worker_discipline
 from .state import load_task_record
 from .utils import project_fields
@@ -16,6 +17,8 @@ class CodexPrompt:
     task_id: str
     workdir: Path
     prompt: str
+    context_pack: dict[str, object] | None = None
+    context_pack_path: Path | None = None
 
 
 def build_codex_prompt(
@@ -30,6 +33,12 @@ def build_codex_prompt(
     workdir = _resolve_workdir(repo_root=repo_root, task=task)
     docs = _load_docs(task=task, task_dir=task_dir)
     task_snapshot = _build_task_snapshot(task)
+    context_pack, context_pack_path = build_task_execution_context_pack(
+        repo_root,
+        config,
+        task=task,
+        docs=docs,
+    )
 
     sections = [
         "You are the local Codex worker for this task.",
@@ -50,6 +59,7 @@ def build_codex_prompt(
         build_execution_contract(task),
         "## Task Metadata",
         json.dumps(task_snapshot, indent=2),
+        *_render_context_pack_sections(context_pack, context_pack_path),
     ]
 
     for name, content in docs:
@@ -64,6 +74,8 @@ def build_codex_prompt(
         task_id=task["id"],
         workdir=workdir,
         prompt="\n\n".join(body).strip() + "\n",
+        context_pack=context_pack,
+        context_pack_path=context_pack_path,
     )
 
 
@@ -73,6 +85,58 @@ def _render_discipline_sections() -> list[str]:
         rendered.append(f"## {title}")
         rendered.extend(f"- {bullet}" for bullet in bullets)
     return rendered
+
+
+def _render_context_pack_sections(context_pack: dict[str, object], context_pack_path: Path) -> list[str]:
+    lines = [
+        "## ContextPack",
+        "",
+        "Use this as supporting evidence only. The frozen task docs and execution contract remain authoritative.",
+        "",
+        f"- Pack ID: `{context_pack.get('pack_id')}`",
+        f"- Fingerprint: `{context_pack.get('fingerprint')}`",
+        f"- Path: `{context_pack_path}`",
+        f"- Purpose: `{context_pack.get('purpose') or 'n/a'}`",
+        f"- Source Task ID: `{context_pack.get('source_task_id') or 'n/a'}`",
+        f"- Query: `{context_pack.get('query') or ''}`",
+        f"- Results: `{context_pack.get('result_count')}`",
+    ]
+    excluded_task_ids = context_pack.get("excluded_task_ids")
+    if isinstance(excluded_task_ids, list) and excluded_task_ids:
+        lines.append(f"- Excluded Task IDs: `{', '.join(str(task_id) for task_id in excluded_task_ids)}`")
+
+    items = context_pack.get("items")
+    if not isinstance(items, list) or not items:
+        lines.extend(["", "No ContextPack results selected."])
+        return lines
+
+    lines.append("")
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        matched_terms = item.get("matched_terms")
+        if isinstance(matched_terms, list):
+            matched_terms_text = ", ".join(str(term) for term in matched_terms)
+        else:
+            matched_terms_text = ""
+        lines.extend(
+            [
+                f"### Context Item {item.get('rank')}",
+                "",
+                f"- Source Ref: `{item.get('source_ref')}`",
+                f"- Source Type: `{item.get('source_type')}`",
+                f"- Task ID: `{item.get('task_id') or 'n/a'}`",
+                f"- Title: `{item.get('title') or ''}`",
+                f"- Score: `{item.get('score')}`",
+                f"- Freshness: `{item.get('freshness_status') or 'n/a'}`",
+                f"- Document Fingerprint: `{item.get('document_fingerprint')}`",
+                f"- Matched Terms: `{matched_terms_text}`",
+                "",
+                str(item.get("excerpt") or "").strip(),
+                "",
+            ]
+        )
+    return lines
 
 
 def _resolve_workdir(repo_root: Path, task: dict) -> Path:
