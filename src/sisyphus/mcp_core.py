@@ -12,6 +12,7 @@ from .bus_jsonl import read_jsonl_events, resolve_event_bus_path
 from .closeout import run_close
 from .config import load_config
 from .conformance import ensure_task_conformance_defaults, summarize_subtask_conformance, summarize_task_conformance
+from .context_pack import build_and_persist_context_pack, read_context_pack
 from .daemon import run_daemon
 from .evolution.handoff import EvolutionEvidenceSummary, EvolutionVerificationObligation
 from .evolution.operator import (
@@ -36,6 +37,8 @@ from .planning import (
 )
 from .metrics import build_value_metrics_report
 from .promotion_state import promotion_summary
+from .retrieval import retrieve_documents
+from .search_index import read_search_index, rebuild_search_index, search_index_status
 from .state import load_task_record
 from .utils import optional_str, optional_str_list
 
@@ -92,6 +95,44 @@ class SisyphusMcpCoreService:
         if tool_name == "sisyphus.get_task":
             task_id = str(args["task_id"])
             return {"task": get_task(repo_root=self.repo_root, task_id=task_id, config=config)}
+
+        if tool_name == "sisyphus.search_index_rebuild":
+            result = rebuild_search_index(self.repo_root, config)
+            return result.to_dict()
+
+        if tool_name == "sisyphus.search":
+            rebuild_if_missing = bool(args.get("rebuild_if_missing", False))
+            try:
+                documents = read_search_index(self.repo_root)
+            except FileNotFoundError:
+                if not rebuild_if_missing:
+                    raise
+                rebuild_search_index(self.repo_root, config)
+                documents = read_search_index(self.repo_root)
+            results = retrieve_documents(
+                str(args["query"]),
+                documents,
+                limit=int(args.get("limit", 10)),
+            )
+            return {
+                "query": str(args["query"]),
+                "result_count": len(results),
+                "results": [result.to_dict() for result in results],
+            }
+
+        if tool_name == "sisyphus.context_build":
+            pack, path = build_and_persist_context_pack(
+                self.repo_root,
+                config,
+                query=str(args["query"]),
+                limit=int(args.get("limit", 5)),
+                max_excerpt_chars=int(args.get("max_excerpt_chars", 800)),
+                rebuild_if_missing=bool(args.get("rebuild_if_missing", True)),
+            )
+            return {
+                "pack_path": str(path),
+                "context_pack": pack,
+            }
 
         if tool_name == "sisyphus.evolution_run":
             run_id = str(args["run_id"])
@@ -388,10 +429,14 @@ class SisyphusMcpCoreService:
             }
         if parsed.scheme == "repo" and parsed.netloc == "status" and parsed.path == "/metrics":
             return build_value_metrics_report(self.repo_root, config)
+        if parsed.scheme == "repo" and parsed.netloc == "search" and parsed.path == "/status":
+            return search_index_status(self.repo_root)
         if parsed.scheme == "repo" and parsed.netloc == "schema" and parsed.path == "/mcp":
             return _mcp_schema_markdown()
         if parsed.scheme == "evolution":
             return _read_evolution_resource(self.repo_root, parsed)
+        if parsed.scheme == "context":
+            return read_context_pack(self.repo_root, parsed.netloc)
 
         if parsed.scheme != "task":
             raise ValueError(f"unsupported MCP resource URI: {uri}")
@@ -509,6 +554,67 @@ def mcp_tool_definitions() -> list[dict[str, object]]:
                 "additionalProperties": False,
             },
             "outputSchema": {"type": "object", "properties": {"task": {"type": "object"}}},
+        },
+        {
+            "name": "sisyphus.search_index_rebuild",
+            "description": "Rebuild the repo-local SearchDocument JSONL index from task docs and artifact evidence.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "index_path": {"type": "string"},
+                    "document_count": {"type": "integer"},
+                    "changed": {"type": "boolean"},
+                },
+            },
+        },
+        {
+            "name": "sisyphus.search",
+            "description": "Search the repo-local SearchDocument index for task spec and artifact evidence.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "minimum": 1},
+                    "rebuild_if_missing": {"type": "boolean"},
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "result_count": {"type": "integer"},
+                    "results": {"type": "array"},
+                },
+            },
+        },
+        {
+            "name": "sisyphus.context_build",
+            "description": "Build and persist a ContextPack from repo-local search results.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "minimum": 1},
+                    "max_excerpt_chars": {"type": "integer", "minimum": 80},
+                    "rebuild_if_missing": {"type": "boolean"},
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "pack_path": {"type": "string"},
+                    "context_pack": {"type": "object"},
+                },
+            },
         },
         {
             "name": "sisyphus.evolution_execute",
@@ -910,7 +1016,9 @@ def mcp_resource_definitions() -> list[dict[str, object]]:
         {"uri": "repo://status/board", "description": "Operator-focused board with conformance summary and recent events."},
         {"uri": "repo://status/events", "description": "Recent event bus envelopes from the repository event log."},
         {"uri": "repo://status/metrics", "description": "Repository-level workflow value metrics derived from task state and lifecycle events."},
+        {"uri": "repo://search/status", "description": "Repo-local search index status and document count."},
         {"uri": "repo://schema/mcp", "description": "Human-readable MCP tool and resource schema for Sisyphus."},
+        {"uri": "context://<context-pack-id>", "description": "Persisted ContextPack JSON built from repo-local search results."},
         {"uri": "evolution://<run-id>/run", "description": "Read-only overview for a persisted evolution run."},
         {"uri": "evolution://<run-id>/status", "description": "Read-only status summary for a persisted evolution run."},
         {"uri": "evolution://<run-id>/report", "description": "Read-only report for a persisted evolution run."},
