@@ -44,3 +44,4 @@
 - `SPEC_INCOMPLETE`: issue repro and regression target must be completed before audit
 - `SPEC_INCOMPLETE`: task spec must define normal, edge, and exception cases before audit
 - `VERIFICATION_MAPPING_MISSING`: verification mapping must be completed before audit
+- `SPEC_VALIDATION_FAILED`: task spec validation failed before verify: REQUIRED_SECTION_MISSING: FIX_PLAN.md must include `design evaluation`; REQUIRED_SECTION_MISSING: FIX_PLAN.md must include `design artifacts`; PLACEHOLDER_TEXT: REPRO.md still contains generated placeholder text: describe the expected result; +5 more

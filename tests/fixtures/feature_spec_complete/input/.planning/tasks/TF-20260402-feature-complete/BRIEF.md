@@ -19,3 +19,7 @@
 
 - [x] Criterion A
 - [x] Criterion B
+
+## Constraints
+
+- Keep the complete spec fixture deterministic.

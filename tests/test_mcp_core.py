@@ -70,6 +70,10 @@ class McpCoreTests(unittest.TestCase):
                     "- [x] Projection creates a feature change envelope",
                     "- [x] Projection preserves verification evidence",
                     "",
+                    "## Constraints",
+                    "",
+                    "- Keep MCP fixture scope local to task resources.",
+                    "",
                 ]
             ),
             encoding="utf-8",
@@ -86,6 +90,21 @@ class McpCoreTests(unittest.TestCase):
                     "## Risks",
                     "",
                     "- Adapter shape could drift.",
+                    "",
+                    "## Design Evaluation",
+                    "",
+                    "- Design Mode: `none`",
+                    "- Decision Reason: `existing contract only`",
+                    "- Confidence: `medium`",
+                    "- Layer Impact: `layer-preserving`",
+                    "- Layer Decision Reason: `MCP fixture uses existing lifecycle behavior`",
+                    "- Required Design Artifacts: `none`",
+                    "",
+                    "## Design Artifacts",
+                    "",
+                    "- Connection Diagram: `n/a`",
+                    "- Sequence Diagram: `n/a`",
+                    "- Boundary Note: `n/a`",
                     "",
                     "## Test Strategy",
                     "",
@@ -252,9 +271,11 @@ class McpCoreTests(unittest.TestCase):
         self.assertIn("task://<task-id>/repro", resource_uris)
         self.assertIn("task://<task-id>/promotion", resource_uris)
         self.assertIn("task://<task-id>/changeset", resource_uris)
+        self.assertIn("task://<task-id>/spec-validation", resource_uris)
         self.assertIn("task://<task-id>/artifact-graph", resource_uris)
         self.assertIn("task://<task-id>/compiled-obligations", resource_uris)
         self.assertIn("task://<task-id>/promotion-summary", resource_uris)
+        self.assertIn("sisyphus.spec_validate", tool_names)
         request_tool = next(tool for tool in self.core.list_tools() if tool["name"] == "sisyphus.request_task")
         self.assertEqual(request_tool["inputSchema"]["required"], ["message"])
         self.assertFalse(request_tool["inputSchema"]["additionalProperties"])
@@ -270,6 +291,19 @@ class McpCoreTests(unittest.TestCase):
         self.assertEqual(record_payload["task"]["id"], task["id"])
         self.assertEqual(record_payload["task"]["promotion"]["status"], "not_required")
         self.assertIn("# Brief", brief_payload)
+
+    def test_spec_validate_tool_and_resource(self) -> None:
+        task = self._new_task("spec-validation")
+        self._fill_feature_docs(task)
+
+        result = self.core.call_tool("sisyphus.spec_validate", {"task_id": task["id"]})
+        resource = self.core.read_resource(f"task://{task['id']}/spec-validation")
+
+        self.assertEqual(result["task_id"], task["id"])
+        self.assertIn(result["status"], {"passed", "warning"})
+        self.assertEqual(result["gates"], [])
+        self.assertEqual(resource["task_id"], task["id"])
+        self.assertEqual(resource["summary"]["error_count"], 0)
 
     def test_task_record_resource_returns_doc_synced_projection_state(self) -> None:
         task = self._new_task("record-projection")
