@@ -34,6 +34,7 @@ from sisyphus.cli import (
     handle_ingest_conversation,
     handle_ingest_pull_request_merged,
     handle_request,
+    handle_spec_validate,
     handle_status,
     handle_subtasks_generate,
     main as cli_main,
@@ -62,9 +63,121 @@ from sisyphus.paths import event_log_file, inbox_failed_dir, inbox_processed_dir
 from sisyphus.planning import approve_task_plan, freeze_task_spec, request_plan_changes, revise_task_plan
 from sisyphus.provider_wrapper import run_provider_wrapper
 from sisyphus.service import TaskNotificationTracker, build_task_update_summary, run_service_step
+from sisyphus.spec_validation import load_spec_validation_report, validate_task_spec
 from sisyphus.state import build_task_record, create_task_record, list_task_records, load_task_record, save_task_record
 from sisyphus.templates import materialize_task_templates, template_root
 from sisyphus.workflow import run_workflow_cycle
+
+
+def write_valid_feature_spec(
+    repo_root: Path,
+    task: dict,
+    *,
+    normal: str = "Happy path works",
+    edge: str = "Empty payload is rejected",
+    exception: str = "Downstream timeout is surfaced",
+    design_mode: str = "none",
+    layer_impact: str = "layer-preserving",
+    required_artifacts: str = "none",
+    connection_diagram: str = "n/a",
+    sequence_diagram: str = "n/a",
+    boundary_note: str = "n/a",
+) -> None:
+    task_dir = repo_root / task["task_dir"]
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "BRIEF.md").write_text(
+        "\n".join(
+            [
+                "# Brief",
+                "",
+                "## Task",
+                "",
+                f"- Task ID: `{task['id']}`",
+                "",
+                "## Problem",
+                "",
+                "- Need a concrete task contract.",
+                "",
+                "## Desired Outcome",
+                "",
+                "- The requested workflow has a reviewable implementation path.",
+                "",
+                "## Acceptance Criteria",
+                "",
+                f"- [x] {normal}",
+                f"- [x] {edge}",
+                f"- [x] {exception}",
+                "",
+                "## Constraints",
+                "",
+                "- Keep changes scoped to this task.",
+                "- Preserve existing repository conventions.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (task_dir / "PLAN.md").write_text(
+        "\n".join(
+            [
+                "# Plan",
+                "",
+                "## Implementation Plan",
+                "",
+                "1. Inspect the current code path.",
+                "2. Implement the scoped behavior.",
+                "3. Add focused regression coverage.",
+                "",
+                "## Risks",
+                "",
+                "- Shared lifecycle behavior can regress.",
+                "",
+                "## Design Evaluation",
+                "",
+                f"- Design Mode: `{design_mode}`",
+                "- Decision Reason: `existing contract only`",
+                "- Confidence: `medium`",
+                f"- Layer Impact: `{layer_impact}`",
+                "- Layer Decision Reason: `keeps behavior within the existing task lifecycle`",
+                f"- Required Design Artifacts: `{required_artifacts}`",
+                "",
+                "## Design Artifacts",
+                "",
+                f"- Connection Diagram: `{connection_diagram}`",
+                f"- Sequence Diagram: `{sequence_diagram}`",
+                f"- Boundary Note: `{boundary_note}`",
+                "",
+                "## Test Strategy",
+                "",
+                "### Normal Cases",
+                "",
+                f"- [x] {normal}",
+                "",
+                "### Edge Cases",
+                "",
+                f"- [x] {edge}",
+                "",
+                "### Exception Cases",
+                "",
+                f"- [x] {exception}",
+                "",
+                "## Verification Mapping",
+                "",
+                f"- `{normal}` -> `unit_test`",
+                f"- `{edge}` -> `integration_test`",
+                f"- `{exception}` -> `manual_check`",
+                "",
+                "## External LLM Review",
+                "",
+                "- Required: `no`",
+                "- Provider: `n/a`",
+                "- Purpose: `not needed for deterministic test coverage`",
+                "- Trigger: `not required for this test fixture`",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
 
 
 class SisyphusVerifyTests(unittest.TestCase):
@@ -123,81 +236,84 @@ class SisyphusVerifyTests(unittest.TestCase):
         self.assertIn("ACCEPTANCE_CRITERIA_MISSING", gate_codes)
         self.assertIn("SPEC_INCOMPLETE", gate_codes)
         self.assertIn("VERIFICATION_MAPPING_MISSING", gate_codes)
+        self.assertIn("SPEC_VALIDATION_FAILED", gate_codes)
+
+    def test_spec_validate_fails_generated_placeholder_spec(self) -> None:
+        task = self._new_feature_task("spec-validation-placeholder")
+
+        outcome = validate_task_spec(self.repo_root, self.config, task["id"])
+
+        self.assertEqual(outcome.status, "failed")
+        self.assertTrue(outcome.report_path.exists())
+        gate_codes = set(outcome.report["gate_codes"])
+        self.assertIn("PLACEHOLDER_TEXT", gate_codes)
+        self.assertIn("ACCEPTANCE_CRITERIA_MISSING", gate_codes)
+
+    def test_plan_approve_blocks_generated_placeholder_spec(self) -> None:
+        task = self._new_feature_task("approve-placeholder")
+
+        outcome = approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="should be blocked",
+        )
+
+        self.assertEqual(outcome.plan_status, "pending_review")
+        self.assertEqual(outcome.task_status, "blocked")
+        gate_codes = {gate["code"] for gate in outcome.gates}
+        self.assertIn("SPEC_VALIDATION_FAILED", gate_codes)
+
+    def test_plan_revise_clears_prior_spec_validation_gate(self) -> None:
+        task = self._new_feature_task("revise-validation-gate")
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="should be blocked",
+        )
+
+        revised = revise_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            author="worker-1",
+            notes="resubmit after editing docs",
+        )
+
+        self.assertEqual(revised.plan_status, "pending_review")
+        self.assertEqual(revised.gates, [])
+
+    def test_spec_validate_passes_concrete_feature_spec(self) -> None:
+        task = self._new_feature_task("spec-validation-pass")
+        write_valid_feature_spec(self.repo_root, task)
+
+        outcome = validate_task_spec(self.repo_root, self.config, task["id"])
+
+        self.assertIn(outcome.status, {"passed", "warning"})
+        self.assertEqual(outcome.gates, [])
+        report = load_spec_validation_report(self.repo_root / task["task_dir"])
+        self.assertIsNotNone(report)
+        self.assertEqual(report["summary"]["error_count"], 0)
+
+    def test_cli_spec_validate_outputs_json_report(self) -> None:
+        task = self._new_feature_task("spec-validation-cli")
+        write_valid_feature_spec(self.repo_root, task)
+
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            exit_code = handle_spec_validate(task["id"], as_json=True, repo_root=self.repo_root)
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(buffer.getvalue())
+        self.assertEqual(payload["task_id"], task["id"])
+        self.assertEqual(payload["summary"]["error_count"], 0)
 
     def test_verify_passes_when_feature_spec_is_filled(self) -> None:
         task = self._new_feature_task("filled-feature")
-        task_dir = self.repo_root / task["task_dir"]
-
-        (task_dir / "BRIEF.md").write_text(
-            "\n".join(
-                [
-                    "# Brief",
-                    "",
-                    "## Task",
-                    "",
-                    "- Task ID: `filled`",
-                    "",
-                    "## Problem",
-                    "",
-                    "- Need a filled brief.",
-                    "",
-                    "## Desired Outcome",
-                    "",
-                    "- Verify should pass.",
-                    "",
-                    "## Acceptance Criteria",
-                    "",
-                    "- [x] Criterion A",
-                    "- [x] Criterion B",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
-        )
-        (task_dir / "PLAN.md").write_text(
-            "\n".join(
-                [
-                    "# Plan",
-                    "",
-                    "## Implementation Plan",
-                    "",
-                    "1. Do the work.",
-                    "",
-                    "## Risks",
-                    "",
-                    "- Small risk.",
-                    "",
-                    "## Test Strategy",
-                    "",
-                    "### Normal Cases",
-                    "",
-                    "- [x] Happy path works",
-                    "",
-                    "### Edge Cases",
-                    "",
-                    "- [x] Empty payload is rejected",
-                    "",
-                    "### Exception Cases",
-                    "",
-                    "- [x] Downstream timeout is surfaced",
-                    "",
-                    "## Verification Mapping",
-                    "",
-                    "- `Happy path works` -> `unit_test`",
-                    "- `Empty payload is rejected` -> `integration_test`",
-                    "- `Downstream timeout is surfaced` -> `manual_check`",
-                    "",
-                    "## External LLM Review",
-                    "",
-                    "- Required: `no`",
-                    "- Provider: `n/a`",
-                    "- Purpose: `n/a`",
-                    "- Trigger: `n/a`",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
-        )
+        write_valid_feature_spec(self.repo_root, task)
 
         approve_task_plan(
             repo_root=self.repo_root,
@@ -219,117 +335,39 @@ class SisyphusVerifyTests(unittest.TestCase):
         self.assertEqual(reloaded["gates"], [])
         self.assertEqual(reloaded["last_verify_results"][0]["status"], "passed")
 
-    def test_verify_reopens_plan_when_design_is_underdesigned(self) -> None:
+    def test_plan_approval_blocks_when_design_is_underdesigned(self) -> None:
         task = self._new_feature_task("design-replan")
-        task_dir = self.repo_root / task["task_dir"]
-
-        (task_dir / "BRIEF.md").write_text(
-            "\n".join(
-                [
-                    "# Brief",
-                    "",
-                    "## Acceptance Criteria",
-                    "",
-                    "- [x] Adaptive planning state is persisted",
-                    "- [x] Verify can request a design replan",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
-        )
-        (task_dir / "PLAN.md").write_text(
-            "\n".join(
-                [
-                    "# Plan",
-                    "",
-                    "## Implementation Plan",
-                    "",
-                    "1. Add adaptive planning state.",
-                    "2. Add verify-time design evaluation.",
-                    "",
-                    "## Risks",
-                    "",
-                    "- Replanning could disturb the workflow state machine.",
-                    "",
-                    "## Design Evaluation",
-                    "",
-                    "- Design Mode: `none`",
-                    "- Decision Reason: `existing contract only`",
-                    "- Confidence: `medium`",
-                    "- Layer Impact: `layer-adding`",
-                    "- Layer Decision Reason: `introduces an adaptive planning layer`",
-                    "- Required Design Artifacts: `connection_diagram, sequence_diagram`",
-                    "",
-                    "## Design Artifacts",
-                    "",
-                    "- Connection Diagram: `n/a`",
-                    "- Sequence Diagram: `n/a`",
-                    "- Boundary Note: `n/a`",
-                    "",
-                    "## Test Strategy",
-                    "",
-                    "### Normal Cases",
-                    "",
-                    "- [x] Adaptive planning state is persisted",
-                    "",
-                    "### Edge Cases",
-                    "",
-                    "- [x] Verify can reopen planning when design is too shallow",
-                    "",
-                    "### Exception Cases",
-                    "",
-                    "- [x] Existing verify flow remains actionable",
-                    "",
-                    "## Verification Mapping",
-                    "",
-                    "- `Adaptive planning state is persisted` -> `unit_test`",
-                    "- `Verify can reopen planning when design is too shallow` -> `integration_test`",
-                    "- `Existing verify flow remains actionable` -> `manual_check`",
-                    "",
-                    "## External LLM Review",
-                    "",
-                    "- Required: `no`",
-                    "- Provider: `n/a`",
-                    "- Purpose: `n/a`",
-                    "- Trigger: `n/a`",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
+        write_valid_feature_spec(
+            self.repo_root,
+            task,
+            normal="Adaptive planning state is persisted",
+            edge="Verify can reopen planning when design is too shallow",
+            exception="Existing verify flow remains actionable",
+            design_mode="none",
+            layer_impact="layer-adding",
+            required_artifacts="connection_diagram, sequence_diagram",
         )
 
-        approve_task_plan(
+        outcome = approve_task_plan(
             repo_root=self.repo_root,
             config=self.config,
             task_id=task["id"],
             reviewer="reviewer-1",
             notes="design needs later validation",
         )
-        freeze_task_spec(
-            repo_root=self.repo_root,
-            config=self.config,
-            task_id=task["id"],
-            reviewer="reviewer-1",
-            notes="freeze initial spec",
-        )
 
-        outcome = run_verify(self.repo_root, self.config, task["id"])
-
-        self.assertEqual(outcome.status, "failed")
-        self.assertEqual(outcome.stage, "plan_review")
+        self.assertEqual(outcome.plan_status, "pending_review")
+        self.assertEqual(outcome.task_status, "blocked")
 
         reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
         gate_codes = {gate["code"] for gate in reloaded["gates"]}
-        self.assertEqual(reloaded["plan_status"], "changes_requested")
+        self.assertEqual(reloaded["plan_status"], "pending_review")
         self.assertEqual(reloaded["spec_status"], "draft")
         self.assertEqual(reloaded["workflow_phase"], "plan_revision")
-        self.assertEqual(reloaded["design"]["assessment"]["status"], "underdesigned")
-        self.assertTrue(reloaded["design"]["assessment"]["replan_required"])
-        self.assertIn("DESIGN_REPLAN_REQUIRED", gate_codes)
-        self.assertIn("PLAN_CHANGES_REQUESTED", gate_codes)
-        verify_text = (task_dir / "VERIFY.md").read_text(encoding="utf-8")
-        self.assertIn("## Design Assessment", verify_text)
-        self.assertIn("- Status: `underdesigned`", verify_text)
+        self.assertIn("SPEC_VALIDATION_FAILED", gate_codes)
+        report = load_spec_validation_report(self.repo_root / task["task_dir"])
+        self.assertIsNotNone(report)
+        self.assertIn("DESIGN_MODE_INSUFFICIENT", report["gate_codes"])
 
     def test_load_and_list_task_records_sync_docs_into_projection_state(self) -> None:
         task = self._new_feature_task("projection-sync")
@@ -816,6 +854,7 @@ class SisyphusAgentTests(unittest.TestCase):
             slug="agent-visibility",
         )
         materialize_task_templates(self.task)
+        write_valid_feature_spec(self.repo_root, self.task)
         approve_task_plan(
             repo_root=self.repo_root,
             config=self.config,
@@ -1066,6 +1105,7 @@ class SisyphusAgentTests(unittest.TestCase):
             slug="spec-freeze-block",
         )
         materialize_task_templates(task)
+        write_valid_feature_spec(self.repo_root, task)
         approve_task_plan(
             repo_root=self.repo_root,
             config=self.config,
@@ -2427,6 +2467,7 @@ class SisyphusDaemonTests(unittest.TestCase):
             slug="plan-review",
         )
         materialize_task_templates(task)
+        write_valid_feature_spec(self.repo_root, task)
 
         requested = request_plan_changes(
             repo_root=self.repo_root,
@@ -2490,43 +2531,7 @@ class SisyphusDaemonTests(unittest.TestCase):
             slug="subtask-flow",
         )
         materialize_task_templates(task)
-        task_dir = self.repo_root / task["task_dir"]
-        (task_dir / "PLAN.md").write_text(
-            "\n".join(
-                [
-                    "# Plan",
-                    "",
-                    "## Test Strategy",
-                    "",
-                    "### Normal Cases",
-                    "",
-                    "- [x] Happy path works",
-                    "",
-                    "### Edge Cases",
-                    "",
-                    "- [x] Empty payload is rejected",
-                    "",
-                    "### Exception Cases",
-                    "",
-                    "- [x] Downstream timeout is surfaced",
-                    "",
-                    "## Verification Mapping",
-                    "",
-                    "- `Happy path works` -> `unit_test`",
-                    "- `Empty payload is rejected` -> `integration_test`",
-                    "- `Downstream timeout is surfaced` -> `manual_check`",
-                    "",
-                    "## External LLM Review",
-                    "",
-                    "- Required: `no`",
-                    "- Provider: `n/a`",
-                    "- Purpose: `n/a`",
-                    "- Trigger: `n/a`",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
-        )
+        write_valid_feature_spec(self.repo_root, task)
 
         approve_task_plan(
             repo_root=self.repo_root,
@@ -2560,6 +2565,13 @@ class SisyphusDaemonTests(unittest.TestCase):
             slug="design-anchor",
         )
         materialize_task_templates(task)
+        write_valid_feature_spec(
+            self.repo_root,
+            task,
+            normal="Planner persists design state",
+            edge="Missing design artifacts are reported",
+            exception="Existing tasks still verify",
+        )
         task_dir = self.repo_root / task["task_dir"]
         (task_dir / "PLAN.md").write_text(
             "\n".join(
@@ -2995,74 +3007,12 @@ class SisyphusDaemonTests(unittest.TestCase):
         )
         materialize_task_templates(task)
         task_dir = self.repo_root / task["task_dir"]
-        (task_dir / "BRIEF.md").write_text(
-            "\n".join(
-                [
-                    "# Brief",
-                    "",
-                    "## Task",
-                    "",
-                    f"- Task ID: `{task['id']}`",
-                    "",
-                    "## Problem",
-                    "",
-                    "- Need daemon-visible obligations.",
-                    "",
-                    "## Desired Outcome",
-                    "",
-                    "- Workflow materializes a compiled obligation queue.",
-                    "",
-                    "## Acceptance Criteria",
-                    "",
-                    "- [x] Queue is written before subtask generation",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
-        )
-        (task_dir / "PLAN.md").write_text(
-            "\n".join(
-                [
-                    "# Plan",
-                    "",
-                    "## Implementation Plan",
-                    "",
-                    "1. Materialize queue.",
-                    "",
-                    "## Risks",
-                    "",
-                    "- Queue updates could loop.",
-                    "",
-                    "## Test Strategy",
-                    "",
-                    "### Normal Cases",
-                    "",
-                    "- [x] Queue is written before subtask generation",
-                    "",
-                    "### Edge Cases",
-                    "",
-                    "- [x] Re-running with identical queue does not count as queue progress",
-                    "",
-                    "### Exception Cases",
-                    "",
-                    "- [x] Missing docs fail clearly",
-                    "",
-                    "## Verification Mapping",
-                    "",
-                    "- `Queue is written before subtask generation` -> `unit_test`",
-                    "- `Re-running with identical queue does not count as queue progress` -> `unit_test`",
-                    "- `Missing docs fail clearly` -> `unit_test`",
-                    "",
-                    "## External LLM Review",
-                    "",
-                    "- Required: `no`",
-                    "- Provider: `n/a`",
-                    "- Purpose: `n/a`",
-                    "- Trigger: `n/a`",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
+        write_valid_feature_spec(
+            self.repo_root,
+            task,
+            normal="Queue is written before subtask generation",
+            edge="Re-running with identical queue does not count as queue progress",
+            exception="Missing docs fail clearly",
         )
         approve_task_plan(
             repo_root=self.repo_root,

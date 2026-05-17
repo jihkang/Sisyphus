@@ -23,6 +23,11 @@ from .design import (
 )
 from .events import new_event_envelope
 from .planning import collect_plan_gates, reopen_task_plan_for_design_replan
+from .spec_validation import (
+    SPEC_VALIDATION_GATE_CODES,
+    SPEC_VALIDATION_SOURCES,
+    collect_spec_validation_gates,
+)
 from .state import load_task_record, save_task_record, utc_now
 from .strategy import sync_test_strategy_from_docs
 
@@ -43,6 +48,7 @@ VERIFY_GATE_CODES = {
     "PLAN_CHANGES_REQUESTED",
     "DESIGN_REPLAN_REQUIRED",
     "DESIGN_ARTIFACTS_MISSING",
+    *SPEC_VALIDATION_GATE_CODES,
 }
 
 TRANSIENT_GATE_SOURCES = {
@@ -53,6 +59,7 @@ TRANSIENT_GATE_SOURCES = {
     "close",
     "plan",
     "conformance",
+    *SPEC_VALIDATION_SOURCES,
 }
 
 
@@ -88,13 +95,20 @@ def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyO
     gates.extend(spec_gates)
     design_gates = _collect_design_gates(task)
     gates.extend(design_gates)
+    validation_gates = collect_spec_validation_gates(
+        task=task,
+        task_dir=task_dir,
+        action="verify",
+        require_existing_report=bool(task.get("spec_validation")),
+    )
+    gates.extend(validation_gates)
     plan_gates = collect_plan_gates(task, action="verify")
     gates.extend(plan_gates)
     conformance_gates = collect_conformance_gates(task, action="verify")
     gates.extend(conformance_gates)
 
     command_results: list[dict] = []
-    if not spec_gates and not design_gates and not plan_gates and not conformance_gates:
+    if not spec_gates and not design_gates and not validation_gates and not plan_gates and not conformance_gates:
         task["stage"] = "audit"
         gates.extend(_collect_test_strategy_gates(task))
         command_results = _run_verify_commands(task, task_dir)
@@ -120,6 +134,8 @@ def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyO
         task["stage"] = "plan_review"
     elif plan_gates:
         task["stage"] = "plan_review"
+    elif validation_gates:
+        task["stage"] = "spec"
     elif conformance_gates:
         task["stage"] = "audit"
     else:

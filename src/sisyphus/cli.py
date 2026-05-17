@@ -52,6 +52,7 @@ from .service import (
 )
 from .retrieval import retrieve_documents
 from .search_index import SearchIndexError, read_search_index, rebuild_search_index
+from .spec_validation import validate_task_spec
 from .state import list_task_records, load_task_record
 
 
@@ -97,6 +98,9 @@ def build_parser() -> argparse.ArgumentParser:
     spec_freeze_parser.add_argument("task_id")
     spec_freeze_parser.add_argument("--by", dest="reviewer", default="operator")
     spec_freeze_parser.add_argument("--notes")
+    spec_validate_parser = spec_subparsers.add_parser("validate")
+    spec_validate_parser.add_argument("task_id")
+    spec_validate_parser.add_argument("--json", action="store_true")
 
     subtasks_parser = subparsers.add_parser("subtasks")
     subtasks_subparsers = subtasks_parser.add_subparsers(dest="subtasks_command", required=True)
@@ -372,6 +376,11 @@ def handle_plan_approve(
     print(f"plan {outcome.task_id}")
     print(f"plan_status: {outcome.plan_status}")
     print(f"task_status: {outcome.task_status}")
+    if outcome.gates:
+        print("gates:")
+        for gate in outcome.gates:
+            print(f"- {gate['code']}: {gate['message']}")
+        return 1
     return 0
 
 
@@ -440,7 +449,40 @@ def handle_spec_freeze(
     print(f"spec_status: {outcome.spec_status}")
     print(f"task_status: {outcome.task_status}")
     print(f"workflow_phase: {outcome.workflow_phase}")
-    return 0
+    return 0 if outcome.spec_status == "frozen" and outcome.task_status != "blocked" else 1
+
+
+def handle_spec_validate(
+    task_id: str,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    outcome = validate_task_spec(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        persist=True,
+    )
+    if as_json:
+        print(json.dumps(outcome.report, indent=2))
+        return 0 if outcome.status != "failed" else 1
+
+    print(f"spec_validation {outcome.task_id}")
+    print(f"status: {outcome.status}")
+    print(f"report: {outcome.report_path}")
+    summary = outcome.report.get("summary", {})
+    print(f"errors: {summary.get('error_count', 0)}")
+    print(f"warnings: {summary.get('warning_count', 0)}")
+    findings = outcome.report.get("findings", [])
+    if findings:
+        print("findings:")
+        for finding in findings:
+            print(f"- {finding['severity']} {finding['code']}: {finding['message']}")
+    else:
+        print("findings: none")
+    return 0 if outcome.status != "failed" else 1
 
 
 def handle_subtasks_generate(task_id: str, repo_root: str | Path | None = None) -> int:
@@ -1009,6 +1051,14 @@ def handle_status(
         gate_count = len(task.get("gates", []))
         task_conformance = format_conformance_summary(extract_conformance_summary(task))
         subtask_conformance = summarize_subtask_conformance(task)
+        spec_validation = task.get("spec_validation")
+        spec_validation_text = ""
+        if isinstance(spec_validation, dict) and spec_validation.get("status"):
+            spec_validation_text = (
+                f" spec_validation={spec_validation.get('status')}"
+                f"/{spec_validation.get('error_count', 0)}e"
+                f"/{spec_validation.get('warning_count', 0)}w"
+            )
         print(
             f"{task.get('id')} "
             f"[{task.get('type')}] "
@@ -1019,6 +1069,7 @@ def handle_status(
             f"phase={task.get('workflow_phase', '-')} "
             f"audit={task.get('audit_attempts', 0)}/{task.get('max_audit_attempts', 10)} "
             f"gates={gate_count}"
+            f"{spec_validation_text}"
             f"{f' conformance={task_conformance}' if task_conformance else ''}"
         )
         if subtask_conformance:
@@ -1346,6 +1397,12 @@ def main() -> int:
                 task_id=args.task_id,
                 reviewer=args.reviewer,
                 notes=args.notes,
+                repo_root=args.repo_root,
+            )
+        if args.spec_command == "validate":
+            return handle_spec_validate(
+                task_id=args.task_id,
+                as_json=args.json,
                 repo_root=args.repo_root,
             )
     if args.command == "subtasks":

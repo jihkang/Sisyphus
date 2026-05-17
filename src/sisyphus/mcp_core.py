@@ -39,6 +39,7 @@ from .metrics import build_value_metrics_report
 from .promotion_state import promotion_summary
 from .retrieval import retrieve_documents
 from .search_index import read_search_index, rebuild_search_index, search_index_status
+from .spec_validation import load_spec_validation_report, validate_task_spec
 from .state import load_task_record
 from .utils import optional_str, optional_str_list
 
@@ -348,6 +349,22 @@ class SisyphusMcpCoreService:
                 "workflow_phase": outcome.workflow_phase,
             }
 
+        if tool_name == "sisyphus.spec_validate":
+            outcome = validate_task_spec(
+                repo_root=self.repo_root,
+                config=config,
+                task_id=str(args["task_id"]),
+                persist=bool(args.get("persist", True)),
+            )
+            return {
+                "task_id": outcome.task_id,
+                "status": outcome.status,
+                "stale": outcome.stale,
+                "report_path": str(outcome.report_path),
+                "gates": outcome.gates,
+                "report": outcome.report,
+            }
+
         if tool_name == "sisyphus.subtasks_generate":
             outcome = generate_subtasks(repo_root=self.repo_root, config=config, task_id=str(args["task_id"]))
             return {"task_id": outcome.task_id, "workflow_phase": outcome.workflow_phase, "subtasks": outcome.subtasks}
@@ -462,6 +479,15 @@ class SisyphusMcpCoreService:
             if not doc_path.exists():
                 return _changeset_resource_placeholder(task)
             return doc_path.read_text(encoding="utf-8")
+        if resource_name == "spec-validation":
+            report = load_spec_validation_report(task_dir)
+            if report is None:
+                return {
+                    "task_id": task.get("id"),
+                    "status": "not_recorded",
+                    "report_path": "artifacts/spec-validation/latest.json",
+                }
+            return report
         if resource_name == "agents":
             return {
                 "agents": list_agents(
@@ -945,6 +971,30 @@ def mcp_tool_definitions() -> list[dict[str, object]]:
             "outputSchema": {"type": "object", "properties": {"task_id": {"type": "string"}, "spec_status": {"type": "string"}, "task_status": {"type": "string"}, "workflow_phase": {"type": "string"}}},
         },
         {
+            "name": "sisyphus.spec_validate",
+            "description": "Validate a task spec and persist a reviewable report.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "persist": {"type": "boolean"},
+                },
+                "required": ["task_id"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "status": {"type": "string"},
+                    "stale": {"type": "boolean"},
+                    "report_path": {"type": "string"},
+                    "gates": {"type": "array"},
+                    "report": {"type": "object"},
+                },
+            },
+        },
+        {
             "name": "sisyphus.subtasks_generate",
             "description": "Generate subtasks from the current strategy.",
             "inputSchema": {
@@ -1031,6 +1081,7 @@ def mcp_resource_definitions() -> list[dict[str, object]]:
         {"uri": "task://<task-id>/repro", "description": "Task repro markdown for issue tasks."},
         {"uri": "task://<task-id>/verify", "description": "Task verification markdown."},
         {"uri": "task://<task-id>/log", "description": "Task log markdown."},
+        {"uri": "task://<task-id>/spec-validation", "description": "Latest persisted task spec-validation report."},
         {"uri": "task://<task-id>/promotion", "description": "Recorded promotion receipt JSON for a merged pull request."},
         {"uri": "task://<task-id>/changeset", "description": "Human-readable merged pull request changeset markdown."},
         {"uri": "task://<task-id>/agents", "description": "Tracked agent records for a task."},

@@ -42,3 +42,4 @@
 - `ACCEPTANCE_CRITERIA_MISSING`: feature task requires filled acceptance criteria
 - `SPEC_INCOMPLETE`: task spec must define normal, edge, and exception cases before audit
 - `VERIFICATION_MAPPING_MISSING`: verification mapping must be completed before audit
+- `SPEC_VALIDATION_FAILED`: task spec validation failed before verify: REQUIRED_SECTION_MISSING: BRIEF.md must include `constraints`; REQUIRED_SECTION_MISSING: PLAN.md must include `design evaluation`; REQUIRED_SECTION_MISSING: PLAN.md must include `design artifacts`; +7 more
