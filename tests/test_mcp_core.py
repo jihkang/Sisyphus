@@ -850,6 +850,23 @@ class McpCoreTests(unittest.TestCase):
         self.assertEqual(payload["task_id"], task["id"])
         self.assertTrue(payload["subtasks"])
 
+    def test_verify_tool_reports_lifecycle_gates_before_mutation(self) -> None:
+        task = self._new_task("verify-lifecycle-gate")
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="approved",
+        )
+
+        payload = self.core.call_tool("sisyphus.verify_task", {"task_id": task["id"]})
+
+        self.assertEqual(payload["task_id"], task["id"])
+        self.assertEqual(payload["status"], "failed")
+        self.assertEqual(payload["audit_attempts"], 0)
+        self.assertIn("SPEC_FREEZE_REQUIRED", {gate["code"] for gate in payload["gates"]})
+
     def test_request_task_tool_returns_integer_orchestrated_count(self) -> None:
         fake_result = mock.Mock(
             ok=True,

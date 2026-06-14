@@ -53,6 +53,14 @@ class LifecycleRulesTests(unittest.TestCase):
         self.assertFalse(result.allowed)
         self.assertEqual(result.blocking_codes, ("SPEC_FREEZE_REQUIRED",))
 
+    def test_verify_requires_frozen_spec(self) -> None:
+        task = _task(plan_status="approved", spec_status="draft")
+
+        result = evaluate_transition(task, LifecycleAction.VERIFY)
+
+        self.assertFalse(result.allowed)
+        self.assertEqual(result.blocking_codes, ("SPEC_FREEZE_REQUIRED",))
+
     def test_close_requires_verify_and_promotion_completion(self) -> None:
         task = _task(
             plan_status="approved",
