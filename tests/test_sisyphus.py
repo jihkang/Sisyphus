@@ -3618,6 +3618,34 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(args.fixtures_dir, "benchmarks/tasks")
         self.assertTrue(args.json)
 
+    def test_parser_accepts_dataset_export_surface(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "dataset",
+                "export",
+                "--format",
+                "rl",
+                "--task-id",
+                "TF-20260614-feature-demo",
+                "--output",
+                "artifacts/dataset.jsonl",
+                "--max-action-count",
+                "12",
+            ]
+        )
+
+        self.assertEqual(args.repo_root, str(self.repo_root))
+        self.assertEqual(args.command, "dataset")
+        self.assertEqual(args.dataset_command, "export")
+        self.assertEqual(args.format, "rl")
+        self.assertEqual(args.task_id, "TF-20260614-feature-demo")
+        self.assertEqual(args.output, "artifacts/dataset.jsonl")
+        self.assertEqual(args.max_action_count, 12)
+
     def test_parser_accepts_serve_and_discord_bot_commands(self) -> None:
         parser = build_parser()
 
