@@ -25,6 +25,7 @@ from .creation import TaskCreationError, create_task_workspace
 from .daemon import run_daemon
 from .discovery import detect_repo_root
 from .episode_trace import check_episode_trace
+from .eval.loop import run_task_eval_loop
 from .evolution.handoff import EvolutionEvidenceSummary, EvolutionVerificationObligation
 from .evolution.operator import evaluate_evolution_followup_decision, request_evolution_followup
 from .evolution.surface import (
@@ -88,6 +89,14 @@ def build_parser() -> argparse.ArgumentParser:
     episode_check_parser.add_argument("task_id")
     episode_check_parser.add_argument("--episode-id")
     episode_check_parser.add_argument("--json", action="store_true")
+
+    eval_parser = subparsers.add_parser("eval")
+    eval_subparsers = eval_parser.add_subparsers(dest="eval_command", required=True)
+    eval_loop_parser = eval_subparsers.add_parser("loop")
+    eval_loop_parser.add_argument("task_id")
+    eval_loop_parser.add_argument("--episode-id")
+    eval_loop_parser.add_argument("--max-action-count", type=int, default=50)
+    eval_loop_parser.add_argument("--json", action="store_true")
 
     plan_parser = subparsers.add_parser("plan")
     plan_subparsers = plan_parser.add_subparsers(dest="plan_command", required=True)
@@ -431,6 +440,40 @@ def handle_episode_check(
             if isinstance(error, dict):
                 print(f"- {error.get('episode_id')}: {error.get('error')}")
     return 0 if summary["ok"] else 1
+
+
+def handle_eval_loop(
+    task_id: str,
+    episode_id: str | None,
+    max_action_count: int,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    result = run_task_eval_loop(
+        repo_root,
+        config,
+        task_id,
+        episode_id=episode_id,
+        max_action_count=max_action_count,
+    )
+    payload = result.to_dict()
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return 0
+
+    print(f"eval_loop: {task_id}")
+    print(f"terminal_status: {result.terminal_status}")
+    print(f"reward_total: {result.reward.total}")
+    print(f"actions: {result.action_count}")
+    print("metrics:")
+    for name, value in result.metrics.items():
+        print(f"- {name}: {value}")
+    test_first = payload.get("loop", {}).get("test_first", {}) if isinstance(payload.get("loop"), dict) else {}
+    if isinstance(test_first, dict):
+        print(f"test_first: {test_first.get('status')}")
+    return 0
 
 
 def handle_plan_approve(
@@ -1404,6 +1447,15 @@ def main() -> int:
             return handle_episode_check(
                 task_id=args.task_id,
                 episode_id=args.episode_id,
+                as_json=args.json,
+                repo_root=args.repo_root,
+            )
+    if args.command == "eval":
+        if args.eval_command == "loop":
+            return handle_eval_loop(
+                task_id=args.task_id,
+                episode_id=args.episode_id,
+                max_action_count=args.max_action_count,
                 as_json=args.json,
                 repo_root=args.repo_root,
             )

@@ -1,0 +1,275 @@
+{
+  "id": "TF-20260614-feature-add-eval-loop-runner",
+  "type": "feature",
+  "slug": "add-eval-loop-runner",
+  "status": "verified",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-06-14T10:41:02Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Scope refined to read-only offline eval loop, reward/metric alignment, and explicit test-first TODO phase.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Scope refined to read-only offline eval loop, reward/metric alignment, and explicit test-first TODO phase.",
+      "timestamp": "2026-06-14T10:41:02Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-06-14T10:41:05Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze spec after narrowing RL work to offline eval loop foundations and preserving test-first loop as a future phase.",
+  "audit_attempts": 2,
+  "max_audit_attempts": 10,
+  "created_at": "2026-06-14T09:02:37Z",
+  "updated_at": "2026-06-14T10:45:16Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260614-feature-add-eval-loop-runner",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-add-eval-loop-runner",
+  "branch": "feat/add-eval-loop-runner",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-06-14T10:45:16Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Closed, verified, green task with complete evidence scores positively.",
+        "checked": false
+      },
+      {
+        "name": "Eval loop output contains stable metric names aligned with reward fields.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Missing evidence is visible even when task state is otherwise verified.",
+        "checked": false
+      },
+      {
+        "name": "Excessive recorded episode actions are counted and penalized.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "False close and conformance yellow/red produce explicit penalty facts.",
+        "checked": false
+      },
+      {
+        "name": "Missing episode files are tolerated as zero recorded actions.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Closed verified task scores positively",
+        "method": "tests.test_eval_loop"
+      },
+      {
+        "target": "False close/conformance/missing evidence penalties are explicit",
+        "method": "tests.test_eval_loop` and `tests.test_reward"
+      },
+      {
+        "target": "CLI surface parses eval loop command",
+        "method": "tests.test_sisyphus"
+      },
+      {
+        "target": "Full repository behavior remains intact",
+        "method": "python -m unittest discover -s tests -v"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "design": {
+    "mode": "none",
+    "decision_reason": "existing contract only",
+    "confidence": "medium",
+    "layer_impact": "layer-preserving",
+    "layer_decision_reason": null,
+    "required_artifacts": [],
+    "artifacts": {
+      "connection_diagram": null,
+      "sequence_diagram": null,
+      "boundary_note": null
+    },
+    "frozen": {
+      "mode": "none",
+      "layer_impact": "layer-preserving",
+      "required_artifacts": [],
+      "artifacts": {
+        "connection_diagram": null,
+        "sequence_diagram": null,
+        "boundary_note": null
+      },
+      "anchor_summary": "mode=none, layer=layer-preserving",
+      "frozen_at": "2026-06-14T10:41:05Z"
+    },
+    "assessment": {
+      "status": "appropriate",
+      "summary": "design depth matches the current task shape",
+      "replan_required": false,
+      "escalation_reason": null,
+      "missing_artifacts": []
+    }
+  },
+  "promotion": {
+    "required": true,
+    "required_override": null,
+    "required_reason": "feature tasks are promotable by default",
+    "required_source": "classified",
+    "status": "promotion_pending",
+    "strategy": "direct",
+    "remote_name": null,
+    "parent_artifact_id": null,
+    "parent_task_id": null,
+    "base_override": null,
+    "base_branch": "main",
+    "base_source": null,
+    "base_reason": null,
+    "resolved_parent_branch": null,
+    "retarget_required": false,
+    "reverify_required": false,
+    "retarget_required_at": null,
+    "retarget_parent_task_id": null,
+    "retarget_parent_branch": null,
+    "retarget_merge_target": null,
+    "head_branch": "feat/add-eval-loop-runner",
+    "pr_number": null,
+    "pr_url": null,
+    "receipt_path": "artifacts/promotion/merge_receipt.json",
+    "execution_receipt_path": null,
+    "changeset_path": "CHANGESET.md",
+    "commit_message": null,
+    "repo_full_name": null,
+    "title": null,
+    "head_sha": null,
+    "merge_commit_sha": null,
+    "committed_at": null,
+    "pushed_at": null,
+    "pr_opened_at": null,
+    "merged_at": null,
+    "merged_by": null,
+    "merge_method": null,
+    "recorded_at": null
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": "design depth matches the current task shape",
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_design_anchor_at": "2026-06-14T10:41:05Z",
+    "last_design_anchor_source": "planning.freeze_task_spec",
+    "last_checkpoint_type": "design_assessment",
+    "last_checkpoint_source": "audit.design",
+    "last_checkpoint_at": "2026-06-14T10:45:16Z",
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": [
+      {
+        "id": "0dabe0cd88184000adce7badaed50bc9",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=none, layer=layer-preserving",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-06-14T10:41:05Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "77ed39a161ff4a0cbbd2fcc71b2b750b",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-06-14T10:44:44Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "1f3d3b525262427abfe51d24b1e98e5c",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-06-14T10:45:16Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      }
+    ]
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "promotion": {
+      "status": "promotion_pending",
+      "recorded_at": null,
+      "repo_full_name": null,
+      "pr_number": null,
+      "title": null,
+      "url": null,
+      "head_branch": "feat/add-eval-loop-runner",
+      "base_branch": "main",
+      "head_sha": null,
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "merged_by": null,
+      "merge_method": null,
+      "receipt_path": "artifacts/promotion/merge_receipt.json",
+      "changeset_path": "CHANGESET.md",
+      "parent_artifact_id": null,
+      "parent_task_id": null
+    },
+    "source_event_id": "evt-de8864966a14",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "add-eval-loop-runner",
+    "owned_paths": [
+      "src/sisyphus/reward.py",
+      "src/sisyphus/eval/",
+      "src/sisyphus/metrics.py",
+      "src/sisyphus/evolution/fitness.py",
+      "src/sisyphus/evolution/harness.py",
+      "src/sisyphus/cli.py",
+      "tests/test_reward.py",
+      "tests/test_eval_loop.py",
+      "tests/test_evolution.py"
+    ],
+    "requested_adopt_paths": [],
+    "evidence_graph_required": true
+  }
+}
