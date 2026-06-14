@@ -249,6 +249,7 @@ class McpCoreTests(unittest.TestCase):
         self.assertIn("evolution://<run-id>/report", resource_uris)
         self.assertIn("evolution://compare/<left-run-id>/<right-run-id>", resource_uris)
         self.assertIn("task://<task-id>/conformance", resource_uris)
+        self.assertIn("task://<task-id>/observation", resource_uris)
         self.assertIn("task://<task-id>/repro", resource_uris)
         self.assertIn("task://<task-id>/promotion", resource_uris)
         self.assertIn("task://<task-id>/changeset", resource_uris)
@@ -265,10 +266,17 @@ class McpCoreTests(unittest.TestCase):
         task = self._new_task("record")
 
         record_payload = self.core.read_resource(f"task://{task['id']}/record")
+        observation_payload = self.core.read_resource(f"task://{task['id']}/observation")
         brief_payload = self.core.read_resource(f"task://{task['id']}/brief")
 
         self.assertEqual(record_payload["task"]["id"], task["id"])
         self.assertEqual(record_payload["task"]["promotion"]["status"], "not_required")
+        self.assertEqual(observation_payload["task_id"], task["id"])
+        self.assertEqual(observation_payload["plan_status"], "pending_review")
+        self.assertIn("observation_hash", observation_payload)
+        self.assertIn("sisyphus.get_task", observation_payload["allowed_next_actions"])
+        forbidden_actions = {item["action"] for item in observation_payload["forbidden_next_actions"]}
+        self.assertIn("sisyphus.close_task", forbidden_actions)
         self.assertIn("# Brief", brief_payload)
 
     def test_task_record_resource_returns_doc_synced_projection_state(self) -> None:

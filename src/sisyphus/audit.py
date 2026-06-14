@@ -22,6 +22,7 @@ from .design import (
     ensure_task_design_defaults,
 )
 from .events import new_event_envelope
+from .gates import dedupe_gates as _dedupe_gates, make_gate as _gate
 from .planning import collect_plan_gates, reopen_task_plan_for_design_replan
 from .state import load_task_record, save_task_record, utc_now
 from .strategy import sync_test_strategy_from_docs
@@ -348,28 +349,6 @@ def _render_verify_markdown(task: dict, command_results: list[dict]) -> str:
             "",
         ]
     )
-
-
-def _gate(code: str, message: str, source: str) -> dict:
-    return {
-        "code": code,
-        "message": message,
-        "blocking": True,
-        "source": source,
-        "created_at": utc_now(),
-    }
-
-
-def _dedupe_gates(gates: list[dict]) -> list[dict]:
-    seen: set[tuple[str, str]] = set()
-    deduped: list[dict] = []
-    for gate in gates:
-        key = (gate.get("code", ""), gate.get("message", ""))
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(gate)
-    return deduped
 
 
 def _looks_like_unfilled_template(content: str) -> bool:

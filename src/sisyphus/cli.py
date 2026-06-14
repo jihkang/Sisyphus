@@ -35,6 +35,7 @@ from .evolution.surface import (
     render_evolution_run_report,
     render_evolution_run_status,
 )
+from .observation import render_task_observation
 from .planning import (
     approve_task_plan,
     enforce_plan_approved,
@@ -75,6 +76,10 @@ def build_parser() -> argparse.ArgumentParser:
     close_parser = subparsers.add_parser("close")
     close_parser.add_argument("task_id")
     close_parser.add_argument("--allow-dirty", action="store_true")
+
+    observe_parser = subparsers.add_parser("observe")
+    observe_parser.add_argument("task_id")
+    observe_parser.add_argument("--json", action="store_true")
 
     plan_parser = subparsers.add_parser("plan")
     plan_subparsers = plan_parser.add_subparsers(dest="plan_command", required=True)
@@ -351,6 +356,38 @@ def handle_close(task_id: str, allow_dirty: bool, repo_root: str | Path | None =
             print(f"- {gate['code']}: {gate['message']}")
         return 1
     print("gates: none")
+    return 0
+
+
+def handle_observe(task_id: str, as_json: bool, repo_root: str | Path | None = None) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    observation = render_task_observation(repo_root=repo_root, config=config, task_id=task_id)
+    if as_json:
+        print(json.dumps(observation, indent=2))
+        return 0
+
+    verification = observation.get("verification", {})
+    conformance = observation.get("conformance", {})
+    print(f"task: {observation.get('task_id')}")
+    print(f"status: {observation.get('status')}")
+    print(f"phase: {observation.get('phase')}")
+    print(f"plan_status: {observation.get('plan_status')}")
+    print(f"spec_status: {observation.get('spec_status')}")
+    print(f"verify_status: {verification.get('status') if isinstance(verification, dict) else None}")
+    print(f"conformance: {conformance.get('status') if isinstance(conformance, dict) else None}")
+    print(f"observation_hash: {observation.get('observation_hash')}")
+    allowed = observation.get("allowed_next_actions", [])
+    if isinstance(allowed, list) and allowed:
+        print("allowed_next_actions:")
+        for action in allowed:
+            print(f"- {action}")
+    forbidden = observation.get("forbidden_next_actions", [])
+    if isinstance(forbidden, list) and forbidden:
+        print("forbidden_next_actions:")
+        for item in forbidden:
+            if isinstance(item, dict):
+                print(f"- {item.get('action')}: {item.get('reason')}")
     return 0
 
 
@@ -1318,6 +1355,8 @@ def main() -> int:
         return handle_verify(task_id=args.task_id, repo_root=args.repo_root)
     if args.command == "close":
         return handle_close(task_id=args.task_id, allow_dirty=args.allow_dirty, repo_root=args.repo_root)
+    if args.command == "observe":
+        return handle_observe(task_id=args.task_id, as_json=args.json, repo_root=args.repo_root)
     if args.command == "plan":
         if args.plan_command == "approve":
             return handle_plan_approve(

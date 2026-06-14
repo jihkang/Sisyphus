@@ -541,6 +541,41 @@ class SisyphusVerifyTests(unittest.TestCase):
         self.assertEqual(reloaded["stage"], "promotion")
         self.assertEqual(reloaded["workflow_phase"], "promotion_pending")
 
+    def test_close_blocks_on_conformance_warning(self) -> None:
+        task = self._new_feature_task("close-conformance-warning")
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "verified"
+        persisted["stage"] = "done"
+        persisted["workflow_phase"] = "verified"
+        persisted["verify_status"] = "passed"
+        persisted["plan_status"] = "approved"
+        persisted["spec_status"] = "frozen"
+        persisted["promotion"] = {
+            "required": False,
+            "status": "not_required",
+            "strategy": "direct",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        append_conformance_log(
+            persisted,
+            checkpoint_type="post_exec",
+            status="yellow",
+            summary="implementation drift requires review",
+            source="test",
+            resolved=False,
+            drift=1,
+        )
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        outcome = run_close(self.repo_root, self.config, task["id"], allow_dirty=False)
+
+        self.assertFalse(outcome.closed)
+        gate_codes = {gate["code"] for gate in outcome.gates}
+        self.assertIn("CONFORMANCE_WARNING_UNRESOLVED", gate_codes)
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded["status"], "blocked")
+
     def test_close_succeeds_when_required_promotion_is_recorded(self) -> None:
         task = self._new_feature_task("close-promotion-recorded")
         task_file = self.repo_root / task["task_dir"] / "task.json"

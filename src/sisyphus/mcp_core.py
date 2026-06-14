@@ -36,6 +36,7 @@ from .planning import (
     revise_task_plan,
 )
 from .metrics import build_value_metrics_report
+from .observation import build_task_observation
 from .promotion_state import promotion_summary
 from .retrieval import retrieve_documents
 from .search_index import read_search_index, rebuild_search_index, search_index_status
@@ -448,6 +449,8 @@ class SisyphusMcpCoreService:
 
         if resource_name == "record":
             return {"task": task}
+        if resource_name == "observation":
+            return build_task_observation(task, task_dir)
         if resource_name == "conformance":
             return {"conformance": summarize_task_conformance(task)}
         if resource_name == "timeline":
@@ -1024,6 +1027,7 @@ def mcp_resource_definitions() -> list[dict[str, object]]:
         {"uri": "evolution://<run-id>/report", "description": "Read-only report for a persisted evolution run."},
         {"uri": "evolution://compare/<left-run-id>/<right-run-id>", "description": "Read-only comparison across two persisted evolution runs."},
         {"uri": "task://<task-id>/record", "description": "Raw task record JSON."},
+        {"uri": "task://<task-id>/observation", "description": "Compact agent-facing task observation JSON."},
         {"uri": "task://<task-id>/conformance", "description": "Task-level conformance summary."},
         {"uri": "task://<task-id>/timeline", "description": "Task and subtask conformance/drift timeline."},
         {"uri": "task://<task-id>/brief", "description": "Task brief markdown."},
