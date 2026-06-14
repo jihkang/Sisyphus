@@ -69,6 +69,7 @@ def evaluate_transition(task: dict, action: LifecycleAction | str) -> Transition
 
     if lifecycle_action == LifecycleAction.VERIFY:
         gates = list(collect_plan_gates(task, action="verify"))
+        gates.extend(collect_spec_execution_gates(task, action="verify"))
         gates.extend(collect_conformance_gates(task, action="verify"))
         if gates:
             return _blocked(task, lifecycle_action, *gates, reason="Verification is blocked by lifecycle gates.")

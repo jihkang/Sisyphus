@@ -16,6 +16,8 @@ from .gitops import (
     stage_all_changes,
     has_staged_changes,
 )
+from .lifecycle_guard import blocked_phase_for_transition, blocked_stage_for_transition, record_lifecycle_transition
+from .lifecycle_state import LifecycleAction
 from .metrics import publish_manual_intervention_required, publish_reopened_after_verify
 from .promotion_state import (
     PROMOTION_STATUS_COMMITTED,
@@ -93,6 +95,19 @@ def execute_promotion(
 
     if not bool(promotion.get("required")):
         raise ValueError(f"task `{task_id}` does not require promotion")
+
+    transition = record_lifecycle_transition(
+        task,
+        LifecycleAction.EXECUTE_PROMOTION,
+        gate_sources={"plan", "spec", "conformance", "promotion", "lifecycle"},
+    )
+    if not transition.allowed:
+        task["status"] = "blocked"
+        task["stage"] = blocked_stage_for_transition(transition)
+        task["workflow_phase"] = blocked_phase_for_transition(transition)
+        save_task_record(task_file=task_file, task=task)
+        gate_codes = ", ".join(transition.blocking_codes) or "lifecycle gate"
+        raise ValueError(f"promotion blocked by lifecycle gates: {gate_codes}")
 
     current_status = str(promotion.get("status") or "").strip()
     if current_status in {PROMOTION_STATUS_MERGED, PROMOTION_STATUS_RECORDED}:
@@ -464,6 +479,15 @@ def record_merged_pull_request(
         branch=branch,
         head_branch=head_branch,
     )
+    transition = record_lifecycle_transition(
+        task,
+        LifecycleAction.RECORD_MERGED_PR,
+        gate_sources={"lifecycle"},
+    )
+    if not transition.allowed:
+        save_task_record(task_file=task_file, task=task)
+        gate_codes = ", ".join(transition.blocking_codes) or "lifecycle gate"
+        raise ValueError(f"merged pull request recording blocked by lifecycle gates: {gate_codes}")
     recorded_at = utc_now()
     normalized_changed_files = _normalize_changed_files(changed_files)
     total_additions = _resolve_total_count(additions, normalized_changed_files, "additions")

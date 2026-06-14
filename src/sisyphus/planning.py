@@ -8,6 +8,7 @@ from .config import SisyphusConfig
 from .conformance import mark_design_anchor
 from .design import ensure_task_design_defaults, freeze_design_anchor
 from .gates import dedupe_gates as _dedupe_gates, make_gate as _gate
+from .lifecycle_state import LifecycleAction
 from .state import load_task_record, save_task_record, utc_now
 from .strategy import sync_test_strategy_from_docs
 
@@ -93,6 +94,17 @@ def approve_task_plan(
 ) -> PlanReviewOutcome:
     task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
     _ensure_plan_fields(task)
+    transition = _record_lifecycle_transition(task, LifecycleAction.APPROVE_PLAN, gate_sources={"lifecycle"})
+    if not transition.allowed:
+        task["status"] = "blocked"
+        task["stage"] = "plan_review"
+        save_task_record(task_file=task_file, task=task)
+        return PlanReviewOutcome(
+            task_id=task["id"],
+            plan_status=current_plan_status(task),
+            task_status=task["status"],
+            gates=task["gates"],
+        )
     task["plan_status"] = PLAN_APPROVED
     task["plan_reviewed_at"] = utc_now()
     task["plan_reviewed_by"] = reviewer.strip() or "operator"
@@ -129,6 +141,17 @@ def request_plan_changes(
 ) -> PlanReviewOutcome:
     task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
     _ensure_plan_fields(task)
+    transition = _record_lifecycle_transition(task, LifecycleAction.REQUEST_PLAN_CHANGES, gate_sources={"lifecycle"})
+    if not transition.allowed:
+        task["status"] = "blocked"
+        task["stage"] = "plan_review"
+        save_task_record(task_file=task_file, task=task)
+        return PlanReviewOutcome(
+            task_id=task["id"],
+            plan_status=current_plan_status(task),
+            task_status=task["status"],
+            gates=task["gates"],
+        )
     task["plan_status"] = PLAN_CHANGES_REQUESTED
     task["plan_review_round"] = int(task.get("plan_review_round", 0)) + 1
     task["plan_reviewed_at"] = utc_now()
@@ -170,6 +193,18 @@ def revise_task_plan(
 ) -> PlanReviewOutcome:
     task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
     _ensure_plan_fields(task)
+    transition = _record_lifecycle_transition(task, LifecycleAction.REVISE_PLAN, gate_sources={"plan", "lifecycle"})
+    if not transition.allowed:
+        task["status"] = "blocked"
+        task["stage"] = "plan_review"
+        task["workflow_phase"] = "plan_revision"
+        save_task_record(task_file=task_file, task=task)
+        return PlanReviewOutcome(
+            task_id=task["id"],
+            plan_status=current_plan_status(task),
+            task_status=task["status"],
+            gates=task["gates"],
+        )
     task["plan_status"] = PLAN_PENDING_REVIEW
     task["plan_reviewed_at"] = utc_now()
     task["plan_reviewed_by"] = author.strip() or "operator"
@@ -233,10 +268,8 @@ def freeze_task_spec(
     _ensure_spec_fields(task)
     task = sync_test_strategy_from_docs(task=task, task_dir=task_file.parent)
     task["plan_status"] = current_plan_status(task)
-    task["gates"] = [gate for gate in task.get("gates", []) if gate.get("source") != "spec"]
-    plan_gates = collect_plan_gates(task, action="spec freeze")
-    if plan_gates:
-        task["gates"] = _dedupe_gates([gate for gate in task.get("gates", []) if gate.get("source") != "plan"] + plan_gates)
+    transition = _record_lifecycle_transition(task, LifecycleAction.FREEZE_SPEC, gate_sources={"plan", "spec", "lifecycle"})
+    if not transition.allowed:
         task["status"] = "blocked"
         task["stage"] = "plan_review"
         task["workflow_phase"] = "needs_user_input"
@@ -296,6 +329,17 @@ def generate_subtasks(
     _ensure_spec_fields(task)
     task_dir = task_file.parent
     task = sync_test_strategy_from_docs(task=task, task_dir=task_dir)
+    transition = _record_lifecycle_transition(task, LifecycleAction.GENERATE_SUBTASKS, gate_sources={"plan", "spec", "lifecycle"})
+    if not transition.allowed:
+        task["status"] = "blocked"
+        task["stage"] = "plan_review" if any(gate.get("source") == "plan" for gate in task["gates"]) else "spec"
+        task["workflow_phase"] = "plan_in_review" if task["stage"] == "plan_review" else "spec_in_review"
+        save_task_record(task_file=task_file, task=task)
+        return SubtaskGenerationOutcome(
+            task_id=task["id"],
+            workflow_phase=task["workflow_phase"],
+            subtasks=list(task.get("subtasks", [])),
+        )
     task["subtasks"] = _build_subtasks(task)
     task["workflow_phase"] = "execution"
     save_task_record(task_file=task_file, task=task)
@@ -365,6 +409,12 @@ def _append_review_history(task: dict, *, action: str, actor: str, notes: str | 
         }
     )
     task["plan_review_history"] = history
+
+
+def _record_lifecycle_transition(task: dict, action: LifecycleAction, *, gate_sources: set[str]):
+    from .lifecycle_guard import record_lifecycle_transition
+
+    return record_lifecycle_transition(task, action, gate_sources=gate_sources)
 
 
 def reopen_task_plan_for_design_replan(
