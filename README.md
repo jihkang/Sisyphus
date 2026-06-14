@@ -1,6 +1,20 @@
 # Sisyphus
 
-Sisyphus is a Python work orchestration tool for repository-local planning, artifact projection, obligation execution, verification, promotion, and closeout. It is designed to be installed once and then run inside any target project repository.
+Sisyphus is a stateful harness for AI-assisted software work. It externalizes agent memory into repository-local task state, artifact projections, lifecycle gates, verification claims, evidence graphs, episode traces, and promotion records.
+
+Instead of asking an AI worker to infer progress from chat history, Sisyphus exposes a structured control plane through CLI and MCP tools:
+
+```text
+state_t
+-> observation_t
+-> action_t
+-> transition
+-> state_t+1
+```
+
+That makes Sisyphus useful as both a task lifecycle tool and an agent evaluation environment. Current runtime support includes task observation rendering, explicit action risk levels, episode trace capture, curated evidence, reward-aligned eval output, benchmark fixtures, test-first loop checks, and SFT/RL dataset export. Online RL training is not part of the current runtime; the implemented boundary is the environment interface and offline data path.
+
+Sisyphus is designed to be installed once and then run inside any target project repository.
 
 Preferred command:
 
@@ -15,6 +29,18 @@ That command creates and manages task state in the current repository:
 - project worktrees and task branches
 
 Sisyphus itself does not need to live inside the target repository. The important rule is simple: run `sisyphus` from the repo you want to manage, or pass `--repo` explicitly.
+
+## Harness Loop
+
+The agent-facing loop starts from recorded task state rather than chat transcript reconstruction:
+
+1. Sisyphus owns task state, lifecycle rules, conformance, gates, evidence, and closeout.
+2. `sisyphus observe <task-id> --json` renders compact state for a worker or policy.
+3. The worker selects an allowed action such as search, context build, plan revision, subtask generation, or verification.
+4. Sisyphus validates the action against lifecycle and risk boundaries.
+5. The transition result, state diff, reward facts, and evidence remain inspectable in repository-local artifacts.
+
+Review and judgment remain conservative. Actions such as plan approval, spec freeze, close, promotion execution, and merged-PR recording are review-gated or human-only in the action registry.
 
 ## Install
 
@@ -148,6 +174,7 @@ sisyphus agents --json
 Manual lifecycle commands:
 
 ```bash
+sisyphus observe <task-id> --json
 sisyphus plan approve <task-id> --by reviewer
 sisyphus plan request-changes <task-id> --by reviewer --notes "split the work more clearly"
 sisyphus plan revise <task-id> --by worker --notes "updated the plan"
@@ -155,6 +182,17 @@ sisyphus spec freeze <task-id> --by reviewer
 sisyphus subtasks generate <task-id>
 sisyphus verify <task-id>
 sisyphus close <task-id>
+```
+
+Harness and evaluation commands:
+
+```bash
+sisyphus episode check <task-id> --json
+sisyphus eval loop <task-id> --json
+sisyphus eval test-first <task-id> --json
+sisyphus benchmark run --json
+sisyphus dataset export --format sft --task-id <task-id>
+sisyphus dataset export --format rl --output artifacts/rollouts.jsonl
 ```
 
 ## Workflow
@@ -191,6 +229,18 @@ Key persisted artifact outputs currently include:
 
 - `.planning/tasks/<task-id>/artifacts/projection/feature-change.json`
 - `.planning/tasks/<task-id>/artifacts/obligations/compiled.json`
+- `.planning/tasks/<task-id>/artifacts/episodes/<episode-id>.jsonl`
+- `.planning/tasks/<task-id>/artifacts/evidence/evidence-graph.json`
+
+Related documentation:
+
+- `docs/research/stateful-agent-harness.md`
+- `docs/research/harness-1-comparison.md`
+- `docs/rl-action-space.md`
+- `docs/reward-model.md`
+- `docs/episode-trace.md`
+- `docs/curated-evidence.md`
+- `docs/dataset-export.md`
 
 ## Discord Bot
 
