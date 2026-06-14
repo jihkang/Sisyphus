@@ -52,6 +52,7 @@ from sisyphus.daemon import (
 )
 from sisyphus.discovery import detect_repo_root
 from sisyphus.discord_bot import build_discord_source_context, queue_discord_conversation
+from sisyphus.evidence_graph import read_evidence_graph, write_evidence_graph
 from sisyphus.events import new_event_envelope
 from sisyphus.metrics import (
     MANUAL_INTERVENTION_REQUIRED_EVENT,
@@ -239,6 +240,12 @@ class SisyphusVerifyTests(unittest.TestCase):
         self.assertEqual(reloaded["workflow_phase"], "verified")
         self.assertEqual(reloaded["gates"], [])
         self.assertEqual(reloaded["last_verify_results"][0]["status"], "passed")
+        evidence_graph = read_evidence_graph(task_dir)
+        self.assertIsNotNone(evidence_graph)
+        assert evidence_graph is not None
+        self.assertEqual(evidence_graph["task_id"], task["id"])
+        self.assertEqual(evidence_graph["verify_status"], "passed")
+        self.assertGreaterEqual(len(evidence_graph["curated_evidence"]), 2)
 
     def test_verify_reopens_plan_when_design_is_underdesigned(self) -> None:
         task = self._new_feature_task("design-replan")
@@ -698,6 +705,75 @@ class SisyphusVerifyTests(unittest.TestCase):
         self.assertIn("CONFORMANCE_WARNING_UNRESOLVED", gate_codes)
         reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
         self.assertEqual(reloaded["status"], "blocked")
+
+    def test_close_blocks_new_verified_task_missing_evidence_graph(self) -> None:
+        task = self._new_feature_task("close-missing-evidence")
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "verified"
+        persisted["stage"] = "done"
+        persisted["workflow_phase"] = "verified"
+        persisted["verify_status"] = "passed"
+        persisted["last_verified_at"] = "2026-06-14T00:00:00Z"
+        persisted.setdefault("meta", {})["evidence_graph_required"] = True
+        persisted["plan_status"] = "approved"
+        persisted["spec_status"] = "frozen"
+        persisted["promotion"] = {
+            "required": False,
+            "status": "not_required",
+            "strategy": "direct",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        outcome = run_close(self.repo_root, self.config, task["id"], allow_dirty=False)
+
+        self.assertFalse(outcome.closed)
+        self.assertIn("EVIDENCE_GRAPH_MISSING", {gate["code"] for gate in outcome.gates})
+
+    def test_close_blocks_unsupported_high_importance_evidence(self) -> None:
+        task = self._new_feature_task("close-unsupported-evidence")
+        task_dir = self.repo_root / task["task_dir"]
+        task_file = task_dir / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "verified"
+        persisted["stage"] = "done"
+        persisted["workflow_phase"] = "verified"
+        persisted["verify_status"] = "passed"
+        persisted["last_verified_at"] = "2026-06-14T00:00:00Z"
+        persisted.setdefault("meta", {})["evidence_graph_required"] = True
+        persisted["plan_status"] = "approved"
+        persisted["spec_status"] = "frozen"
+        persisted["promotion"] = {
+            "required": False,
+            "status": "not_required",
+            "strategy": "direct",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+        write_evidence_graph(
+            task_dir,
+            {
+                "schema_version": "sisyphus.evidence_graph.v1",
+                "task_id": task["id"],
+                "curated_evidence": [
+                    {
+                        "id": "ev-001",
+                        "claim": "Unit tests pass.",
+                        "verdict": "unsupported",
+                        "importance": "high",
+                        "blocking": True,
+                    }
+                ],
+                "unsupported_claims": [],
+                "blocking_gaps": [],
+            },
+        )
+
+        outcome = run_close(self.repo_root, self.config, task["id"], allow_dirty=False)
+
+        self.assertFalse(outcome.closed)
+        self.assertIn("EVIDENCE_UNSUPPORTED_HIGH_IMPORTANCE", {gate["code"] for gate in outcome.gates})
 
     def test_close_succeeds_when_required_promotion_is_recorded(self) -> None:
         task = self._new_feature_task("close-promotion-recorded")
