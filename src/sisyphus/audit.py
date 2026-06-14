@@ -21,6 +21,7 @@ from .design import (
     evaluate_design_adequacy,
     ensure_task_design_defaults,
 )
+from .evidence_graph import build_evidence_graph, write_evidence_graph
 from .events import new_event_envelope
 from .gates import dedupe_gates as _dedupe_gates, make_gate as _gate
 from .lifecycle_guard import blocked_phase_for_transition, blocked_stage_for_transition, record_lifecycle_transition
@@ -168,6 +169,8 @@ def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyO
 
     verify_file = task_dir / task["docs"]["verify"]
     verify_file.write_text(_render_verify_markdown(task, command_results), encoding="utf-8")
+    task.setdefault("meta", {})["evidence_graph_required"] = True
+    write_evidence_graph(task_dir, build_evidence_graph(task, task_dir, command_results))
     save_task_record(task_file=task_file, task=task)
     build_event_publisher(repo_root, config).publish(
         new_event_envelope(

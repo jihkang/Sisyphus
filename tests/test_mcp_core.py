@@ -252,6 +252,7 @@ class McpCoreTests(unittest.TestCase):
         self.assertIn("evolution://compare/<left-run-id>/<right-run-id>", resource_uris)
         self.assertIn("task://<task-id>/conformance", resource_uris)
         self.assertIn("task://<task-id>/observation", resource_uris)
+        self.assertIn("task://<task-id>/evidence", resource_uris)
         self.assertIn("task://<task-id>/repro", resource_uris)
         self.assertIn("task://<task-id>/promotion", resource_uris)
         self.assertIn("task://<task-id>/changeset", resource_uris)
@@ -269,6 +270,7 @@ class McpCoreTests(unittest.TestCase):
 
         record_payload = self.core.read_resource(f"task://{task['id']}/record")
         observation_payload = self.core.read_resource(f"task://{task['id']}/observation")
+        evidence_payload = self.core.read_resource(f"task://{task['id']}/evidence")
         brief_payload = self.core.read_resource(f"task://{task['id']}/brief")
 
         self.assertEqual(record_payload["task"]["id"], task["id"])
@@ -279,6 +281,9 @@ class McpCoreTests(unittest.TestCase):
         self.assertIn("sisyphus.get_task", observation_payload["allowed_next_actions"])
         forbidden_actions = {item["action"] for item in observation_payload["forbidden_next_actions"]}
         self.assertIn("sisyphus.close_task", forbidden_actions)
+        self.assertEqual(evidence_payload["task_id"], task["id"])
+        self.assertEqual(evidence_payload["status"], "not_required")
+        self.assertEqual(evidence_payload["curated_evidence"], [])
         self.assertIn("# Brief", brief_payload)
 
     def test_task_record_resource_returns_doc_synced_projection_state(self) -> None:

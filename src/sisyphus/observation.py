@@ -5,6 +5,7 @@ from pathlib import Path
 from .action_space import allowed_policy_actions, forbidden_policy_actions
 from .config import SisyphusConfig
 from .conformance import summarize_task_conformance
+from .evidence_graph import summarize_evidence_graph
 from .fingerprint import stable_json_hash
 from .promotion_state import promotion_summary
 from .state import load_task_record
@@ -53,6 +54,7 @@ def build_task_observation(task: dict, task_dir: Path) -> dict[str, object]:
         "gates": gates,
         "required_docs": _required_doc_status(task, task_dir),
         "subtasks": _subtask_summary(task),
+        "evidence_summary": summarize_evidence_graph(task, task_dir),
         "promotion": _promotion_observation(task),
         "allowed_next_actions": list(allowed_policy_actions(task)),
         "forbidden_next_actions": list(forbidden_policy_actions(task)),

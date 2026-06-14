@@ -6,6 +6,7 @@ import subprocess
 
 from .bus import build_event_publisher
 from .config import SisyphusConfig
+from .evidence_graph import collect_evidence_close_gates
 from .events import new_event_envelope
 from .gates import dedupe_gates as _dedupe_gates, make_gate as _gate
 from .lifecycle_rules import evaluate_transition
@@ -28,10 +29,11 @@ def run_close(repo_root: Path, config: SisyphusConfig, task_id: str, allow_dirty
     gates = [
         gate
         for gate in task.get("gates", [])
-        if gate.get("source") not in {"close", "plan", "conformance", "promotion"}
+        if gate.get("source") not in {"close", "plan", "conformance", "promotion", "evidence"}
     ]
     transition = evaluate_transition(task, LifecycleAction.CLOSE)
     gates.extend(transition.gates)
+    gates.extend(collect_evidence_close_gates(task, task_file.parent))
 
     dirty = is_dirty_worktree(_resolve_dirty_check_path(repo_root=repo_root, task=task))
     if dirty and not allow_dirty:

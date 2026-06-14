@@ -14,6 +14,7 @@ from .config import load_config
 from .conformance import ensure_task_conformance_defaults, summarize_subtask_conformance, summarize_task_conformance
 from .context_pack import build_and_persist_context_pack, read_context_pack
 from .daemon import run_daemon
+from .evidence_graph import evidence_resource_payload
 from .episode_trace import append_episode_step, build_episode_step, default_episode_id, next_episode_step
 from .evolution.handoff import EvolutionEvidenceSummary, EvolutionVerificationObligation
 from .evolution.operator import (
@@ -521,6 +522,8 @@ class SisyphusMcpCoreService:
             return build_task_observation(task, task_dir)
         if resource_name == "conformance":
             return {"conformance": summarize_task_conformance(task)}
+        if resource_name == "evidence":
+            return evidence_resource_payload(task, task_dir)
         if resource_name == "timeline":
             return _task_timeline_resource(task)
         if resource_name == "promotion":
@@ -1137,6 +1140,7 @@ def mcp_resource_definitions() -> list[dict[str, object]]:
         {"uri": "task://<task-id>/record", "description": "Raw task record JSON."},
         {"uri": "task://<task-id>/observation", "description": "Compact agent-facing task observation JSON."},
         {"uri": "task://<task-id>/conformance", "description": "Task-level conformance summary."},
+        {"uri": "task://<task-id>/evidence", "description": "Structured curated evidence graph for verification and closeout."},
         {"uri": "task://<task-id>/timeline", "description": "Task and subtask conformance/drift timeline."},
         {"uri": "task://<task-id>/brief", "description": "Task brief markdown."},
         {"uri": "task://<task-id>/plan", "description": "Task plan markdown."},
