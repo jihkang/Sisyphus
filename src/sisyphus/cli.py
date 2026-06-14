@@ -24,6 +24,7 @@ from .config import load_config
 from .context_pack import build_and_persist_context_pack
 from .creation import TaskCreationError, create_task_workspace
 from .daemon import run_daemon
+from .dataset_export import DATASET_FORMATS, export_dataset
 from .discovery import detect_repo_root
 from .episode_trace import check_episode_trace, read_episode_steps
 from .eval.loop import run_task_eval_loop
@@ -109,6 +110,14 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_run_parser = benchmark_subparsers.add_parser("run")
     benchmark_run_parser.add_argument("--fixtures-dir")
     benchmark_run_parser.add_argument("--json", action="store_true")
+
+    dataset_parser = subparsers.add_parser("dataset")
+    dataset_subparsers = dataset_parser.add_subparsers(dest="dataset_command", required=True)
+    dataset_export_parser = dataset_subparsers.add_parser("export")
+    dataset_export_parser.add_argument("--format", choices=DATASET_FORMATS, required=True)
+    dataset_export_parser.add_argument("--task-id")
+    dataset_export_parser.add_argument("--output")
+    dataset_export_parser.add_argument("--max-action-count", type=int, default=50)
 
     plan_parser = subparsers.add_parser("plan")
     plan_subparsers = plan_parser.add_subparsers(dest="plan_command", required=True)
@@ -542,6 +551,34 @@ def handle_benchmark_run(
         print(json.dumps(result.to_dict(), indent=2))
     else:
         print(render_benchmark_markdown(result), end="")
+    return 0
+
+
+def handle_dataset_export(
+    *,
+    format: str,
+    task_id: str | None,
+    output: str | None,
+    max_action_count: int,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    output_path = Path(output) if output else None
+    if output_path is not None and not output_path.is_absolute():
+        output_path = repo_root / output_path
+    result = export_dataset(
+        repo_root,
+        config,
+        format=format,
+        task_id=task_id,
+        output_path=output_path,
+        max_action_count=max_action_count,
+    )
+    if output_path is None:
+        print(result.to_jsonl(), end="")
+    else:
+        print(json.dumps(result.summary(), indent=2))
     return 0
 
 
@@ -1540,6 +1577,15 @@ def main() -> int:
             return handle_benchmark_run(
                 fixtures_dir=args.fixtures_dir,
                 as_json=args.json,
+                repo_root=args.repo_root,
+            )
+    if args.command == "dataset":
+        if args.dataset_command == "export":
+            return handle_dataset_export(
+                format=args.format,
+                task_id=args.task_id,
+                output=args.output,
+                max_action_count=args.max_action_count,
                 repo_root=args.repo_root,
             )
     if args.command == "plan":
