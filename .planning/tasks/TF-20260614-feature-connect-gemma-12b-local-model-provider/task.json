@@ -1,0 +1,212 @@
+{
+  "id": "TF-20260614-feature-connect-gemma-12b-local-model-provider",
+  "type": "feature",
+  "slug": "connect-gemma-12b-local-model-provider",
+  "status": "open",
+  "stage": "spec",
+  "plan_status": "pending_review",
+  "plan_reviewed_at": null,
+  "plan_reviewed_by": null,
+  "plan_review_notes": null,
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [],
+  "workflow_phase": "plan_in_review",
+  "spec_status": "draft",
+  "spec_frozen_at": null,
+  "spec_reviewed_by": null,
+  "spec_review_notes": null,
+  "audit_attempts": 0,
+  "max_audit_attempts": 10,
+  "created_at": "2026-06-14T11:40:30Z",
+  "updated_at": "2026-06-14T11:40:31Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260614-feature-connect-gemma-12b-local-model-provider",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider",
+  "branch": "feat/connect-gemma-12b-local-model-provider",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "not_run",
+  "last_verified_at": null,
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Requested conversation workflow succeeds",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Minimal valid input still behaves predictably",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Unexpected failure surfaces an actionable error",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Requested conversation workflow succeeds",
+        "method": "sisyphus verify"
+      },
+      {
+        "target": "Minimal valid input still behaves predictably",
+        "method": "targeted regression test"
+      },
+      {
+        "target": "Unexpected failure surfaces an actionable error",
+        "method": "manual review"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "design": {
+    "mode": "none",
+    "decision_reason": "existing contract only",
+    "confidence": "medium",
+    "layer_impact": "layer-preserving",
+    "layer_decision_reason": null,
+    "required_artifacts": [],
+    "artifacts": {
+      "connection_diagram": null,
+      "sequence_diagram": null,
+      "boundary_note": null
+    },
+    "frozen": {
+      "mode": "none",
+      "layer_impact": "layer-preserving",
+      "required_artifacts": [],
+      "artifacts": {
+        "connection_diagram": null,
+        "sequence_diagram": null,
+        "boundary_note": null
+      },
+      "anchor_summary": null,
+      "frozen_at": null
+    },
+    "assessment": {
+      "status": "not_assessed",
+      "summary": null,
+      "replan_required": false,
+      "escalation_reason": null,
+      "missing_artifacts": []
+    }
+  },
+  "promotion": {
+    "required": true,
+    "required_override": null,
+    "required_reason": "feature tasks are promotable by default",
+    "required_source": "classified",
+    "status": "promotion_pending",
+    "strategy": "direct",
+    "remote_name": null,
+    "parent_artifact_id": null,
+    "parent_task_id": null,
+    "base_override": null,
+    "base_branch": "main",
+    "base_source": null,
+    "base_reason": null,
+    "resolved_parent_branch": null,
+    "retarget_required": false,
+    "reverify_required": false,
+    "retarget_required_at": null,
+    "retarget_parent_task_id": null,
+    "retarget_parent_branch": null,
+    "retarget_merge_target": null,
+    "head_branch": "feat/connect-gemma-12b-local-model-provider",
+    "pr_number": null,
+    "pr_url": null,
+    "receipt_path": "artifacts/promotion/merge_receipt.json",
+    "execution_receipt_path": null,
+    "changeset_path": "CHANGESET.md",
+    "commit_message": null,
+    "repo_full_name": null,
+    "title": null,
+    "head_sha": null,
+    "merge_commit_sha": null,
+    "committed_at": null,
+    "pushed_at": null,
+    "pr_opened_at": null,
+    "merged_at": null,
+    "merged_by": null,
+    "merge_method": null,
+    "recorded_at": null
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": null,
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_design_anchor_at": null,
+    "last_design_anchor_source": null,
+    "last_checkpoint_type": null,
+    "last_checkpoint_source": null,
+    "last_checkpoint_at": null,
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": []
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "promotion": {
+      "status": "promotion_pending",
+      "recorded_at": null,
+      "repo_full_name": null,
+      "pr_number": null,
+      "title": null,
+      "url": null,
+      "head_branch": "feat/connect-gemma-12b-local-model-provider",
+      "base_branch": "main",
+      "head_sha": null,
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "merged_by": null,
+      "merge_method": null,
+      "receipt_path": "artifacts/promotion/merge_receipt.json",
+      "changeset_path": "CHANGESET.md",
+      "parent_artifact_id": null,
+      "parent_task_id": null
+    },
+    "source_event_id": "evt-bcea589ff62e",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "connect-gemma-12b-local-model-provider",
+    "owned_paths": [
+      "src/sisyphus/agent_runtime.py",
+      "src/sisyphus/providers",
+      "src/sisyphus/cli.py",
+      "docs/local-models.md",
+      "tests/test_sisyphus.py"
+    ],
+    "requested_adopt_paths": []
+  }
+}

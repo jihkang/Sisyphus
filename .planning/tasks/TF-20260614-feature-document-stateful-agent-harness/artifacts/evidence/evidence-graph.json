@@ -1,0 +1,197 @@
+{
+  "blocking_gaps": [],
+  "claims": [
+    {
+      "blocking": true,
+      "id": "claim-readme-harness-positioning",
+      "importance": "high",
+      "linked_spec_section": "BRIEF.md#acceptance-criteria",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "README positions Sisyphus as a stateful agent harness/control plane."
+    },
+    {
+      "blocking": true,
+      "id": "claim-observation-first-agents",
+      "importance": "high",
+      "linked_spec_section": "BRIEF.md#acceptance-criteria",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "AGENTS.md includes observation-first guidance."
+    },
+    {
+      "blocking": true,
+      "id": "claim-harness-docs",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#implementation-plan",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Harness docs cover action space, reward model, episode trace, curated evidence, dataset export, and Harness-1 comparison."
+    },
+    {
+      "blocking": false,
+      "id": "claim-gemma-follow-up",
+      "importance": "medium",
+      "linked_spec_section": "LOG.md#timeline",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "A linked Gemma 12B local model provider follow-up task was recorded."
+    },
+    {
+      "blocking": true,
+      "id": "claim-verification-passed",
+      "importance": "high",
+      "linked_spec_section": "VERIFY.md#audit-summary",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Documentation checks, full tests, diff check, and Sisyphus verify passed."
+    }
+  ],
+  "curated_evidence": [
+    {
+      "blocking": false,
+      "claim": "README positions Sisyphus as a stateful agent harness/control plane.",
+      "id": "ev-readme",
+      "importance": "high",
+      "linked_spec_section": "BRIEF.md#acceptance-criteria",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:42:58Z",
+      "reproducibility": "high",
+      "source": {
+        "path": "README.md"
+      },
+      "supports": [
+        "claim-readme-harness-positioning"
+      ],
+      "type": "file_diff",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "AGENTS.md includes observation-first guidance.",
+      "id": "ev-agents",
+      "importance": "high",
+      "linked_spec_section": "BRIEF.md#acceptance-criteria",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:42:58Z",
+      "reproducibility": "high",
+      "source": {
+        "path": "AGENTS.md"
+      },
+      "supports": [
+        "claim-observation-first-agents"
+      ],
+      "type": "file_diff",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Harness docs cover action space, reward model, episode trace, curated evidence, dataset export, and Harness-1 comparison.",
+      "id": "ev-doc-files",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#implementation-plan",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:42:58Z",
+      "reproducibility": "high",
+      "source": {
+        "paths": [
+          "docs/research/stateful-agent-harness.md",
+          "docs/research/harness-1-comparison.md",
+          "docs/rl-action-space.md",
+          "docs/reward-model.md",
+          "docs/episode-trace.md",
+          "docs/curated-evidence.md",
+          "docs/dataset-export.md"
+        ]
+      },
+      "supports": [
+        "claim-harness-docs"
+      ],
+      "type": "file_diff",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "A linked Gemma 12B local model provider follow-up task was recorded.",
+      "id": "ev-gemma-task",
+      "importance": "medium",
+      "linked_spec_section": "LOG.md#timeline",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:42:58Z",
+      "reproducibility": "high",
+      "source": {
+        "resource": "task://TF-20260614-feature-connect-gemma-12b-local-model-provider/record"
+      },
+      "supports": [
+        "claim-gemma-follow-up"
+      ],
+      "type": "task_record",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Documentation path and keyword checks passed.",
+      "id": "ev-doc-checks",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#verification-mapping",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:42:58Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "test -f docs/research/stateful-agent-harness.md && rg -n \"state_t|task://<task-id>/observation|sisyphus dataset export|ActionRiskLevel|REWARD_METRIC_NAMES|TF-20260614-feature-connect-gemma-12b-local-model-provider\" README.md AGENTS.md docs",
+        "exit_code": 0,
+        "output_excerpt": "All referenced docs and key harness terms were found."
+      },
+      "supports": [
+        "claim-harness-docs",
+        "claim-gemma-follow-up",
+        "claim-verification-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Full repository unittest suite passed.",
+      "id": "ev-full-suite",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#verification-mapping",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:42:58Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "env PYTHONDONTWRITEBYTECODE=1 /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest discover -s tests -v",
+        "exit_code": 0,
+        "output_excerpt": "Ran 361 tests in 6.868s OK"
+      },
+      "supports": [
+        "claim-verification-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Sisyphus verify passed with no gates.",
+      "id": "ev-sisyphus-verify",
+      "importance": "high",
+      "linked_spec_section": "VERIFY.md#audit-summary",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:42:58Z",
+      "reproducibility": "high",
+      "source": {
+        "resource": "task://TF-20260614-feature-document-stateful-agent-harness/record"
+      },
+      "supports": [
+        "claim-verification-passed"
+      ],
+      "type": "verification_status",
+      "verdict": "supports"
+    }
+  ],
+  "generated_at": "2026-06-14T11:42:58Z",
+  "schema_version": "sisyphus.evidence_graph.v1",
+  "task_id": "TF-20260614-feature-document-stateful-agent-harness",
+  "unsupported_claims": [],
+  "verify_status": "passed"
+}
