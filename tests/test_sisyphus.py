@@ -3574,6 +3574,27 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(args.max_action_count, 12)
         self.assertTrue(args.json)
 
+    def test_parser_accepts_benchmark_run_surface(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "benchmark",
+                "run",
+                "--fixtures-dir",
+                "benchmarks/tasks",
+                "--json",
+            ]
+        )
+
+        self.assertEqual(args.repo_root, str(self.repo_root))
+        self.assertEqual(args.command, "benchmark")
+        self.assertEqual(args.benchmark_command, "run")
+        self.assertEqual(args.fixtures_dir, "benchmarks/tasks")
+        self.assertTrue(args.json)
+
     def test_parser_accepts_serve_and_discord_bot_commands(self) -> None:
         parser = build_parser()
 

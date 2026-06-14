@@ -18,6 +18,7 @@ from .api import queue_conversation, request_task
 from .api import queue_pull_request_merged as queue_pull_request_merged_api
 from .agent_runtime import run_tracked_agent
 from .audit import run_verify
+from .benchmark import BenchmarkFixtureError, default_benchmark_fixture_dir, render_benchmark_markdown, run_benchmark_suite
 from .closeout import run_close
 from .config import load_config
 from .context_pack import build_and_persist_context_pack
@@ -97,6 +98,12 @@ def build_parser() -> argparse.ArgumentParser:
     eval_loop_parser.add_argument("--episode-id")
     eval_loop_parser.add_argument("--max-action-count", type=int, default=50)
     eval_loop_parser.add_argument("--json", action="store_true")
+
+    benchmark_parser = subparsers.add_parser("benchmark")
+    benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command", required=True)
+    benchmark_run_parser = benchmark_subparsers.add_parser("run")
+    benchmark_run_parser.add_argument("--fixtures-dir")
+    benchmark_run_parser.add_argument("--json", action="store_true")
 
     plan_parser = subparsers.add_parser("plan")
     plan_subparsers = plan_parser.add_subparsers(dest="plan_command", required=True)
@@ -473,6 +480,28 @@ def handle_eval_loop(
     test_first = payload.get("loop", {}).get("test_first", {}) if isinstance(payload.get("loop"), dict) else {}
     if isinstance(test_first, dict):
         print(f"test_first: {test_first.get('status')}")
+    return 0
+
+
+def handle_benchmark_run(
+    *,
+    fixtures_dir: str | None,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    fixture_path = Path(fixtures_dir) if fixtures_dir else default_benchmark_fixture_dir(repo_root)
+    if not fixture_path.is_absolute():
+        fixture_path = repo_root / fixture_path
+    try:
+        result = run_benchmark_suite(fixture_path)
+    except BenchmarkFixtureError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print(render_benchmark_markdown(result), end="")
     return 0
 
 
@@ -1456,6 +1485,13 @@ def main() -> int:
                 task_id=args.task_id,
                 episode_id=args.episode_id,
                 max_action_count=args.max_action_count,
+                as_json=args.json,
+                repo_root=args.repo_root,
+            )
+    if args.command == "benchmark":
+        if args.benchmark_command == "run":
+            return handle_benchmark_run(
+                fixtures_dir=args.fixtures_dir,
                 as_json=args.json,
                 repo_root=args.repo_root,
             )
