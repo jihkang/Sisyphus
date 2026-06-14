@@ -3548,6 +3548,32 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(args.episode_id, "ep-demo")
         self.assertTrue(args.json)
 
+    def test_parser_accepts_eval_loop_surface(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "eval",
+                "loop",
+                "TF-20260614-feature-demo",
+                "--episode-id",
+                "ep-demo",
+                "--max-action-count",
+                "12",
+                "--json",
+            ]
+        )
+
+        self.assertEqual(args.repo_root, str(self.repo_root))
+        self.assertEqual(args.command, "eval")
+        self.assertEqual(args.eval_command, "loop")
+        self.assertEqual(args.task_id, "TF-20260614-feature-demo")
+        self.assertEqual(args.episode_id, "ep-demo")
+        self.assertEqual(args.max_action_count, 12)
+        self.assertTrue(args.json)
+
     def test_parser_accepts_serve_and_discord_bot_commands(self) -> None:
         parser = build_parser()
 

@@ -12,7 +12,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from sisyphus.conformance import append_conformance_log
 from sisyphus.gates import make_gate
-from sisyphus.reward import score_task_outcome, task_outcome_facts
+from sisyphus.reward import REWARD_METRIC_NAMES, reward_breakdown_metrics, score_task_outcome, task_outcome_facts
 
 
 class RewardTests(unittest.TestCase):
@@ -26,6 +26,15 @@ class RewardTests(unittest.TestCase):
         self.assertEqual(reward.verify_passed, 0.8)
         self.assertEqual(reward.conformance_green, 0.6)
         self.assertEqual(reward.penalties, {})
+
+    def test_exposes_stable_metric_names(self) -> None:
+        task = _task(status="closed", verify_status="passed")
+
+        reward = score_task_outcome(task)
+        metrics = reward_breakdown_metrics(reward)
+
+        self.assertEqual(set(metrics), set(REWARD_METRIC_NAMES))
+        self.assertEqual(metrics["reward_total"], reward.total)
 
     def test_penalizes_false_close_with_blocking_gates(self) -> None:
         task = _task(status="closed", verify_status="failed")
