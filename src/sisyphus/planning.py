@@ -7,6 +7,7 @@ from .metrics import publish_manual_intervention_required
 from .config import SisyphusConfig
 from .conformance import mark_design_anchor
 from .design import ensure_task_design_defaults, freeze_design_anchor
+from .gates import dedupe_gates as _dedupe_gates, make_gate as _gate
 from .state import load_task_record, save_task_record, utc_now
 from .strategy import sync_test_strategy_from_docs
 
@@ -430,25 +431,3 @@ def _build_subtasks(task: dict) -> list[dict]:
             "depends_on": [],
         }
     ]
-
-
-def _gate(code: str, message: str, source: str) -> dict:
-    return {
-        "code": code,
-        "message": message,
-        "blocking": True,
-        "source": source,
-        "created_at": utc_now(),
-    }
-
-
-def _dedupe_gates(gates: list[dict]) -> list[dict]:
-    seen: set[tuple[str, str]] = set()
-    deduped: list[dict] = []
-    for gate in gates:
-        key = (gate.get("code", ""), gate.get("message", ""))
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(gate)
-    return deduped

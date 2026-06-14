@@ -7,9 +7,10 @@ import subprocess
 from .bus import build_event_publisher
 from .config import SisyphusConfig
 from .events import new_event_envelope
+from .gates import dedupe_gates as _dedupe_gates, make_gate as _gate
+from .lifecycle_rules import evaluate_transition
+from .lifecycle_state import LifecycleAction
 from .metrics import publish_manual_intervention_required
-from .planning import collect_plan_gates
-from .promotion_state import PROMOTION_STATUS_NOT_REQUIRED, PROMOTION_STATUS_RECORDED, promotion_summary
 from .state import load_task_record, save_task_record, utc_now
 
 
@@ -24,24 +25,13 @@ class CloseOutcome:
 
 def run_close(repo_root: Path, config: SisyphusConfig, task_id: str, allow_dirty: bool) -> CloseOutcome:
     task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
-    gates = [gate for gate in task.get("gates", []) if gate.get("source") not in {"close", "plan"}]
-    gates.extend(collect_plan_gates(task, action="close"))
-
-    if task.get("verify_status") != "passed":
-        gates.append(_gate("VERIFY_REQUIRED", "task must pass verify before close", source="close"))
-
-    promotion = promotion_summary(task)
-    if bool(promotion.get("required")) and promotion.get("status") not in {
-        PROMOTION_STATUS_NOT_REQUIRED,
-        PROMOTION_STATUS_RECORDED,
-    }:
-        gates.append(
-            _gate(
-                "PROMOTION_REQUIRED",
-                "task requires promotion completion before close",
-                source="close",
-            )
-        )
+    gates = [
+        gate
+        for gate in task.get("gates", [])
+        if gate.get("source") not in {"close", "plan", "conformance", "promotion"}
+    ]
+    transition = evaluate_transition(task, LifecycleAction.CLOSE)
+    gates.extend(transition.gates)
 
     dirty = is_dirty_worktree(_resolve_dirty_check_path(repo_root=repo_root, task=task))
     if dirty and not allow_dirty:
@@ -136,25 +126,3 @@ def _resolve_dirty_check_path(repo_root: Path, task: dict) -> Path:
         if resolved.is_dir():
             return resolved
     return repo_root
-
-
-def _gate(code: str, message: str, source: str) -> dict:
-    return {
-        "code": code,
-        "message": message,
-        "blocking": True,
-        "source": source,
-        "created_at": utc_now(),
-    }
-
-
-def _dedupe_gates(gates: list[dict]) -> list[dict]:
-    seen: set[tuple[str, str]] = set()
-    deduped: list[dict] = []
-    for gate in gates:
-        key = (gate.get("code", ""), gate.get("message", ""))
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(gate)
-    return deduped
