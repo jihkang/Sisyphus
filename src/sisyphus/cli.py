@@ -24,6 +24,7 @@ from .context_pack import build_and_persist_context_pack
 from .creation import TaskCreationError, create_task_workspace
 from .daemon import run_daemon
 from .discovery import detect_repo_root
+from .episode_trace import check_episode_trace
 from .evolution.handoff import EvolutionEvidenceSummary, EvolutionVerificationObligation
 from .evolution.operator import evaluate_evolution_followup_decision, request_evolution_followup
 from .evolution.surface import (
@@ -80,6 +81,13 @@ def build_parser() -> argparse.ArgumentParser:
     observe_parser = subparsers.add_parser("observe")
     observe_parser.add_argument("task_id")
     observe_parser.add_argument("--json", action="store_true")
+
+    episode_parser = subparsers.add_parser("episode")
+    episode_subparsers = episode_parser.add_subparsers(dest="episode_command", required=True)
+    episode_check_parser = episode_subparsers.add_parser("check")
+    episode_check_parser.add_argument("task_id")
+    episode_check_parser.add_argument("--episode-id")
+    episode_check_parser.add_argument("--json", action="store_true")
 
     plan_parser = subparsers.add_parser("plan")
     plan_subparsers = plan_parser.add_subparsers(dest="plan_command", required=True)
@@ -389,6 +397,40 @@ def handle_observe(task_id: str, as_json: bool, repo_root: str | Path | None = N
             if isinstance(item, dict):
                 print(f"- {item.get('action')}: {item.get('reason')}")
     return 0
+
+
+def handle_episode_check(
+    task_id: str,
+    episode_id: str | None,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    _, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+    summary = check_episode_trace(task_file.parent, task_id=task_id, episode_id=episode_id)
+    if as_json:
+        print(json.dumps(summary, indent=2))
+        return 0 if summary["ok"] else 1
+
+    print(f"episode_check: {task_id}")
+    if episode_id:
+        print(f"episode_id: {episode_id}")
+    print(f"ok: {'yes' if summary['ok'] else 'no'}")
+    print(f"episodes: {summary['episode_count']}")
+    print(f"steps: {summary['valid_step_count']}/{summary['step_count']}")
+    actions = summary.get("actions", [])
+    if isinstance(actions, list) and actions:
+        print("actions:")
+        for action in actions:
+            print(f"- {action}")
+    errors = summary.get("errors", [])
+    if isinstance(errors, list) and errors:
+        print("errors:")
+        for error in errors:
+            if isinstance(error, dict):
+                print(f"- {error.get('episode_id')}: {error.get('error')}")
+    return 0 if summary["ok"] else 1
 
 
 def handle_plan_approve(
@@ -1357,6 +1399,14 @@ def main() -> int:
         return handle_close(task_id=args.task_id, allow_dirty=args.allow_dirty, repo_root=args.repo_root)
     if args.command == "observe":
         return handle_observe(task_id=args.task_id, as_json=args.json, repo_root=args.repo_root)
+    if args.command == "episode":
+        if args.episode_command == "check":
+            return handle_episode_check(
+                task_id=args.task_id,
+                episode_id=args.episode_id,
+                as_json=args.json,
+                repo_root=args.repo_root,
+            )
     if args.command == "plan":
         if args.plan_command == "approve":
             return handle_plan_approve(

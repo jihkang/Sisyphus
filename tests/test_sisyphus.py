@@ -3449,6 +3449,29 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(args.command, "request")
         self.assertTrue(args.no_run)
 
+    def test_parser_accepts_episode_check_surface(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "episode",
+                "check",
+                "TF-20260614-feature-demo",
+                "--episode-id",
+                "ep-demo",
+                "--json",
+            ]
+        )
+
+        self.assertEqual(args.repo_root, str(self.repo_root))
+        self.assertEqual(args.command, "episode")
+        self.assertEqual(args.episode_command, "check")
+        self.assertEqual(args.task_id, "TF-20260614-feature-demo")
+        self.assertEqual(args.episode_id, "ep-demo")
+        self.assertTrue(args.json)
+
     def test_parser_accepts_serve_and_discord_bot_commands(self) -> None:
         parser = build_parser()
 

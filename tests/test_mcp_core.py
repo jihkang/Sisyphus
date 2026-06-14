@@ -18,10 +18,12 @@ from sisyphus.artifact_snapshot import materialize_feature_task_artifact_snapsho
 from sisyphus.audit import run_verify
 from sisyphus.config import load_config
 from sisyphus.conformance import append_conformance_log
+from sisyphus.episode_trace import check_episode_trace, read_episode_steps
 from sisyphus.events import new_event_envelope
 from sisyphus.mcp_core import SisyphusMcpCoreService
+from sisyphus.observation import build_task_observation
 from sisyphus.planning import approve_task_plan, freeze_task_spec
-from sisyphus.state import create_task_record, save_task_record
+from sisyphus.state import create_task_record, load_task_record, save_task_record
 from sisyphus.templates import materialize_task_templates
 
 
@@ -859,6 +861,8 @@ class McpCoreTests(unittest.TestCase):
             reviewer="reviewer",
             notes="approved",
         )
+        loaded_before, task_file = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        expected_observation = build_task_observation(loaded_before, task_file.parent)
 
         payload = self.core.call_tool("sisyphus.verify_task", {"task_id": task["id"]})
 
@@ -866,6 +870,49 @@ class McpCoreTests(unittest.TestCase):
         self.assertEqual(payload["status"], "failed")
         self.assertEqual(payload["audit_attempts"], 0)
         self.assertIn("SPEC_FREEZE_REQUIRED", {gate["code"] for gate in payload["gates"]})
+        steps = read_episode_steps(task_file.parent)
+        self.assertEqual(len(steps), 1)
+        step = steps[0]
+        self.assertEqual(step["task_id"], task["id"])
+        self.assertEqual(step["observation_hash"], expected_observation["observation_hash"])
+        self.assertEqual(step["action"]["name"], "sisyphus.verify_task")
+        self.assertIn("SPEC_FREEZE_REQUIRED", {gate["code"] for gate in step["result"]["gates"]})
+        self.assertEqual(step["state_before"]["verify_status"], "not_run")
+        self.assertEqual(step["state_after"]["verify_status"], "failed")
+
+    def test_verify_tool_writes_successful_episode_trace_step(self) -> None:
+        task = self._new_task("verify-trace")
+        self._fill_feature_docs(task)
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="approved",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer",
+            notes="frozen",
+        )
+        loaded_before, task_file = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        expected_observation = build_task_observation(loaded_before, task_file.parent)
+
+        payload = self.core.call_tool("sisyphus.verify_task", {"task_id": task["id"]})
+
+        self.assertEqual(payload["task_id"], task["id"])
+        self.assertEqual(payload["status"], "passed")
+        steps = read_episode_steps(task_file.parent)
+        self.assertEqual(len(steps), 1)
+        step = steps[0]
+        self.assertEqual(step["observation_hash"], expected_observation["observation_hash"])
+        self.assertEqual(step["action"]["name"], "sisyphus.verify_task")
+        self.assertEqual(step["state_diff"]["verify_status"], ["not_run", "passed"])
+        summary = check_episode_trace(task_file.parent, task_id=task["id"])
+        self.assertTrue(summary["ok"])
+        self.assertEqual(summary["actions"], ["sisyphus.verify_task"])
 
     def test_request_task_tool_returns_integer_orchestrated_count(self) -> None:
         fake_result = mock.Mock(
