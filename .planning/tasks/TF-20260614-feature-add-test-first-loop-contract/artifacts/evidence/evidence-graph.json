@@ -1,0 +1,183 @@
+{
+  "blocking_gaps": [],
+  "claims": [
+    {
+      "blocking": true,
+      "id": "claim-test-first-contract",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#implementation-plan",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Recorded episode steps can be evaluated against the test-first loop contract."
+    },
+    {
+      "blocking": true,
+      "id": "claim-eval-loop-integration",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#verification-mapping",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Eval loop JSON exposes the evaluated test-first result instead of a static todo placeholder."
+    },
+    {
+      "blocking": true,
+      "id": "claim-cli-surface",
+      "importance": "high",
+      "linked_spec_section": "BRIEF.md#acceptance-criteria",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "The CLI exposes a read-only test-first check."
+    },
+    {
+      "blocking": true,
+      "id": "claim-verification-passed",
+      "importance": "high",
+      "linked_spec_section": "VERIFY.md#audit-summary",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "The implementation passed targeted tests, CLI smoke testing, full unittest discovery, and Sisyphus verify."
+    }
+  ],
+  "curated_evidence": [
+    {
+      "blocking": false,
+      "claim": "Recorded episode steps can be evaluated against the test-first loop contract.",
+      "id": "ev-test-first-module",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#implementation-plan",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:16:13Z",
+      "reproducibility": "high",
+      "source": {
+        "path": "src/sisyphus/test_first.py"
+      },
+      "supports": [
+        "claim-test-first-contract"
+      ],
+      "type": "file_diff",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Eval loop JSON exposes the evaluated test-first result instead of a static todo placeholder.",
+      "id": "ev-eval-loop-integration",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#implementation-plan",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:16:13Z",
+      "reproducibility": "high",
+      "source": {
+        "path": "src/sisyphus/eval/loop.py"
+      },
+      "supports": [
+        "claim-eval-loop-integration"
+      ],
+      "type": "file_diff",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "The CLI exposes a read-only test-first check.",
+      "id": "ev-cli-surface",
+      "importance": "high",
+      "linked_spec_section": "BRIEF.md#acceptance-criteria",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:16:13Z",
+      "reproducibility": "high",
+      "source": {
+        "path": "src/sisyphus/cli.py"
+      },
+      "supports": [
+        "claim-cli-surface"
+      ],
+      "type": "file_diff",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Targeted test-first regression tests passed.",
+      "id": "ev-command-targeted-tests",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#verification-mapping",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:16:13Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "env PYTHONDONTWRITEBYTECODE=1 /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest tests.test_test_first tests.test_eval_loop tests.test_sisyphus.SisyphusDaemonTests.test_parser_accepts_eval_test_first_surface -v",
+        "exit_code": 0,
+        "output_excerpt": "Ran 13 tests OK"
+      },
+      "supports": [
+        "claim-test-first-contract",
+        "claim-eval-loop-integration",
+        "claim-cli-surface",
+        "claim-verification-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "CLI JSON smoke test reports a non-fabricated not_recorded status when no phase annotations exist.",
+      "id": "ev-command-cli-smoke",
+      "importance": "medium",
+      "linked_spec_section": "BRIEF.md#acceptance-criteria",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:16:13Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "env PYTHONDONTWRITEBYTECODE=1 /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m sisyphus.cli --repo /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-add-test-first-loop-contract eval test-first TF-20260614-feature-add-test-first-loop-contract --json",
+        "exit_code": 0,
+        "output_excerpt": "test_first.status=not_recorded"
+      },
+      "supports": [
+        "claim-cli-surface"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Full repository unittest suite passed.",
+      "id": "ev-command-full-suite",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#verification-mapping",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:16:13Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "env PYTHONDONTWRITEBYTECODE=1 /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest discover -s tests -v",
+        "exit_code": 0,
+        "output_excerpt": "Ran 355 tests in 6.846s OK"
+      },
+      "supports": [
+        "claim-verification-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Sisyphus verify passed with no gates.",
+      "id": "ev-sisyphus-verify",
+      "importance": "high",
+      "linked_spec_section": "VERIFY.md#audit-summary",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:16:13Z",
+      "reproducibility": "high",
+      "source": {
+        "resource": "task://TF-20260614-feature-add-test-first-loop-contract/record"
+      },
+      "supports": [
+        "claim-verification-passed"
+      ],
+      "type": "verification_status",
+      "verdict": "supports"
+    }
+  ],
+  "generated_at": "2026-06-14T11:16:13Z",
+  "schema_version": "sisyphus.evidence_graph.v1",
+  "task_id": "TF-20260614-feature-add-test-first-loop-contract",
+  "unsupported_claims": [],
+  "verify_status": "passed"
+}

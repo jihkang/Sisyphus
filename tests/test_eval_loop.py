@@ -16,6 +16,7 @@ from sisyphus.episode_trace import append_episode_step, build_episode_step, next
 from sisyphus.eval.loop import TEST_FIRST_LOOP_PHASES, build_task_eval_loop_result
 from sisyphus.evidence_graph import write_evidence_graph
 from sisyphus.reward import REWARD_METRIC_NAMES
+from sisyphus.test_first import TEST_FIRST_STATUS_NOT_RECORDED, TEST_FIRST_STATUS_SATISFIED
 
 
 class EvalLoopTests(unittest.TestCase):
@@ -34,8 +35,20 @@ class EvalLoopTests(unittest.TestCase):
             self.assertGreater(result.reward.total, 3.0)
             self.assertEqual(set(REWARD_METRIC_NAMES), set(result.metrics))
             self.assertEqual(payload["loop"]["shape"][0], "observation_t")
-            self.assertEqual(payload["loop"]["test_first"]["status"], "todo")
-            self.assertEqual(tuple(payload["loop"]["test_first"]["phases"]), TEST_FIRST_LOOP_PHASES)
+            self.assertEqual(payload["loop"]["test_first"]["status"], TEST_FIRST_STATUS_NOT_RECORDED)
+            self.assertEqual(tuple(payload["loop"]["test_first"]["required_phases"]), TEST_FIRST_LOOP_PHASES)
+
+    def test_eval_loop_reports_satisfied_test_first_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            task_dir = Path(tmp)
+            task = _task(status="open", verify_status="passed")
+            for index, phase in enumerate(TEST_FIRST_LOOP_PHASES, start=1):
+                _append_action(task_dir, task["id"], f"phase.{phase}", ok=True, test_first_phase=phase)
+
+            result = build_task_eval_loop_result(task, task_dir)
+
+            self.assertEqual(result.test_first.status, TEST_FIRST_STATUS_SATISFIED)
+            self.assertEqual(result.to_dict()["loop"]["test_first"]["status"], TEST_FIRST_STATUS_SATISFIED)
 
     def test_false_close_gets_explicit_penalty(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -111,7 +124,14 @@ class EvalLoopTests(unittest.TestCase):
             self.assertFalse(result.reward.facts.excessive_action_count)
 
 
-def _append_action(task_dir: Path, task_id: str, action_name: str, *, ok: bool) -> None:
+def _append_action(
+    task_dir: Path,
+    task_id: str,
+    action_name: str,
+    *,
+    ok: bool,
+    test_first_phase: str | None = None,
+) -> None:
     episode_id = "ep-eval"
     step = build_episode_step(
         episode_id=episode_id,
@@ -119,7 +139,7 @@ def _append_action(task_dir: Path, task_id: str, action_name: str, *, ok: bool) 
         step=next_episode_step(task_dir, episode_id),
         observation={"task_id": task_id, "observation_hash": "sha256:before"},
         action_name=action_name,
-        arguments={"task_id": task_id},
+        arguments={"task_id": task_id, **({"test_first_phase": test_first_phase} if test_first_phase else {})},
         result={"ok": ok},
         state_before={"verify_status": "not_run"},
         state_after={"verify_status": "passed" if ok else "failed"},

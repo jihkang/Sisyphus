@@ -25,7 +25,7 @@ from .context_pack import build_and_persist_context_pack
 from .creation import TaskCreationError, create_task_workspace
 from .daemon import run_daemon
 from .discovery import detect_repo_root
-from .episode_trace import check_episode_trace
+from .episode_trace import check_episode_trace, read_episode_steps
 from .eval.loop import run_task_eval_loop
 from .evolution.handoff import EvolutionEvidenceSummary, EvolutionVerificationObligation
 from .evolution.operator import evaluate_evolution_followup_decision, request_evolution_followup
@@ -57,6 +57,7 @@ from .service import (
 from .retrieval import retrieve_documents
 from .search_index import SearchIndexError, read_search_index, rebuild_search_index
 from .state import list_task_records, load_task_record
+from .test_first import evaluate_test_first_loop
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -98,6 +99,10 @@ def build_parser() -> argparse.ArgumentParser:
     eval_loop_parser.add_argument("--episode-id")
     eval_loop_parser.add_argument("--max-action-count", type=int, default=50)
     eval_loop_parser.add_argument("--json", action="store_true")
+    eval_test_first_parser = eval_subparsers.add_parser("test-first")
+    eval_test_first_parser.add_argument("task_id")
+    eval_test_first_parser.add_argument("--episode-id")
+    eval_test_first_parser.add_argument("--json", action="store_true")
 
     benchmark_parser = subparsers.add_parser("benchmark")
     benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command", required=True)
@@ -481,6 +486,41 @@ def handle_eval_loop(
     if isinstance(test_first, dict):
         print(f"test_first: {test_first.get('status')}")
     return 0
+
+
+def handle_eval_test_first(
+    task_id: str,
+    episode_id: str | None,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    _, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+    steps = read_episode_steps(task_file.parent, episode_id=episode_id)
+    evaluation = evaluate_test_first_loop(steps)
+    payload = {
+        "task_id": task_id,
+        "episode_id": episode_id,
+        "test_first": evaluation.to_dict(),
+    }
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return 0
+
+    print(f"test_first: {task_id}")
+    if episode_id:
+        print(f"episode_id: {episode_id}")
+    print(f"status: {evaluation.status}")
+    if evaluation.missing_phases:
+        print("missing_phases:")
+        for phase in evaluation.missing_phases:
+            print(f"- {phase}")
+    if evaluation.violations:
+        print("violations:")
+        for violation in evaluation.violations:
+            print(f"- {violation}")
+    return 0 if evaluation.status != "violated" else 1
 
 
 def handle_benchmark_run(
@@ -1485,6 +1525,13 @@ def main() -> int:
                 task_id=args.task_id,
                 episode_id=args.episode_id,
                 max_action_count=args.max_action_count,
+                as_json=args.json,
+                repo_root=args.repo_root,
+            )
+        if args.eval_command == "test-first":
+            return handle_eval_test_first(
+                task_id=args.task_id,
+                episode_id=args.episode_id,
                 as_json=args.json,
                 repo_root=args.repo_root,
             )

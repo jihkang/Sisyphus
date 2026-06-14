@@ -8,6 +8,7 @@ from ..episode_trace import read_episode_steps
 from ..observation import build_task_observation
 from ..reward import RewardBreakdown, reward_breakdown_metrics, score_task_outcome
 from ..state import load_task_record
+from ..test_first import TEST_FIRST_LOOP_PHASES, TestFirstEvaluation, evaluate_test_first_loop
 
 
 EVAL_LOOP_SCHEMA_VERSION = "sisyphus.eval_loop.v1"
@@ -18,15 +19,6 @@ EVAL_LOOP_SHAPE = (
     "observation_t_plus_1",
     "reward_t",
 )
-TEST_FIRST_LOOP_PHASES = (
-    "select_or_generate_tests",
-    "run_baseline_tests",
-    "implement_change",
-    "rerun_tests",
-    "record_evidence",
-)
-
-
 @dataclass(frozen=True, slots=True)
 class EvalLoopResult:
     task_id: str
@@ -41,6 +33,7 @@ class EvalLoopResult:
     reward: RewardBreakdown
     metrics: dict[str, float]
     actions: tuple[dict[str, object], ...]
+    test_first: TestFirstEvaluation
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -49,11 +42,7 @@ class EvalLoopResult:
             "mode": self.mode,
             "loop": {
                 "shape": list(EVAL_LOOP_SHAPE),
-                "test_first": {
-                    "status": "todo",
-                    "phases": list(TEST_FIRST_LOOP_PHASES),
-                    "reason": "future harness work should require test selection or generation before implementation",
-                },
+                "test_first": self.test_first.to_dict(),
             },
             "observation": {
                 "ref": self.observation_ref,
@@ -113,6 +102,7 @@ def build_task_eval_loop_result(
     )
     metrics = reward_breakdown_metrics(reward)
     action_summaries = tuple(_action_summary(step) for step in steps if _has_action(step))
+    test_first = evaluate_test_first_loop(steps)
     current_hash = str(observation.get("observation_hash") or "")
     initial_hash = _initial_observation_hash(steps) or current_hash
     return EvalLoopResult(
@@ -128,6 +118,7 @@ def build_task_eval_loop_result(
         reward=reward,
         metrics=metrics,
         actions=action_summaries,
+        test_first=test_first,
     )
 
 
