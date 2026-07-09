@@ -7,6 +7,8 @@ from ...agents import list_agents
 from ...artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
 from ...config import SisyphusConfig
 from ...conformance import ensure_task_conformance_defaults, summarize_subtask_conformance, summarize_task_conformance
+from ...evidence_graph import evidence_resource_payload
+from ...observation import build_task_observation
 from ...promotion_state import promotion_summary
 from ...state import load_task_record
 
@@ -20,6 +22,8 @@ def read_task_resource(
     list_agents_fn=list_agents,
     is_artifact_resource=is_feature_task_artifact_resource,
     read_artifact_resource=read_feature_task_artifact_resource,
+    observation_payload=build_task_observation,
+    evidence_payload=evidence_resource_payload,
 ) -> dict[str, object] | str:
     task_id = parsed.netloc
     resource_name = parsed.path.lstrip("/")
@@ -28,8 +32,12 @@ def read_task_resource(
 
     if resource_name == "record":
         return {"task": task}
+    if resource_name == "observation":
+        return observation_payload(task, task_dir)
     if resource_name == "conformance":
         return {"conformance": summarize_task_conformance(task)}
+    if resource_name == "evidence":
+        return evidence_payload(task, task_dir)
     if resource_name == "timeline":
         return _task_timeline_resource(task)
     if resource_name == "promotion":

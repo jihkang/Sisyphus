@@ -12,6 +12,7 @@ from ...closeout import run_close
 from ...config import load_config
 from ...context_pack import build_and_persist_context_pack, read_context_pack
 from ...daemon import run_daemon
+from ...episode_trace import append_episode_step, build_episode_step, default_episode_id, next_episode_step
 from ...evolution.operator import (
     evaluate_evolution_followup_decision,
     request_evolution_followup,
@@ -33,6 +34,7 @@ from ...planning import (
     revise_task_plan,
 )
 from ...metrics import build_value_metrics_report
+from ...observation import build_task_observation
 from ...retrieval import retrieve_documents
 from ...search_index import read_search_index, rebuild_search_index, search_index_status
 from ...state import load_task_record
@@ -64,10 +66,80 @@ class SisyphusMcpCoreService:
 
     def call_tool(self, tool_name: str, arguments: dict[str, object] | None = None) -> dict[str, object]:
         args = arguments or {}
+        config = load_config(self.repo_root)
+        task_id = _trace_task_id(tool_name, args)
+        if task_id and _trace_tool_enabled(tool_name):
+            return self._call_tool_with_episode_trace(tool_name, args, config, task_id)
+        return self._call_tool_inner(tool_name, args, config)
+
+    def _call_tool_with_episode_trace(
+        self,
+        tool_name: str,
+        args: dict[str, object],
+        config: object,
+        task_id: str,
+    ) -> dict[str, object]:
+        task_dir_name = getattr(config, "task_dir", None)
+        if task_dir_name is None:
+            return self._call_tool_inner(tool_name, args, config)
+        try:
+            state_before, task_file = load_task_record(
+                repo_root=self.repo_root,
+                task_dir_name=task_dir_name,
+                task_id=task_id,
+            )
+            task_dir = task_file.parent
+        except FileNotFoundError:
+            return self._call_tool_inner(tool_name, args, config)
+
+        observation_before = build_task_observation(state_before, task_dir)
+        result: dict[str, object] | None = None
+        error: Exception | None = None
+        try:
+            result = self._call_tool_inner(tool_name, args, config)
+            return result
+        except Exception as exc:
+            error = exc
+            result = {
+                "ok": False,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+            raise
+        finally:
+            try:
+                state_after, _ = load_task_record(
+                    repo_root=self.repo_root,
+                    task_dir_name=task_dir_name,
+                    task_id=task_id,
+                )
+            except FileNotFoundError:
+                state_after = state_before
+            actor = _trace_actor(args)
+            episode_id = default_episode_id(task_id, actor_id=str(actor.get("agent_id", "mcp")))
+            trace_result = dict(result or {})
+            if error is not None:
+                trace_result.setdefault("ok", False)
+            append_episode_step(
+                task_dir,
+                build_episode_step(
+                    episode_id=episode_id,
+                    task_id=task_id,
+                    step=next_episode_step(task_dir, episode_id),
+                    observation=observation_before,
+                    action_name=tool_name,
+                    arguments=args,
+                    result=trace_result,
+                    state_before=state_before,
+                    state_after=state_after,
+                    actor=actor,
+                ),
+            )
+
+    def _call_tool_inner(self, tool_name: str, args: dict[str, object], config: object) -> dict[str, object]:
         group = tool_group_for(tool_name)
         if group is None:
             raise ValueError(f"unsupported MCP tool: {tool_name}")
-        config = load_config(self.repo_root)
 
         if group == "task":
             payload = task_tools.call_task_tool(
@@ -179,3 +251,43 @@ class SisyphusMcpCoreService:
             )
 
         raise ValueError(f"unsupported MCP resource URI: {uri}")
+
+
+_TRACEABLE_TASK_TOOLS = {
+    "sisyphus.plan_approve",
+    "sisyphus.plan_request_changes",
+    "sisyphus.plan_revise",
+    "sisyphus.spec_freeze",
+    "sisyphus.subtasks_generate",
+    "sisyphus.verify_task",
+    "sisyphus.close_task",
+    "sisyphus.execute_promotion",
+    "sisyphus.record_merged_pr",
+    "sisyphus.evolution_decide",
+}
+
+
+def _trace_tool_enabled(tool_name: str) -> bool:
+    return tool_name in _TRACEABLE_TASK_TOOLS
+
+
+def _trace_task_id(tool_name: str, args: dict[str, object]) -> str | None:
+    value = args.get("task_id")
+    if value is None:
+        return None
+    task_id = str(value).strip()
+    if not task_id:
+        return None
+    return task_id
+
+
+def _trace_actor(args: dict[str, object]) -> dict[str, object]:
+    actor: dict[str, object] = {
+        "interface": "mcp",
+        "agent_id": str(args.get("agent_id") or "mcp"),
+    }
+    if args.get("provider") is not None:
+        actor["provider"] = str(args["provider"])
+    if args.get("role") is not None:
+        actor["role"] = str(args["role"])
+    return actor

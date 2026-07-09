@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 
 from ...agents import AGENT_STATUSES, DEFAULT_STALE_AFTER_SECONDS
+from ...dataset_export import DATASET_FORMATS
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,6 +26,43 @@ def build_parser() -> argparse.ArgumentParser:
     close_parser = subparsers.add_parser("close")
     close_parser.add_argument("task_id")
     close_parser.add_argument("--allow-dirty", action="store_true")
+
+    observe_parser = subparsers.add_parser("observe")
+    observe_parser.add_argument("task_id")
+    observe_parser.add_argument("--json", action="store_true")
+
+    episode_parser = subparsers.add_parser("episode")
+    episode_subparsers = episode_parser.add_subparsers(dest="episode_command", required=True)
+    episode_check_parser = episode_subparsers.add_parser("check")
+    episode_check_parser.add_argument("task_id")
+    episode_check_parser.add_argument("--episode-id")
+    episode_check_parser.add_argument("--json", action="store_true")
+
+    eval_parser = subparsers.add_parser("eval")
+    eval_subparsers = eval_parser.add_subparsers(dest="eval_command", required=True)
+    eval_loop_parser = eval_subparsers.add_parser("loop")
+    eval_loop_parser.add_argument("task_id")
+    eval_loop_parser.add_argument("--episode-id")
+    eval_loop_parser.add_argument("--max-action-count", type=int, default=50)
+    eval_loop_parser.add_argument("--json", action="store_true")
+    eval_test_first_parser = eval_subparsers.add_parser("test-first")
+    eval_test_first_parser.add_argument("task_id")
+    eval_test_first_parser.add_argument("--episode-id")
+    eval_test_first_parser.add_argument("--json", action="store_true")
+
+    benchmark_parser = subparsers.add_parser("benchmark")
+    benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command", required=True)
+    benchmark_run_parser = benchmark_subparsers.add_parser("run")
+    benchmark_run_parser.add_argument("--fixtures-dir")
+    benchmark_run_parser.add_argument("--json", action="store_true")
+
+    dataset_parser = subparsers.add_parser("dataset")
+    dataset_subparsers = dataset_parser.add_subparsers(dest="dataset_command", required=True)
+    dataset_export_parser = dataset_subparsers.add_parser("export")
+    dataset_export_parser.add_argument("--format", choices=DATASET_FORMATS, required=True)
+    dataset_export_parser.add_argument("--task-id")
+    dataset_export_parser.add_argument("--output")
+    dataset_export_parser.add_argument("--max-action-count", type=int, default=50)
 
     plan_parser = subparsers.add_parser("plan")
     plan_subparsers = plan_parser.add_subparsers(dest="plan_command", required=True)

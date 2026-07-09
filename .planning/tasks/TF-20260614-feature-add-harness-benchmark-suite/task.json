@@ -1,0 +1,260 @@
+{
+  "id": "TF-20260614-feature-add-harness-benchmark-suite",
+  "type": "feature",
+  "slug": "add-harness-benchmark-suite",
+  "status": "verified",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-06-14T10:58:49Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Proceed with deterministic offline benchmark fixtures and metric aggregation. Live LLM/RL execution and documentation positioning are deferred.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Proceed with deterministic offline benchmark fixtures and metric aggregation. Live LLM/RL execution and documentation positioning are deferred.",
+      "timestamp": "2026-06-14T10:58:49Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-06-14T10:58:53Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Freeze benchmark scope to local deterministic fixtures, aggregate metrics, and JSON/Markdown CLI rendering.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-06-14T09:02:46Z",
+  "updated_at": "2026-06-14T11:03:23Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260614-feature-add-harness-benchmark-suite",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-add-harness-benchmark-suite",
+  "branch": "feat/add-harness-benchmark-suite",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-06-14T11:03:23Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "The default fixture suite runs and returns stable aggregate metrics.",
+        "checked": false
+      },
+      {
+        "name": "JSON and Markdown render paths include all benchmark modes.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "failure_gated records false-close prevention for Sisyphus modes.",
+        "checked": false
+      },
+      {
+        "name": "spec_drift records drift detection for observation/evidence/trace modes.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Missing or malformed benchmark fixtures fail with actionable errors.",
+        "checked": false
+      },
+      {
+        "name": "Unknown benchmark mode/scenario is rejected during fixture loading.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Default fixture suite returns stable aggregate metrics",
+        "method": "tests.test_benchmark"
+      },
+      {
+        "target": "failure_gated/spec_drift behavior is captured",
+        "method": "tests.test_benchmark"
+      },
+      {
+        "target": "CLI parser accepts benchmark run surface",
+        "method": "tests.test_sisyphus"
+      },
+      {
+        "target": "Full repository behavior remains intact",
+        "method": "python -m unittest discover -s tests -v"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "design": {
+    "mode": "none",
+    "decision_reason": "existing contract only",
+    "confidence": "medium",
+    "layer_impact": "layer-preserving",
+    "layer_decision_reason": null,
+    "required_artifacts": [],
+    "artifacts": {
+      "connection_diagram": null,
+      "sequence_diagram": null,
+      "boundary_note": null
+    },
+    "frozen": {
+      "mode": "none",
+      "layer_impact": "layer-preserving",
+      "required_artifacts": [],
+      "artifacts": {
+        "connection_diagram": null,
+        "sequence_diagram": null,
+        "boundary_note": null
+      },
+      "anchor_summary": "mode=none, layer=layer-preserving",
+      "frozen_at": "2026-06-14T10:58:53Z"
+    },
+    "assessment": {
+      "status": "appropriate",
+      "summary": "design depth matches the current task shape",
+      "replan_required": false,
+      "escalation_reason": null,
+      "missing_artifacts": []
+    }
+  },
+  "promotion": {
+    "required": true,
+    "required_override": null,
+    "required_reason": "feature tasks are promotable by default",
+    "required_source": "classified",
+    "status": "promotion_pending",
+    "strategy": "direct",
+    "remote_name": null,
+    "parent_artifact_id": null,
+    "parent_task_id": null,
+    "base_override": null,
+    "base_branch": "main",
+    "base_source": null,
+    "base_reason": null,
+    "resolved_parent_branch": null,
+    "retarget_required": false,
+    "reverify_required": false,
+    "retarget_required_at": null,
+    "retarget_parent_task_id": null,
+    "retarget_parent_branch": null,
+    "retarget_merge_target": null,
+    "head_branch": "feat/add-harness-benchmark-suite",
+    "pr_number": null,
+    "pr_url": null,
+    "receipt_path": "artifacts/promotion/merge_receipt.json",
+    "execution_receipt_path": null,
+    "changeset_path": "CHANGESET.md",
+    "commit_message": null,
+    "repo_full_name": null,
+    "title": null,
+    "head_sha": null,
+    "merge_commit_sha": null,
+    "committed_at": null,
+    "pushed_at": null,
+    "pr_opened_at": null,
+    "merged_at": null,
+    "merged_by": null,
+    "merge_method": null,
+    "recorded_at": null
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": "design depth matches the current task shape",
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_design_anchor_at": "2026-06-14T10:58:53Z",
+    "last_design_anchor_source": "planning.freeze_task_spec",
+    "last_checkpoint_type": "design_assessment",
+    "last_checkpoint_source": "audit.design",
+    "last_checkpoint_at": "2026-06-14T11:03:23Z",
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": [
+      {
+        "id": "f599aeb6d4f547cd8bc77df397298200",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=none, layer=layer-preserving",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-06-14T10:58:53Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "99ecc14e77624c08b0495e61ea9b5d49",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-06-14T11:03:23Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      }
+    ]
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "promotion": {
+      "status": "promotion_pending",
+      "recorded_at": null,
+      "repo_full_name": null,
+      "pr_number": null,
+      "title": null,
+      "url": null,
+      "head_branch": "feat/add-harness-benchmark-suite",
+      "base_branch": "main",
+      "head_sha": null,
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "merged_by": null,
+      "merge_method": null,
+      "receipt_path": "artifacts/promotion/merge_receipt.json",
+      "changeset_path": "CHANGESET.md",
+      "parent_artifact_id": null,
+      "parent_task_id": null
+    },
+    "source_event_id": "evt-6b3224288a4f",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "add-harness-benchmark-suite",
+    "owned_paths": [
+      "benchmarks/",
+      "src/sisyphus/benchmark.py",
+      "src/sisyphus/eval/",
+      "src/sisyphus/cli.py",
+      "tests/test_benchmark.py"
+    ],
+    "requested_adopt_paths": [],
+    "evidence_graph_required": true
+  }
+}

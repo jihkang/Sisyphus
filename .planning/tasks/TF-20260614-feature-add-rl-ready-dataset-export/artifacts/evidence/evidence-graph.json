@@ -1,0 +1,166 @@
+{
+  "blocking_gaps": [],
+  "claims": [
+    {
+      "blocking": true,
+      "id": "claim-dataset-export",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#implementation-plan",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Sisyphus can export recorded episode traces as deterministic SFT/RL JSONL records."
+    },
+    {
+      "blocking": true,
+      "id": "claim-reward-alignment",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#verification-mapping",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "RL records use terminal reward and metrics from the existing eval loop output."
+    },
+    {
+      "blocking": true,
+      "id": "claim-cli-surface",
+      "importance": "high",
+      "linked_spec_section": "BRIEF.md#acceptance-criteria",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "The CLI exposes dataset export with format, task scope, output path, and max action count options."
+    },
+    {
+      "blocking": true,
+      "id": "claim-verification-passed",
+      "importance": "high",
+      "linked_spec_section": "VERIFY.md#audit-summary",
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "The implementation passed targeted tests, full unittest discovery, CLI smoke testing, and Sisyphus verify."
+    }
+  ],
+  "curated_evidence": [
+    {
+      "blocking": false,
+      "claim": "Sisyphus can export recorded episode traces as deterministic SFT/RL JSONL records.",
+      "id": "ev-dataset-export-module",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#implementation-plan",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:33:40Z",
+      "reproducibility": "high",
+      "source": {
+        "path": "src/sisyphus/dataset_export.py"
+      },
+      "supports": [
+        "claim-dataset-export",
+        "claim-reward-alignment"
+      ],
+      "type": "file_diff",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "The CLI exposes dataset export with format, task scope, output path, and max action count options.",
+      "id": "ev-cli-surface",
+      "importance": "high",
+      "linked_spec_section": "BRIEF.md#acceptance-criteria",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:33:40Z",
+      "reproducibility": "high",
+      "source": {
+        "path": "src/sisyphus/cli.py"
+      },
+      "supports": [
+        "claim-cli-surface"
+      ],
+      "type": "file_diff",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Targeted dataset export regression tests passed.",
+      "id": "ev-command-targeted-tests",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#verification-mapping",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:33:40Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "env PYTHONDONTWRITEBYTECODE=1 /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest tests.test_dataset_export tests.test_sisyphus.SisyphusDaemonTests.test_parser_accepts_dataset_export_surface -v",
+        "exit_code": 0,
+        "output_excerpt": "Ran 6 tests in 0.057s OK"
+      },
+      "supports": [
+        "claim-dataset-export",
+        "claim-reward-alignment",
+        "claim-cli-surface",
+        "claim-verification-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Full repository unittest suite passed.",
+      "id": "ev-command-full-suite",
+      "importance": "high",
+      "linked_spec_section": "PLAN.md#verification-mapping",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:33:40Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "env PYTHONDONTWRITEBYTECODE=1 /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest discover -s tests -v",
+        "exit_code": 0,
+        "output_excerpt": "Ran 361 tests in 6.882s OK"
+      },
+      "supports": [
+        "claim-verification-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "CLI dataset export smoke test passed.",
+      "id": "ev-command-cli-smoke",
+      "importance": "medium",
+      "linked_spec_section": "BRIEF.md#acceptance-criteria",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:33:40Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "env PYTHONDONTWRITEBYTECODE=1 /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m sisyphus.cli --repo /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-add-rl-ready-dataset-export dataset export --format sft --task-id TF-20260614-feature-add-rl-ready-dataset-export --output .planning/tasks/TF-20260614-feature-add-rl-ready-dataset-export/artifacts/dataset/sft.jsonl",
+        "exit_code": 0,
+        "output_excerpt": "schema_version=sisyphus.dataset_export.v1, format=sft, record_count=0"
+      },
+      "supports": [
+        "claim-cli-surface"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Sisyphus verify passed with no gates.",
+      "id": "ev-sisyphus-verify",
+      "importance": "high",
+      "linked_spec_section": "VERIFY.md#audit-summary",
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:33:40Z",
+      "reproducibility": "high",
+      "source": {
+        "resource": "task://TF-20260614-feature-add-rl-ready-dataset-export/record"
+      },
+      "supports": [
+        "claim-verification-passed"
+      ],
+      "type": "verification_status",
+      "verdict": "supports"
+    }
+  ],
+  "generated_at": "2026-06-14T11:33:40Z",
+  "schema_version": "sisyphus.evidence_graph.v1",
+  "task_id": "TF-20260614-feature-add-rl-ready-dataset-export",
+  "unsupported_claims": [],
+  "verify_status": "passed"
+}

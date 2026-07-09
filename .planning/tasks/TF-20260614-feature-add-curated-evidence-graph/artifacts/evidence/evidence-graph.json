@@ -1,0 +1,82 @@
+{
+  "blocking_gaps": [],
+  "claims": [
+    {
+      "blocking": true,
+      "id": "claim-verify-passed",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Sisyphus verification passed."
+    },
+    {
+      "blocking": false,
+      "id": "claim-conformance-green",
+      "importance": "medium",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Task conformance is green."
+    }
+  ],
+  "curated_evidence": [
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification passed.",
+      "id": "ev-verify-status",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T09:45:25Z",
+      "reproducibility": "medium",
+      "source": {
+        "resource": "task://TF-20260614-feature-add-curated-evidence-graph/record"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "verification_status",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Task conformance is green.",
+      "id": "ev-conformance-summary",
+      "importance": "medium",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T09:45:25Z",
+      "reproducibility": "high",
+      "source": {
+        "resource": "task://TF-20260614-feature-add-curated-evidence-graph/conformance"
+      },
+      "supports": [
+        "claim-conformance-green"
+      ],
+      "type": "conformance",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Task changeset is present.",
+      "id": "ev-changeset",
+      "importance": "low",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T09:45:25Z",
+      "reproducibility": "medium",
+      "source": {
+        "path": "CHANGESET.md"
+      },
+      "supports": [],
+      "type": "changeset",
+      "verdict": "supports"
+    }
+  ],
+  "generated_at": "2026-06-14T09:45:25Z",
+  "schema_version": "sisyphus.evidence_graph.v1",
+  "task_id": "TF-20260614-feature-add-curated-evidence-graph",
+  "unsupported_claims": [],
+  "verify_status": "passed"
+}

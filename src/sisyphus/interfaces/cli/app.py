@@ -18,6 +18,7 @@ from ...evolution.surface import (
 from .handlers import agent as agent_handlers
 from .handlers import evolution as evolution_handlers
 from .handlers import ingest as ingest_handlers
+from .handlers import operations as operations_handlers
 from .handlers import planning as planning_handlers
 from .handlers import runtime as runtime_handlers
 from .handlers import search as search_handlers
@@ -53,6 +54,102 @@ def handle_close(task_id: str, allow_dirty: bool, repo_root: str | Path | None =
         config=config,
         task_id=task_id,
         allow_dirty=allow_dirty,
+    )
+
+
+def handle_observe(task_id: str, as_json: bool, repo_root: str | Path | None = None) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    return operations_handlers.handle_observe(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        as_json=as_json,
+    )
+
+
+def handle_episode_check(
+    task_id: str,
+    episode_id: str | None,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    return operations_handlers.handle_episode_check(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        episode_id=episode_id,
+        as_json=as_json,
+    )
+
+
+def handle_eval_loop(
+    task_id: str,
+    episode_id: str | None,
+    max_action_count: int,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    return operations_handlers.handle_eval_loop(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        episode_id=episode_id,
+        max_action_count=max_action_count,
+        as_json=as_json,
+    )
+
+
+def handle_eval_test_first(
+    task_id: str,
+    episode_id: str | None,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    return operations_handlers.handle_eval_test_first(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        episode_id=episode_id,
+        as_json=as_json,
+    )
+
+
+def handle_benchmark_run(
+    fixtures_dir: str | None,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    return operations_handlers.handle_benchmark_run(
+        repo_root=repo_root,
+        fixtures_dir=fixtures_dir,
+        as_json=as_json,
+    )
+
+
+def handle_dataset_export(
+    format: str,
+    task_id: str | None,
+    output: str | None,
+    max_action_count: int,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    return operations_handlers.handle_dataset_export(
+        repo_root=repo_root,
+        config=config,
+        format=format,
+        task_id=task_id,
+        output=output,
+        max_action_count=max_action_count,
     )
 
 
@@ -591,6 +688,12 @@ CLI_HANDLERS = {
     "handle_request": handle_request,
     "handle_verify": handle_verify,
     "handle_close": handle_close,
+    "handle_observe": handle_observe,
+    "handle_episode_check": handle_episode_check,
+    "handle_eval_loop": handle_eval_loop,
+    "handle_eval_test_first": handle_eval_test_first,
+    "handle_benchmark_run": handle_benchmark_run,
+    "handle_dataset_export": handle_dataset_export,
     "handle_plan_approve": handle_plan_approve,
     "handle_plan_request_changes": handle_plan_request_changes,
     "handle_plan_revise": handle_plan_revise,

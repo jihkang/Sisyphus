@@ -49,6 +49,16 @@ COMMAND_SPECS: tuple[CliCommandSpec, ...] = (
     ),
     CliCommandSpec(("verify",), "handle_verify", ("task_id",)),
     CliCommandSpec(("close",), "handle_close", ("task_id", "allow_dirty")),
+    CliCommandSpec(("observe",), "handle_observe", ("task_id", ("json", "as_json"))),
+    CliCommandSpec(("episode", "check"), "handle_episode_check", ("task_id", "episode_id", ("json", "as_json"))),
+    CliCommandSpec(
+        ("eval", "loop"),
+        "handle_eval_loop",
+        ("task_id", "episode_id", "max_action_count", ("json", "as_json")),
+    ),
+    CliCommandSpec(("eval", "test-first"), "handle_eval_test_first", ("task_id", "episode_id", ("json", "as_json"))),
+    CliCommandSpec(("benchmark", "run"), "handle_benchmark_run", ("fixtures_dir", ("json", "as_json"))),
+    CliCommandSpec(("dataset", "export"), "handle_dataset_export", ("format", "task_id", "output", "max_action_count")),
     CliCommandSpec(("plan", "approve"), "handle_plan_approve", ("task_id", "reviewer", "notes")),
     CliCommandSpec(("plan", "request-changes"), "handle_plan_request_changes", ("task_id", "reviewer", "notes")),
     CliCommandSpec(("plan", "revise"), "handle_plan_revise", ("task_id", "author", "notes")),
@@ -162,6 +172,14 @@ def command_path(args: Namespace) -> tuple[str, ...]:
         return (command, getattr(args, "spec_command", None))
     if command == "subtasks":
         return (command, getattr(args, "subtasks_command", None))
+    if command == "episode":
+        return (command, getattr(args, "episode_command", None))
+    if command == "eval":
+        return (command, getattr(args, "eval_command", None))
+    if command == "benchmark":
+        return (command, getattr(args, "benchmark_command", None))
+    if command == "dataset":
+        return (command, getattr(args, "dataset_command", None))
     if command == "agent":
         return (command, getattr(args, "agent_command", None))
     if command == "ingest":

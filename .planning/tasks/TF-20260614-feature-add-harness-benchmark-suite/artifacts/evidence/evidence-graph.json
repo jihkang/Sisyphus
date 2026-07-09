@@ -1,0 +1,126 @@
+{
+  "blocking_gaps": [],
+  "claims": [
+    {
+      "blocking": true,
+      "id": "claim-verify-passed",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Sisyphus verification passed."
+    },
+    {
+      "blocking": false,
+      "id": "claim-conformance-green",
+      "importance": "medium",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Task conformance is green."
+    }
+  ],
+  "curated_evidence": [
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification passed.",
+      "id": "ev-verify-status",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:03:23Z",
+      "reproducibility": "medium",
+      "source": {
+        "resource": "task://TF-20260614-feature-add-harness-benchmark-suite/record"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "verification_status",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Task conformance is green.",
+      "id": "ev-conformance-summary",
+      "importance": "medium",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:03:23Z",
+      "reproducibility": "high",
+      "source": {
+        "resource": "task://TF-20260614-feature-add-harness-benchmark-suite/conformance"
+      },
+      "supports": [
+        "claim-conformance-green"
+      ],
+      "type": "conformance",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Targeted benchmark and CLI parser regression tests passed.",
+      "id": "ev-command-targeted-tests",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:03:23Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "env PYTHONDONTWRITEBYTECODE=1 /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest tests.test_benchmark tests.test_sisyphus.SisyphusDaemonTests.test_parser_accepts_benchmark_run_surface -v",
+        "exit_code": 0,
+        "output_excerpt": "Ran 7 tests in 0.054s OK"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Benchmark JSON and Markdown CLI smoke tests passed.",
+      "id": "ev-command-benchmark-cli",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:03:23Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "sisyphus benchmark run --json && sisyphus benchmark run",
+        "exit_code": 0,
+        "output_excerpt": "fixture_count=7, mode_count=5, sisyphus_full_trace false_close_rate=0.0"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Full repository unittest suite passed.",
+      "id": "ev-command-full-suite",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-06-14T11:03:23Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "env PYTHONDONTWRITEBYTECODE=1 /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest discover -s tests -v",
+        "exit_code": 0,
+        "output_excerpt": "Ran 347 tests in 6.765s OK"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    }
+  ],
+  "generated_at": "2026-06-14T11:03:23Z",
+  "schema_version": "sisyphus.evidence_graph.v1",
+  "task_id": "TF-20260614-feature-add-harness-benchmark-suite",
+  "unsupported_claims": [],
+  "verify_status": "passed"
+}
