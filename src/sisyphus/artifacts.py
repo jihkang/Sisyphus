@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from .utils import find_unknown_fields
+from .shared.mappings import find_unknown_fields
 
 ARTIFACT_RECORD_SCHEMA_VERSION = "sisyphus.artifact_record.v1"
 ARTIFACT_RECORD_KIND_ATOMIC = "artifact"

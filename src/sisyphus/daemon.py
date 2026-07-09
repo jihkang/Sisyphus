@@ -13,12 +13,12 @@ from .creation import create_task_workspace
 from .gitops import copy_relative_path, current_branch_name, list_dirty_paths, remove_relative_path
 from .events import new_event_envelope
 from .metrics import publish_manual_intervention_required
-from .paths import event_log_file, inbox_failed_dir, inbox_pending_dir, inbox_processed_dir
 from .planning import enforce_plan_approved, enforce_spec_frozen
 from .promotion import record_merged_pull_request
 from .provider_wrapper import run_provider_wrapper
-from .state import list_task_records, load_task_record, save_task_record, sync_task_support_files, utc_now
-from .utils import project_fields
+from .shared.mappings import project_fields
+from .shared.paths import event_log_file, inbox_failed_dir, inbox_pending_dir, inbox_processed_dir
+from .state import list_task_records, load_task_record, save_task_record, utc_now
 from .workflow import run_workflow_cycle
 
 
@@ -630,7 +630,6 @@ def _hydrate_task_from_conversation(
     if source_context:
         task_record["meta"]["source_context"] = source_context
     save_task_record(task_file=task_file, task=task_record)
-    sync_task_support_files(task_record)
 
 
 def _apply_direct_change_adoption(
@@ -678,7 +677,6 @@ def _apply_direct_change_adoption(
         task=task,
         note=_render_adoption_log_note(source_branch=source_branch, adopted_paths=adopted_paths, deleted_paths=selected_deleted),
     )
-    sync_task_support_files(task)
 
 
 def _resolve_followup_slug(

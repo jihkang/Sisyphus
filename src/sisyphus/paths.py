@@ -1,35 +1,23 @@
 from __future__ import annotations
 
-from pathlib import Path
+from .shared.paths import (
+    agent_dir,
+    event_log_file,
+    inbox_dir,
+    inbox_failed_dir,
+    inbox_pending_dir,
+    inbox_processed_dir,
+    planning_dir,
+    task_dir,
+)
 
-
-def planning_dir(repo_root: Path) -> Path:
-    return repo_root / ".planning"
-
-
-def task_dir(repo_root: Path, task_dir_name: str, task_id: str) -> Path:
-    return repo_root / task_dir_name / task_id
-
-
-def agent_dir(repo_root: Path, task_dir_name: str, task_id: str) -> Path:
-    return task_dir(repo_root, task_dir_name, task_id) / "agents"
-
-
-def inbox_dir(repo_root: Path) -> Path:
-    return planning_dir(repo_root) / "inbox"
-
-
-def inbox_pending_dir(repo_root: Path) -> Path:
-    return inbox_dir(repo_root) / "pending"
-
-
-def inbox_processed_dir(repo_root: Path) -> Path:
-    return inbox_dir(repo_root) / "processed"
-
-
-def inbox_failed_dir(repo_root: Path) -> Path:
-    return inbox_dir(repo_root) / "failed"
-
-
-def event_log_file(repo_root: Path) -> Path:
-    return planning_dir(repo_root) / "events.jsonl"
+__all__ = [
+    "agent_dir",
+    "event_log_file",
+    "inbox_dir",
+    "inbox_failed_dir",
+    "inbox_pending_dir",
+    "inbox_processed_dir",
+    "planning_dir",
+    "task_dir",
+]

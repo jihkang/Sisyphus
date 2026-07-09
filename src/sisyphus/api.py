@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .config import SisyphusConfig, load_config
 from .daemon import process_inbox_event, queue_conversation_event, queue_pull_request_merged_event
-from .paths import inbox_failed_dir, inbox_processed_dir
+from .shared.paths import inbox_failed_dir, inbox_processed_dir
 from .promotion import execute_promotion as run_promotion_execution
 from .state import list_task_records, load_task_record
 from .workflow import run_workflow_cycle
