@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from .utils import find_unknown_fields
+from .shared.mappings import find_unknown_fields
 
 
 DSL_SCHEMA_VERSION = "sisyphus.dsl.v1"

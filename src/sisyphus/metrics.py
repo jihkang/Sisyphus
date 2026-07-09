@@ -9,7 +9,7 @@ import json
 from .bus_jsonl import resolve_event_bus_path
 from .config import SisyphusConfig
 from .events import new_event_envelope
-from .paths import event_log_file
+from .shared.paths import event_log_file
 from .state import list_task_records, utc_now
 
 
