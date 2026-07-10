@@ -366,6 +366,15 @@ wheels = [
 ]
 
 [[package]]
+name = "coverage"
+version = "7.15.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cc/8b/adeb62ea8951f13c4c7fef2e7a85e1a06b499c8d8237ea589d496029e53f/coverage-7.15.0.tar.gz", hash = "sha256:9ac3fe7a1435986463eaa8ee253ae2f2a268709ba4ae5c7dd1f52a05391ad78f", size = 925362, upload-time = "2026-07-02T13:10:50.535Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/52/30/21b2ad45959cd50e909e02ebac1e30b4ceb7162e91c11d4c570223a458b7/coverage-7.15.0-py3-none-any.whl", hash = "sha256:56da6a4cbe8f7e9e80bd072ca9cefe67d7106a440a7ec06519ec6507ac94ad19", size = 212632, upload-time = "2026-07-02T13:10:48.641Z" },
+]
+
+[[package]]
 name = "cryptography"
 version = "49.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1213,6 +1222,11 @@ dependencies = [
     { name = "mcp" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "coverage" },
+]
+
 [package.optional-dependencies]
 discord = [
     { name = "discord-py" },
@@ -1224,6 +1238,9 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.27,<2" },
 ]
 provides-extras = ["discord"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "coverage", specifier = "==7.15.0" }]
 
 [[package]]
 name = "sse-starlette"
