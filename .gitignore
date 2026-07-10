@@ -5,4 +5,3 @@ __pycache__/
 .planning/events.jsonl
 .planning/inbox/
 .planning/tasks/test.zip
-uv.lock

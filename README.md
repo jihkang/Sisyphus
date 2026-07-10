@@ -57,7 +57,7 @@ Use PowerShell:
 ```powershell
 git clone <repo-url>
 cd Sisyphus
-uv sync
+uv sync --frozen
 uv run sisyphus status
 ```
 
@@ -77,7 +77,7 @@ Use Terminal:
 ```bash
 git clone <repo-url>
 cd Sisyphus
-uv sync
+uv sync --frozen
 uv run sisyphus status
 ```
 
@@ -95,7 +95,7 @@ sisyphus status
 Repo-local environment:
 
 ```bash
-uv sync --extra discord
+uv sync --frozen --extra discord
 ```
 
 Tool install:
@@ -349,10 +349,13 @@ issue = ["lint"]
 
 ## Tests
 
-Run the full suite:
+Reproduce the CI environment and run the full suite:
 
 ```bash
-uv run python -m unittest discover -s tests -v
+uv lock --check
+uv sync --frozen --all-extras
+uv run --frozen python -m unittest discover -s tests -v
+uv build --no-sources
 ```
 
 ## Notes
