@@ -237,7 +237,7 @@ At a high level, the current implementation is organized around responsibility b
 | daemon.py, service.py, provider_wrapper.py, agent_runtime.py        |
 +--------------------------------------------------------------------+
 | Domain authority                                                   |
-| domain/{task,agent,lifecycle,planning,promotion,workflow}           |
+| domain/{inbox,task,agent,lifecycle,planning,promotion,workflow}     |
 +--------------------------------------------------------------------+
 | Artifact, evaluation, and evolution services                       |
 | artifacts.py, dsl.py, obligation_runtime.py, eval/, evolution/      |
@@ -261,7 +261,7 @@ flowchart TD
     P[Public facades and compat\ncli / state / workflow / mcp_core]
     I[Interfaces\nCLI / API / MCP / Discord]
     R[Intake and runtime\ndaemon / service / providers / agents]
-    D[Domain authority\ntask / lifecycle / planning / promotion / workflow]
+    D[Domain authority\ninbox / task / lifecycle / planning / promotion / workflow]
     A[Artifact and evaluation\nDSL / obligations / eval / evolution]
     F[Infrastructure\nconfig / persistence / shared primitives]
     W[Repository workspace\nplanning state / docs / git worktrees]
@@ -594,8 +594,9 @@ This layer should stay thin. It is mostly argument parsing, command dispatch, an
 
 This layer converts a user request into repository-local events and drives the orchestration loop.
 
-- `daemon.py` serializes conversation requests into inbox event JSON files.
-- The daemon processes pending events, creates tasks, and moves events into processed or failed inbox folders.
+- `domain/inbox/models.py` validates typed conversation and pull-request event contracts before they cross the queue boundary.
+- `infra/persistence/inbox.py` atomically persists and claims events across pending, processing, processed, and failed folders.
+- `daemon.py` coordinates validated event routing, creates tasks, and isolates malformed or failed events without stopping the loop.
 - `service.py` wraps the daemon loop and can emit task notifications based on state changes.
 
 This is the operational backbone of the system. It separates request intake from workflow advancement.
@@ -627,7 +628,7 @@ This layer stores state and provisions task workspaces.
 
 - `domain/task/models.py` defines task defaults and `domain/task/repository.py` persists task JSON; `state.py` re-exports the stable surface.
 - `domain/agent/models.py` and `domain/agent/repository.py` own agent records; `agents.py` is the stable facade.
-- `infra/persistence/` provides locked atomic JSON storage and file locks.
+- `infra/persistence/` provides locked atomic JSON storage, file locks, and the inbox lifecycle repository.
 - `infra/config/loader.py` owns configuration loading; `config.py` re-exports it.
 - `shared/` contains dependency-light clock, coercion, mapping, and path primitives.
 - `templates.py` materializes task document templates into the task directory.
@@ -745,7 +746,7 @@ sequenceDiagram
     actor User
     participant CLI as CLI/API
     participant Daemon as daemon.py
-    participant Inbox as .planning/inbox/*.json
+    participant Inbox as typed inbox model + repository
     participant Creation as creation.py + gitops.py
     participant TaskDir as .planning/tasks/<task-id>/
     participant State as state.py
@@ -759,9 +760,9 @@ sequenceDiagram
 
     User->>CLI: request("Add an agent dashboard")
     CLI->>Daemon: queue_conversation_event(message, title, task_type, provider, auto_run)
-    Daemon->>Inbox: write pending event JSON
+    Daemon->>Inbox: validate and atomically enqueue pending JSON
     CLI->>Daemon: process_inbox_event(event_path)
-    Daemon->>Inbox: read event JSON
+    Daemon->>Inbox: claim pending JSON into processing and validate again
     Daemon->>Creation: create_task_workspace(task_type, slug)
     Creation->>Creation: create branch + git worktree
     Creation->>TaskDir: create task directory
@@ -834,7 +835,7 @@ The main data handoff points are:
 
 The most important persistent channels are:
 
-- `.planning/inbox/pending`, `.planning/inbox/processed`, `.planning/inbox/failed`
+- `.planning/inbox/pending`, `.planning/inbox/processing`, `.planning/inbox/processed`, `.planning/inbox/failed`
 - `.planning/tasks/<task-id>/task.json`
 - `.planning/tasks/<task-id>/*.md`
 - `.planning/tasks/<task-id>/agents/*.json`
@@ -888,7 +889,7 @@ The current architecture works best when module responsibilities stay discipline
 
 - top-level facade and `compat` modules should delegate and preserve imports, not accumulate new business rules.
 - `interfaces/cli` and `interfaces/mcp` should own parsing, dispatch, transport schemas, and presentation only.
-- `daemon.py` should own queue processing and event lifecycle, not detailed business policy.
+- `daemon.py` should own queue coordination and event routing, not persistence mechanics or detailed business policy.
 - `domain/workflow/service.py` should coordinate transitions, not absorb template parsing or low-level git logic.
 - domain planning, lifecycle, promotion, and task services should remain transport-independent.
 - `infra` should own configuration and persistence mechanics; `shared` should remain small and dependency-light.
@@ -900,7 +901,7 @@ These are not required for the current design, but they are the most likely pres
 
 - Continue moving residual implicit string transitions behind the action registry and lifecycle rules.
 - Separate verification policy from verify command execution more cleanly.
-- Add stronger schema validation for inbox events, `task.json`, and agent records.
+- Add stronger schema validation for `task.json` and agent records.
 - Make task document parsing more resilient or move structured strategy data into a dedicated machine-readable file.
 - Isolate follow-up task logic and auto-loop policy from core daemon intake for simpler testing.
 - Add an indexed or dirty-set workflow candidate path before operating repositories with very large task histories.

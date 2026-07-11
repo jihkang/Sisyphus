@@ -23,6 +23,10 @@ def inbox_pending_dir(repo_root: Path) -> Path:
     return inbox_dir(repo_root) / "pending"
 
 
+def inbox_processing_dir(repo_root: Path) -> Path:
+    return inbox_dir(repo_root) / "processing"
+
+
 def inbox_processed_dir(repo_root: Path) -> Path:
     return inbox_dir(repo_root) / "processed"
 

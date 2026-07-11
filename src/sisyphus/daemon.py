@@ -10,14 +10,23 @@ import uuid
 from .bus import build_event_publisher
 from .config import SisyphusConfig, load_config
 from .creation import create_task_workspace
+from .domain.inbox import InboxEvent, InboxValidationError
+from .domain.task.documents import (
+    render_brief as _render_brief,
+    render_feature_plan as _render_feature_plan,
+    render_issue_fix_plan as _render_issue_fix_plan,
+    render_issue_repro as _render_issue_repro,
+    single_line as _single_line,
+)
 from .gitops import copy_relative_path, current_branch_name, list_dirty_paths, remove_relative_path
 from .events import new_event_envelope
+from .infra.persistence import InboxRepository
 from .metrics import publish_manual_intervention_required
 from .planning import enforce_plan_approved, enforce_spec_frozen
 from .promotion import record_merged_pull_request
 from .provider_wrapper import run_provider_wrapper
 from .shared.mappings import project_fields
-from .shared.paths import event_log_file, inbox_failed_dir, inbox_pending_dir, inbox_processed_dir
+from .shared.paths import event_log_file
 from .state import list_task_records, load_task_record, save_task_record, utc_now
 from .workflow import run_workflow_cycle
 
@@ -90,49 +99,40 @@ def queue_conversation_event(
     auto_run: bool = True,
 ) -> tuple[dict, Path]:
     event_id = _new_event_id()
-    normalized_title = (title or "").strip()
-    normalized_message = message.strip()
-    if not normalized_message:
-        raise DaemonError("conversation event requires a non-empty message")
-    if task_type not in {"feature", "issue"}:
-        raise DaemonError(f"unsupported task type: {task_type}")
-
-    payload = project_fields(
-        {
-            "title": normalized_title,
-            "message": normalized_message,
-            "task_type": task_type,
-            "slug": (slug or "").strip(),
-            "instruction": instruction,
-            "agent_id": agent_id,
-            "role": role,
-            "provider": provider,
-            "owned_paths": owned_paths or [],
-            "provider_args": provider_args or [],
-            "source_context": source_context or {},
-            "adopt_current_changes": adopt_current_changes,
-            "adopt_paths": adopt_paths or [],
-            "auto_run": auto_run,
-        },
-        CONVERSATION_FIELD_DEFAULTS,
-    )
-    payload["title"] = payload["title"] or _title_from_message(payload["message"])
-    payload["slug"] = payload["slug"] or _slugify(payload["title"], fallback=f"conversation-task-{event_id[-4:]}")
-
-    event = {
+    raw_event = {
         "id": event_id,
         "event_type": "conversation",
         "status": "queued",
         "created_at": utc_now(),
         "updated_at": utc_now(),
-        "payload": payload,
+        "payload": {
+            "title": title if title is not None else "",
+            "message": message,
+            "task_type": task_type,
+            "slug": slug if slug is not None else "",
+            "instruction": instruction,
+            "agent_id": agent_id,
+            "role": role,
+            "provider": provider,
+            "owned_paths": owned_paths if owned_paths is not None else [],
+            "provider_args": provider_args if provider_args is not None else [],
+            "source_context": source_context if source_context is not None else {},
+            "adopt_current_changes": adopt_current_changes,
+            "adopt_paths": adopt_paths if adopt_paths is not None else [],
+            "auto_run": auto_run,
+        },
         "result": None,
         "error": None,
     }
-    target_dir = inbox_pending_dir(repo_root)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    event_path = target_dir / f"{event_id}.json"
-    event_path.write_text(json.dumps(event, indent=2) + "\n", encoding="utf-8")
+    event = _validated_queued_event(raw_event)
+    payload = dict(event["payload"])
+    payload["title"] = payload["title"] or _title_from_message(str(payload["message"]))
+    payload["slug"] = payload["slug"] or _slugify(
+        str(payload["title"]),
+        fallback=f"conversation-task-{event_id[-4:]}",
+    )
+    event["payload"] = payload
+    event_path = InboxRepository(repo_root).enqueue(event)
     _append_event_log(
         repo_root,
         {
@@ -173,58 +173,37 @@ def queue_pull_request_merged_event(
     deletions: int | None = None,
     changed_files: list[dict[str, object]] | None = None,
 ) -> tuple[dict, Path]:
-    if pr_number < 1:
-        raise DaemonError("pull request merge event requires a positive pr_number")
-    normalized_title = title.strip()
-    if not normalized_title:
-        raise DaemonError("pull request merge event requires a non-empty title")
-    normalized_branch = (branch or head_branch or "").strip()
-    if not normalized_branch and not (task_id or "").strip():
-        raise DaemonError("pull request merge event requires task_id or branch/head_branch")
-
-    normalized_changed_files: list[dict[str, object]] = []
-    for item in changed_files or []:
-        if not isinstance(item, dict):
-            raise DaemonError("changed_files entries must be mapping objects")
-        normalized_changed_files.append(dict(item))
-
-    payload = project_fields(
-        {
-            "task_id": (task_id or "").strip() or None,
-            "branch": normalized_branch or None,
-            "repo_full_name": (repo_full_name or "").strip() or None,
-            "pr_number": pr_number,
-            "title": normalized_title,
-            "url": (url or "").strip() or None,
-            "base_branch": (base_branch or "").strip() or None,
-            "head_branch": (head_branch or "").strip() or None,
-            "head_sha": (head_sha or "").strip() or None,
-            "merge_commit_sha": (merge_commit_sha or "").strip() or None,
-            "merged_at": (merged_at or "").strip() or None,
-            "merged_by": (merged_by or "").strip() or None,
-            "merge_method": (merge_method or "").strip() or None,
-            "additions": additions,
-            "deletions": deletions,
-            "changed_files": normalized_changed_files,
-        },
-        PULL_REQUEST_MERGED_FIELD_DEFAULTS,
-    )
-
     event_id = _new_event_id()
-    event = {
+    raw_event = {
         "id": event_id,
         "event_type": "pull_request_merged",
         "status": "queued",
         "created_at": utc_now(),
         "updated_at": utc_now(),
-        "payload": payload,
+        "payload": {
+            "task_id": task_id,
+            "branch": branch,
+            "repo_full_name": repo_full_name,
+            "pr_number": pr_number,
+            "title": title,
+            "url": url,
+            "base_branch": base_branch,
+            "head_branch": head_branch,
+            "head_sha": head_sha,
+            "merge_commit_sha": merge_commit_sha,
+            "merged_at": merged_at,
+            "merged_by": merged_by,
+            "merge_method": merge_method,
+            "additions": additions,
+            "deletions": deletions,
+            "changed_files": changed_files if changed_files is not None else [],
+        },
         "result": None,
         "error": None,
     }
-    target_dir = inbox_pending_dir(repo_root)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    event_path = target_dir / f"{event_id}.json"
-    event_path.write_text(json.dumps(event, indent=2) + "\n", encoding="utf-8")
+    event = _validated_queued_event(raw_event)
+    payload = dict(event["payload"])
+    event_path = InboxRepository(repo_root).enqueue(event)
     _append_event_log(
         repo_root,
         {
@@ -259,12 +238,17 @@ def run_daemon(
     max_events: int | None = None,
 ) -> DaemonStats:
     stats = DaemonStats()
+    inbox = InboxRepository(repo_root)
     while True:
-        available = sorted(inbox_pending_dir(repo_root).glob("*.json"))
+        available = inbox.list_processable()
         progressed = False
 
         for event_path in available:
-            process_inbox_event(repo_root=repo_root, config=config, event_path=event_path, stats=stats)
+            try:
+                process_inbox_event(repo_root=repo_root, config=config, event_path=event_path, stats=stats)
+            except FileNotFoundError:
+                stats.skipped += 1
+                continue
             progressed = True
             if max_events is not None and (stats.processed + stats.failed) >= max_events:
                 return stats
@@ -289,24 +273,52 @@ def process_inbox_event(
     event_path: Path,
     stats: DaemonStats | None = None,
 ) -> dict:
-    publisher = build_event_publisher(repo_root, config)
-    raw_content = event_path.read_text(encoding="utf-8")
-    event = json.loads(raw_content)
+    inbox = InboxRepository(repo_root)
+    claimed_path = inbox.claim(event_path)
+    raw_event: object = None
+    try:
+        raw_event = inbox.read(claimed_path)
+        event = InboxEvent.from_dict(raw_event).to_dict()
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return _quarantine_invalid_event(
+            repo_root=repo_root,
+            config=config,
+            inbox=inbox,
+            event_path=claimed_path,
+            raw_event=raw_event,
+            kind="invalid_json",
+            error=exc,
+            stats=stats,
+        )
+    except InboxValidationError as exc:
+        kind = "unsupported_event_type" if exc.code == "unsupported_event_type" else "invalid_schema"
+        return _quarantine_invalid_event(
+            repo_root=repo_root,
+            config=config,
+            inbox=inbox,
+            event_path=claimed_path,
+            raw_event=raw_event,
+            kind=kind,
+            error=exc,
+            stats=stats,
+        )
+
     event["status"] = "processing"
     event["updated_at"] = utc_now()
-    event_path.write_text(json.dumps(event, indent=2) + "\n", encoding="utf-8")
-    _append_event_log(
-        repo_root,
-        {
-            "timestamp": utc_now(),
-            "event_id": event.get("id"),
-            "event_type": event.get("event_type"),
-            "status": "processing",
-            "message": f"processing {event_path.name}",
-        },
-    )
+    inbox.update(claimed_path, event)
 
     try:
+        publisher = build_event_publisher(repo_root, config)
+        _append_event_log(
+            repo_root,
+            {
+                "timestamp": utc_now(),
+                "event_id": event.get("id"),
+                "event_type": event.get("event_type"),
+                "status": "processing",
+                "message": f"processing {claimed_path.name}",
+            },
+        )
         event_type = str(event.get("event_type"))
         if event_type == "conversation":
             result = _process_conversation_event(repo_root=repo_root, config=config, event=event)
@@ -318,9 +330,6 @@ def process_inbox_event(
         event["updated_at"] = utc_now()
         event["result"] = result
         event["error"] = None
-        destination = inbox_processed_dir(repo_root) / event_path.name
-        if stats is not None:
-            stats.processed += 1
         success_message = (
             f"created task {result['task_id']}"
             if event_type == "conversation"
@@ -348,14 +357,104 @@ def process_inbox_event(
                 data=processed_data,
             )
         )
-    except Exception as exc:
-        event_type = str(event.get("event_type"))
-        event["status"] = "failed"
-        event["updated_at"] = utc_now()
-        event["error"] = str(exc)
-        destination = inbox_failed_dir(repo_root) / event_path.name
+        inbox.complete(claimed_path, event)
         if stats is not None:
-            stats.failed += 1
+            stats.processed += 1
+        return event
+    except Exception as exc:
+        return _fail_event(
+            repo_root=repo_root,
+            config=config,
+            inbox=inbox,
+            event_path=claimed_path,
+            event=event,
+            error=str(exc),
+            stats=stats,
+        )
+
+
+def _validated_queued_event(raw_event: dict[str, object]) -> dict[str, object]:
+    try:
+        return InboxEvent.from_dict(raw_event).to_dict()
+    except InboxValidationError as exc:
+        raise DaemonError(str(exc)) from None
+
+
+def _quarantine_invalid_event(
+    *,
+    repo_root: Path,
+    config: SisyphusConfig,
+    inbox: InboxRepository,
+    event_path: Path,
+    raw_event: object,
+    kind: str,
+    error: Exception,
+    stats: DaemonStats | None,
+) -> dict[str, object]:
+    error_text = f"{kind}: {error}"
+    event = _normalized_failed_event(raw_event, event_path=event_path, error=error_text)
+    return _fail_event(
+        repo_root=repo_root,
+        config=config,
+        inbox=inbox,
+        event_path=event_path,
+        event=event,
+        error=error_text,
+        stats=stats,
+    )
+
+
+def _normalized_failed_event(
+    raw_event: object,
+    *,
+    event_path: Path,
+    error: str,
+) -> dict[str, object]:
+    data = raw_event if type(raw_event) is dict else {}
+    event_id = data.get("id") if type(data.get("id")) is str else event_path.stem
+    event_type = data.get("event_type") if type(data.get("event_type")) is str else "unknown"
+    created_at = data.get("created_at") if type(data.get("created_at")) is str else utc_now()
+    return {
+        "id": str(event_id)[:128] or event_path.stem[:128] or "unknown",
+        "event_type": str(event_type)[:64] or "unknown",
+        "status": "failed",
+        "created_at": str(created_at)[:128] or utc_now(),
+        "updated_at": utc_now(),
+        "payload": {},
+        "result": None,
+        "error": error[:4096],
+    }
+
+
+def _fail_event(
+    *,
+    repo_root: Path,
+    config: SisyphusConfig,
+    inbox: InboxRepository,
+    event_path: Path,
+    event: dict[str, object],
+    error: str,
+    stats: DaemonStats | None,
+) -> dict[str, object]:
+    error = error[:4096]
+    event["status"] = "failed"
+    event["updated_at"] = utc_now()
+    event["error"] = error
+    inbox.fail(event_path, event)
+    if stats is not None:
+        stats.failed += 1
+    _report_event_failure(repo_root=repo_root, config=config, event=event, error=error)
+    return event
+
+
+def _report_event_failure(
+    *,
+    repo_root: Path,
+    config: SisyphusConfig,
+    event: dict[str, object],
+    error: str,
+) -> None:
+    try:
         _append_event_log(
             repo_root,
             {
@@ -363,22 +462,27 @@ def process_inbox_event(
                 "event_id": event.get("id"),
                 "event_type": event.get("event_type"),
                 "status": "failed",
-                "message": str(exc),
+                "message": error,
             },
         )
-        failed_envelope_type = "conversation.failed" if event_type == "conversation" else "pull_request.merged.failed"
-        publisher.publish(
+    except Exception:
+        pass
+
+    event_type = str(event.get("event_type") or "unknown")
+    failed_envelope_type = {
+        "conversation": "conversation.failed",
+        "pull_request_merged": "pull_request.merged.failed",
+    }.get(event_type, "inbox.event.failed")
+    try:
+        build_event_publisher(repo_root, config).publish(
             new_event_envelope(
                 failed_envelope_type,
                 source={"module": "daemon"},
-                data={"event_id": event.get("id"), "status": "failed", "error": str(exc)},
+                data={"event_id": event.get("id"), "status": "failed", "error": error},
             )
         )
-
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(json.dumps(event, indent=2) + "\n", encoding="utf-8")
-    event_path.unlink()
-    return event
+    except Exception:
+        pass
 
 
 def _process_conversation_event(repo_root: Path, config: SisyphusConfig, event: dict) -> dict:
@@ -776,222 +880,6 @@ def _is_internal_sisyphus_path(relative_path: str) -> bool:
     return normalized == ".planning" or normalized.startswith(".planning/")
 
 
-def _render_brief(
-    task: dict,
-    title: str,
-    message: str,
-    *,
-    requested_slug: str,
-    parent_task_id: str | None,
-) -> str:
-    lines = [
-        "# Brief",
-        "",
-        "## Task",
-        "",
-        f"- Task ID: `{task['id']}`",
-        f"- Type: `{task['type']}`",
-        f"- Slug: `{task['slug']}`",
-        f"- Branch: `{task['branch']}`",
-    ]
-    if requested_slug and requested_slug != str(task["slug"]):
-        lines.append(f"- Requested Slug: `{requested_slug}`")
-    if parent_task_id:
-        lines.append(f"- Follow-up Of: `{parent_task_id}`")
-    lines.extend(
-        [
-            "",
-            "## Problem" if task["type"] == "feature" else "## Symptom",
-            "",
-            f"- {title}",
-            f"- Original request: {message}",
-        ]
-    )
-    if parent_task_id:
-        lines.append(f"- This task continues implementation work after `{parent_task_id}` was closed.")
-    lines.extend(
-        [
-            "",
-            "## Desired Outcome" if task["type"] == "feature" else "## Expected Behavior",
-            "",
-            "- The repository behavior matches the requested conversation outcome.",
-            "- The resulting change stays scoped to this task branch and worktree.",
-            "",
-            "## Acceptance Criteria" if task["type"] == "feature" else "## Impact",
-            "",
-            "- [ ] The requested workflow is implemented or corrected.",
-            "- [ ] The task docs reflect the actual implementation and verification scope.",
-            "- [ ] Verification notes are ready to be updated after implementation.",
-            "",
-            "## Constraints" if task["type"] == "feature" else "## Notes",
-            "",
-            "- Preserve existing repository conventions unless the task requires a deliberate change.",
-            "- Re-read the task docs before verify and close.",
-            "",
-        ]
-    )
-    return "\n".join(lines)
-
-
-def _render_feature_plan(task: dict, title: str, message: str) -> str:
-    request_summary = _single_line(message)
-    return "\n".join(
-        [
-            "# Plan",
-            "",
-            "## Implementation Plan",
-            "",
-            f"1. Inspect the current code path related to: {title}.",
-            f"2. Implement the requested behavior for: {request_summary}.",
-            "3. Update tests and task docs to match the final behavior.",
-            "",
-            "## Risks",
-            "",
-            "- The conversation request may omit edge conditions that still matter in the current codebase.",
-            "- The change may affect adjacent flows if the requested behavior touches shared state.",
-            "",
-            "## Design Evaluation",
-            "",
-            "- Design Mode: `none`",
-            "- Decision Reason: `existing contract only`",
-            "- Confidence: `medium`",
-            "- Layer Impact: `layer-preserving`",
-            "- Layer Decision Reason: `n/a`",
-            "- Required Design Artifacts: `none`",
-            "",
-            "## Design Artifacts",
-            "",
-            "- Connection Diagram: `n/a`",
-            "- Sequence Diagram: `n/a`",
-            "- Boundary Note: `n/a`",
-            "",
-            "## Test Strategy",
-            "",
-            "### Normal Cases",
-            "",
-            "- [ ] Requested conversation workflow succeeds",
-            "",
-            "### Edge Cases",
-            "",
-            "- [ ] Minimal valid input still behaves predictably",
-            "",
-            "### Exception Cases",
-            "",
-            "- [ ] Unexpected failure surfaces an actionable error",
-            "",
-            "## Verification Mapping",
-            "",
-            "- `Requested conversation workflow succeeds` -> `sisyphus verify`",
-            "- `Minimal valid input still behaves predictably` -> `targeted regression test`",
-            "- `Unexpected failure surfaces an actionable error` -> `manual review`",
-            "",
-            "## External LLM Review",
-            "",
-            "- Required: `no`",
-            "- Provider: `n/a`",
-            "- Purpose: `n/a`",
-            "- Trigger: `n/a`",
-            "",
-        ]
-    )
-
-
-def _render_issue_repro(task: dict, title: str, message: str) -> str:
-    return "\n".join(
-        [
-            "# Repro",
-            "",
-            "## Preconditions",
-            "",
-            "- Repository is checked out in the task worktree.",
-            "- The current branch reproduces the reported behavior.",
-            "",
-            "## Repro Steps",
-            "",
-            f"1. Follow the workflow described by the request: {title}.",
-            "2. Observe the current incorrect behavior in the relevant code path.",
-            "3. Compare the observed result against the expected result below.",
-            "",
-            "## Observed Result",
-            "",
-            f"- {message}",
-            "",
-            "## Expected Result",
-            "",
-            "- The reported issue no longer occurs once the fix is applied.",
-            "",
-            "## Regression Test Target",
-            "",
-            "- Add or update a regression-oriented test that fails before the fix and passes after it.",
-            "",
-        ]
-    )
-
-
-def _render_issue_fix_plan(task: dict, title: str, message: str) -> str:
-    _ = task
-    request_summary = _single_line(message)
-    return "\n".join(
-        [
-            "# Fix Plan",
-            "",
-            "## Root Cause Hypothesis",
-            "",
-            f"- The behavior described by the request likely originates in the code path for: {title}.",
-            "",
-            "## Fix Strategy",
-            "",
-            f"1. Confirm the failing path described by: {request_summary}.",
-            "2. Add or update a regression test around the failing path.",
-            "3. Implement the fix and re-run the relevant checks.",
-            "4. Update task docs with the verified outcome.",
-            "",
-            "## Design Evaluation",
-            "",
-            "- Design Mode: `none`",
-            "- Decision Reason: `existing contract only`",
-            "- Confidence: `medium`",
-            "- Layer Impact: `layer-preserving`",
-            "- Layer Decision Reason: `n/a`",
-            "- Required Design Artifacts: `none`",
-            "",
-            "## Design Artifacts",
-            "",
-            "- Connection Diagram: `n/a`",
-            "- Sequence Diagram: `n/a`",
-            "- Boundary Note: `n/a`",
-            "",
-            "## Test Strategy",
-            "",
-            "### Normal Cases",
-            "",
-            "- [ ] Regression scenario now passes",
-            "",
-            "### Edge Cases",
-            "",
-            "- [ ] Neighboring behavior remains stable",
-            "",
-            "### Exception Cases",
-            "",
-            "- [ ] Invalid or missing input still fails safely",
-            "",
-            "## Verification Mapping",
-            "",
-            "- `Regression scenario now passes` -> `sisyphus verify`",
-            "- `Neighboring behavior remains stable` -> `targeted regression test`",
-            "- `Invalid or missing input still fails safely` -> `manual review`",
-            "",
-            "## External LLM Review",
-            "",
-            "- Required: `no`",
-            "- Provider: `n/a`",
-            "- Purpose: `n/a`",
-            "- Trigger: `n/a`",
-            "",
-        ]
-    )
-
-
 def _append_event_log(repo_root: Path, entry: dict) -> None:
     log_path = event_log_file(repo_root)
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1011,8 +899,3 @@ def _slugify(value: str, *, fallback: str = "conversation-task") -> str:
 def _title_from_message(message: str) -> str:
     line = _single_line(message)
     return line[:72] or "Conversation Task"
-
-
-def _single_line(value: str) -> str:
-    collapsed = " ".join(part.strip() for part in value.splitlines() if part.strip())
-    return collapsed or "No details provided"
