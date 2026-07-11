@@ -51,6 +51,20 @@ class RepositoryHygieneTests(unittest.TestCase):
         self.assertIn("coverage run -m unittest discover -s tests", workflow)
         self.assertIn("coverage report", workflow)
 
+    def test_mit_license_is_declared_consistently(self) -> None:
+        license_text = (PROJECT_ROOT / "LICENSE").read_text(encoding="utf-8")
+        self.assertTrue(license_text.startswith("MIT License\n"))
+        self.assertIn("Copyright (c) 2026 jihkang", license_text)
+        self.assertIn("Permission is hereby granted, free of charge", license_text)
+
+        with (PROJECT_ROOT / "pyproject.toml").open("rb") as pyproject_file:
+            pyproject = tomllib.load(pyproject_file)
+        self.assertEqual(pyproject["project"]["license"], "MIT")
+        self.assertEqual(pyproject["project"]["license-files"], ["LICENSE"])
+
+        readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("[MIT License](LICENSE)", readme)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,309 @@
+{
+  "id": "TF-20260711-feature-adopt-mit-license",
+  "type": "feature",
+  "slug": "adopt-mit-license",
+  "status": "verified",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-07-11T11:32:36Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved the scoped MIT licensing, package metadata, archive inspection, and full regression verification plan.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved the scoped MIT licensing, package metadata, archive inspection, and full regression verification plan.",
+      "timestamp": "2026-07-11T11:32:36Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-07-11T11:32:46Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Frozen after deterministic spec validation passed with zero errors and warnings.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-07-11T11:26:04Z",
+  "updated_at": "2026-07-11T11:33:21Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260711-feature-adopt-mit-license",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license",
+  "branch": "feat/adopt-mit-license",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license/src /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest discover -s tests",
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && env UV_CACHE_DIR=/tmp/uv-cache /opt/homebrew/bin/uv lock --check",
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && env UV_CACHE_DIR=/tmp/uv-cache /opt/homebrew/bin/uv build --no-sources --offline --clear",
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && tar -tzf dist/sisyphus-0.1.0.tar.gz sisyphus-0.1.0/LICENSE",
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && unzip -l dist/sisyphus-0.1.0-py3-none-any.whl sisyphus-0.1.0.dist-info/licenses/LICENSE"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-07-11T11:33:21Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license/src /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest discover -s tests",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license/src /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest discover -s tests",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-07-11T11:33:09Z",
+      "finished_at": "2026-07-11T11:33:20Z",
+      "duration_ms": null,
+      "output_excerpt": "workflow_phase: execution"
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && env UV_CACHE_DIR=/tmp/uv-cache /opt/homebrew/bin/uv lock --check",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && env UV_CACHE_DIR=/tmp/uv-cache /opt/homebrew/bin/uv lock --check",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-07-11T11:33:20Z",
+      "finished_at": "2026-07-11T11:33:20Z",
+      "duration_ms": null,
+      "output_excerpt": "Resolved 42 packages in 0.87ms"
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && env UV_CACHE_DIR=/tmp/uv-cache /opt/homebrew/bin/uv build --no-sources --offline --clear",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && env UV_CACHE_DIR=/tmp/uv-cache /opt/homebrew/bin/uv build --no-sources --offline --clear",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-07-11T11:33:20Z",
+      "finished_at": "2026-07-11T11:33:21Z",
+      "duration_ms": null,
+      "output_excerpt": "Successfully built dist/sisyphus-0.1.0-py3-none-any.whl"
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && tar -tzf dist/sisyphus-0.1.0.tar.gz sisyphus-0.1.0/LICENSE",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && tar -tzf dist/sisyphus-0.1.0.tar.gz sisyphus-0.1.0/LICENSE",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-07-11T11:33:21Z",
+      "finished_at": "2026-07-11T11:33:21Z",
+      "duration_ms": null,
+      "output_excerpt": "sisyphus-0.1.0/LICENSE"
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && unzip -l dist/sisyphus-0.1.0-py3-none-any.whl sisyphus-0.1.0.dist-info/licenses/LICENSE",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && unzip -l dist/sisyphus-0.1.0-py3-none-any.whl sisyphus-0.1.0.dist-info/licenses/LICENSE",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-07-11T11:33:21Z",
+      "finished_at": "2026-07-11T11:33:21Z",
+      "duration_ms": null,
+      "output_excerpt": "     1064                     1 file"
+    }
+  ],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Root license text, package metadata, and README consistently identify MIT",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Source and wheel distributions both include the root license text",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Existing runtime behavior and tests remain unchanged after metadata edits",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Root license text, package metadata, and README consistently identify MIT",
+        "method": "manual text and metadata review"
+      },
+      {
+        "target": "Source and wheel distributions both include the root license text",
+        "method": "offline package build and archive inspection"
+      },
+      {
+        "target": "Existing runtime behavior and tests remain unchanged after metadata edits",
+        "method": "full unittest suite"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": "not required",
+      "purpose": "the operator explicitly selected the standard MIT license",
+      "trigger": "review again only if the operator changes the license choice or copyright holder",
+      "status": "not_needed"
+    }
+  },
+  "design": {
+    "mode": "none",
+    "decision_reason": "documentation and package metadata only",
+    "confidence": "high",
+    "layer_impact": "layer-preserving",
+    "layer_decision_reason": "no runtime or ownership boundary changes",
+    "required_artifacts": [],
+    "artifacts": {
+      "connection_diagram": "not required for a metadata-only change",
+      "sequence_diagram": "not required for a metadata-only change",
+      "boundary_note": "LICENSE is authoritative; README and package metadata reference it"
+    },
+    "frozen": {
+      "mode": "none",
+      "layer_impact": "layer-preserving",
+      "required_artifacts": [],
+      "artifacts": {
+        "connection_diagram": "not required for a metadata-only change",
+        "sequence_diagram": "not required for a metadata-only change",
+        "boundary_note": "LICENSE is authoritative; README and package metadata reference it"
+      },
+      "anchor_summary": "mode=none, layer=layer-preserving, recorded=3",
+      "frozen_at": "2026-07-11T11:32:46Z"
+    },
+    "assessment": {
+      "status": "appropriate",
+      "summary": "design depth matches the current task shape",
+      "replan_required": false,
+      "escalation_reason": null,
+      "missing_artifacts": []
+    }
+  },
+  "promotion": {
+    "required": true,
+    "required_override": null,
+    "required_reason": "feature tasks are promotable by default",
+    "required_source": "classified",
+    "status": "promotion_pending",
+    "strategy": "direct",
+    "remote_name": null,
+    "parent_artifact_id": null,
+    "parent_task_id": null,
+    "base_override": null,
+    "base_branch": "main",
+    "base_source": null,
+    "base_reason": null,
+    "resolved_parent_branch": null,
+    "retarget_required": false,
+    "reverify_required": false,
+    "retarget_required_at": null,
+    "retarget_parent_task_id": null,
+    "retarget_parent_branch": null,
+    "retarget_merge_target": null,
+    "head_branch": "feat/adopt-mit-license",
+    "pr_number": null,
+    "pr_url": null,
+    "receipt_path": "artifacts/promotion/merge_receipt.json",
+    "execution_receipt_path": null,
+    "changeset_path": "CHANGESET.md",
+    "commit_message": null,
+    "repo_full_name": null,
+    "title": null,
+    "head_sha": null,
+    "merge_commit_sha": null,
+    "committed_at": null,
+    "pushed_at": null,
+    "pr_opened_at": null,
+    "merged_at": null,
+    "merged_by": null,
+    "merge_method": null,
+    "recorded_at": null
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": "design depth matches the current task shape",
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_design_anchor_at": "2026-07-11T11:32:46Z",
+    "last_design_anchor_source": "planning.freeze_task_spec",
+    "last_checkpoint_type": "design_assessment",
+    "last_checkpoint_source": "audit.design",
+    "last_checkpoint_at": "2026-07-11T11:33:09Z",
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": [
+      {
+        "id": "e6f17a7cd7864adab26a5b6ddbcab273",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=none, layer=layer-preserving, recorded=3",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-07-11T11:32:46Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "060f357e1405402e996f8ac9782a6ea1",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-07-11T11:33:09Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      }
+    ]
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "promotion": {
+      "status": "promotion_pending",
+      "recorded_at": null,
+      "repo_full_name": null,
+      "pr_number": null,
+      "title": null,
+      "url": null,
+      "head_branch": "feat/adopt-mit-license",
+      "base_branch": "main",
+      "head_sha": null,
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "merged_by": null,
+      "merge_method": null,
+      "receipt_path": "artifacts/promotion/merge_receipt.json",
+      "changeset_path": "CHANGESET.md",
+      "parent_artifact_id": null,
+      "parent_task_id": null
+    },
+    "source_event_id": "evt-1b6bb6e1bb52",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "adopt-mit-license",
+    "owned_paths": [
+      "LICENSE",
+      "README.md",
+      "pyproject.toml"
+    ],
+    "requested_adopt_paths": [],
+    "spec_validation_required": true,
+    "evidence_graph_required": true
+  },
+  "spec_validation": {
+    "status": "passed",
+    "stale": false,
+    "checked_at": "2026-07-11T11:32:21Z",
+    "report_path": "artifacts/spec-validation/latest.json",
+    "source_fingerprint": "7b175e6773c6d54db2904a0fc24a62bc53f59e648b00881a4a05ba8fdd81027b",
+    "error_count": 0,
+    "warning_count": 0
+  }
+}

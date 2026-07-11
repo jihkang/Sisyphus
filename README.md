@@ -369,6 +369,10 @@ Coverage includes branch measurement and enforces the repository-wide floor conf
 - Contribution workflow and verification requirements: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Versioning and release gates: [RELEASES.md](RELEASES.md)
 
+## License
+
+Sisyphus is available under the [MIT License](LICENSE).
+
 ## Notes
 
 - `sisyphus` is the preferred command surface.
