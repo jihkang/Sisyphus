@@ -10,7 +10,7 @@
 2. Define the MVP rule set.
    - Required docs: feature tasks require BRIEF and PLAN; issue tasks require BRIEF, REPRO, and FIX_PLAN when present in metadata.
    - Required sections: BRIEF must define problem, outcome, acceptance criteria, and constraints; PLAN/FIX_PLAN must define implementation plan, risks, design evaluation, test strategy, verification mapping, and external review policy.
-   - Placeholder detection: reject default/generated placeholders such as generic requested workflow text, `Criterion 1`, `Note 1`, `Follow-up 1`, `n/a` where a concrete answer is required, and empty checkbox-only strategy items.
+   - Placeholder detection: reject generated ordinal labels, generic requested-workflow text, and not-applicable markers where a concrete answer is required, plus empty checkbox-only strategy items.
    - Scope clarity: require owned paths or explicit scope notes, plus out-of-scope notes when the request touches shared lifecycle behavior.
    - Coverage: require at least one normal, edge, and exception case unless an explicit waiver is present with a reason.
    - Verification mapping: each coverage case must map to at least one concrete verification method, and each method must name a command, test, manual review artifact, or external review trigger.

@@ -2,8 +2,8 @@
   "id": "TF-20260517-feature-add-spec-validation-pipeline",
   "type": "feature",
   "slug": "add-spec-validation-pipeline",
-  "status": "open",
-  "stage": "spec",
+  "status": "verified",
+  "stage": "done",
   "plan_status": "approved",
   "plan_reviewed_at": "2026-05-17T08:15:49Z",
   "plan_reviewed_by": "codex",
@@ -33,15 +33,15 @@
       "timestamp": "2026-05-17T08:15:49Z"
     }
   ],
-  "workflow_phase": "subtask_planning",
+  "workflow_phase": "verified",
   "spec_status": "frozen",
-  "spec_frozen_at": "2026-05-17T08:15:51Z",
+  "spec_frozen_at": "2026-07-11T09:52:47Z",
   "spec_reviewed_by": "codex",
-  "spec_review_notes": "Freezing the manually validated spec as the authoritative prerequisite for implementation. This task must land before verify hardening.",
-  "audit_attempts": 0,
+  "spec_review_notes": "Re-anchored after clarifying placeholder-example wording without changing implementation scope.",
+  "audit_attempts": 2,
   "max_audit_attempts": 10,
   "created_at": "2026-05-17T08:07:02Z",
-  "updated_at": "2026-07-11T09:46:12Z",
+  "updated_at": "2026-07-11T09:53:04Z",
   "closed_at": null,
   "repo_root": "/Users/jihokang/Documents/Sisyphus",
   "task_dir": ".planning/tasks/TF-20260517-feature-add-spec-validation-pipeline",
@@ -49,10 +49,23 @@
   "branch": "feat/add-spec-validation-pipeline",
   "base_branch": "main",
   "verify_profile": "default",
-  "verify_commands": [],
-  "verify_status": "not_run",
-  "last_verified_at": null,
-  "last_verify_results": [],
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline/src /Users/jihokang/Documents/Codex/2026-07-06/flat-package-src-sisyphus-utils-coerce/.worktrees/spec-validation-modernized/.venv/bin/python -m unittest discover -s tests"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-07-11T09:53:04Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline/src /Users/jihokang/Documents/Codex/2026-07-06/flat-package-src-sisyphus-utils-coerce/.worktrees/spec-validation-modernized/.venv/bin/python -m unittest discover -s tests",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline/src /Users/jihokang/Documents/Codex/2026-07-06/flat-package-src-sisyphus-utils-coerce/.worktrees/spec-validation-modernized/.venv/bin/python -m unittest discover -s tests",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-07-11T09:52:55Z",
+      "finished_at": "2026-07-11T09:53:04Z",
+      "duration_ms": null,
+      "output_excerpt": "workflow_phase: execution"
+    }
+  ],
   "test_strategy": {
     "normal_cases": [
       {
@@ -164,11 +177,11 @@
         "boundary_note": "Validator is the only owner of spec-validation rules. Planning, audit, CLI, and MCP call the validator and render its report; they should not define competing rule logic."
       },
       "anchor_summary": "mode=light, layer=layer-adding, recorded=1",
-      "frozen_at": "2026-05-17T08:15:51Z"
+      "frozen_at": "2026-07-11T09:52:47Z"
     },
     "assessment": {
-      "status": "not_assessed",
-      "summary": null,
+      "status": "appropriate",
+      "summary": "design depth matches the current task shape",
       "replan_required": false,
       "escalation_reason": null,
       "missing_artifacts": []
@@ -219,14 +232,14 @@
   "conformance": {
     "policy": "required",
     "status": "green",
-    "summary": "mode=light, layer=layer-adding, recorded=1",
+    "summary": "design depth matches the current task shape",
     "last_spec_anchor_at": null,
     "last_spec_anchor_source": null,
-    "last_design_anchor_at": "2026-05-17T08:15:51Z",
+    "last_design_anchor_at": "2026-07-11T09:52:47Z",
     "last_design_anchor_source": "planning.freeze_task_spec",
-    "last_checkpoint_type": "design_anchor",
-    "last_checkpoint_source": "planning.freeze_task_spec",
-    "last_checkpoint_at": "2026-05-17T08:15:51Z",
+    "last_checkpoint_type": "design_assessment",
+    "last_checkpoint_source": "audit.design",
+    "last_checkpoint_at": "2026-07-11T09:52:55Z",
     "drift_count": 0,
     "warning_count": 0,
     "unresolved_warning_count": 0,
@@ -241,6 +254,39 @@
         "summary": "mode=light, layer=layer-adding, recorded=1",
         "source": "planning.freeze_task_spec",
         "timestamp": "2026-05-17T08:15:51Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "bea1dae135aa494baf616a7e8fef1f1c",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-07-11T09:48:22Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "10cc5f7111ec4ff4bdd5312aa65a92b5",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=light, layer=layer-adding, recorded=1",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-07-11T09:52:47Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "8977b9293f744c4586490fad62e1d1c1",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-07-11T09:52:55Z",
         "resolved": false,
         "drift": 0,
         "subtask_id": null
@@ -294,15 +340,6 @@
       "tests/test_golden.py"
     ],
     "requested_adopt_paths": [],
-    "spec_validation_required": true
-  },
-  "spec_validation": {
-    "status": "passed",
-    "stale": false,
-    "checked_at": "2026-07-11T09:46:12Z",
-    "report_path": "artifacts/spec-validation/latest.json",
-    "source_fingerprint": "dfb684d00556534a73da5d6ba7ab255a65c7abef5ff21a71c23ba91a8a1b8749",
-    "error_count": 0,
-    "warning_count": 0
+    "evidence_graph_required": true
   }
 }
