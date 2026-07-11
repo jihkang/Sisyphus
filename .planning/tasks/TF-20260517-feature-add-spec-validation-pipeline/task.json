@@ -38,10 +38,10 @@
   "spec_frozen_at": "2026-07-11T09:52:47Z",
   "spec_reviewed_by": "codex",
   "spec_review_notes": "Re-anchored after clarifying placeholder-example wording without changing implementation scope.",
-  "audit_attempts": 2,
+  "audit_attempts": 3,
   "max_audit_attempts": 10,
   "created_at": "2026-05-17T08:07:02Z",
-  "updated_at": "2026-07-11T09:53:04Z",
+  "updated_at": "2026-07-11T09:55:26Z",
   "closed_at": null,
   "repo_root": "/Users/jihokang/Documents/Sisyphus",
   "task_dir": ".planning/tasks/TF-20260517-feature-add-spec-validation-pipeline",
@@ -50,18 +50,18 @@
   "base_branch": "main",
   "verify_profile": "default",
   "verify_commands": [
-    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline/src /Users/jihokang/Documents/Codex/2026-07-06/flat-package-src-sisyphus-utils-coerce/.worktrees/spec-validation-modernized/.venv/bin/python -m unittest discover -s tests"
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline/src /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest discover -s tests"
   ],
   "verify_status": "passed",
-  "last_verified_at": "2026-07-11T09:53:04Z",
+  "last_verified_at": "2026-07-11T09:55:14Z",
   "last_verify_results": [
     {
-      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline/src /Users/jihokang/Documents/Codex/2026-07-06/flat-package-src-sisyphus-utils-coerce/.worktrees/spec-validation-modernized/.venv/bin/python -m unittest discover -s tests",
-      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline/src /Users/jihokang/Documents/Codex/2026-07-06/flat-package-src-sisyphus-utils-coerce/.worktrees/spec-validation-modernized/.venv/bin/python -m unittest discover -s tests",
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline/src /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest discover -s tests",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline/src /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest discover -s tests",
       "status": "passed",
       "exit_code": 0,
-      "started_at": "2026-07-11T09:52:55Z",
-      "finished_at": "2026-07-11T09:53:04Z",
+      "started_at": "2026-07-11T09:55:05Z",
+      "finished_at": "2026-07-11T09:55:14Z",
       "duration_ms": null,
       "output_excerpt": "workflow_phase: execution"
     }
@@ -239,7 +239,7 @@
     "last_design_anchor_source": "planning.freeze_task_spec",
     "last_checkpoint_type": "design_assessment",
     "last_checkpoint_source": "audit.design",
-    "last_checkpoint_at": "2026-07-11T09:52:55Z",
+    "last_checkpoint_at": "2026-07-11T09:55:05Z",
     "drift_count": 0,
     "warning_count": 0,
     "unresolved_warning_count": 0,
@@ -287,6 +287,17 @@
         "summary": "design depth matches the current task shape",
         "source": "audit.design",
         "timestamp": "2026-07-11T09:52:55Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "cbbe60db271345f8a30c3d4bbb79e166",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-07-11T09:55:05Z",
         "resolved": false,
         "drift": 0,
         "subtask_id": null
@@ -340,6 +351,16 @@
       "tests/test_golden.py"
     ],
     "requested_adopt_paths": [],
-    "evidence_graph_required": true
+    "evidence_graph_required": true,
+    "spec_validation_required": true
+  },
+  "spec_validation": {
+    "status": "passed",
+    "stale": false,
+    "checked_at": "2026-07-11T09:55:26Z",
+    "report_path": "artifacts/spec-validation/latest.json",
+    "source_fingerprint": "53825fb3066a8b6f615770c6cdad94e699e4a79706df023a3d2c2405af89237f",
+    "error_count": 0,
+    "warning_count": 0
   }
 }

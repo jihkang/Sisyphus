@@ -1,0 +1,68 @@
+{
+  "blocking_gaps": [],
+  "claims": [
+    {
+      "blocking": true,
+      "id": "claim-verify-passed",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Sisyphus verification passed."
+    },
+    {
+      "blocking": false,
+      "id": "claim-conformance-green",
+      "importance": "medium",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Task conformance is green."
+    }
+  ],
+  "curated_evidence": [
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification command passed.",
+      "id": "ev-command-001",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-11T09:55:14Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260517-feature-add-spec-validation-pipeline/src /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest discover -s tests",
+        "exit_code": 0,
+        "output_excerpt": "workflow_phase: execution"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Task conformance is green.",
+      "id": "ev-conformance-summary",
+      "importance": "medium",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-11T09:55:14Z",
+      "reproducibility": "high",
+      "source": {
+        "resource": "task://TF-20260517-feature-add-spec-validation-pipeline/conformance"
+      },
+      "supports": [
+        "claim-conformance-green"
+      ],
+      "type": "conformance",
+      "verdict": "supports"
+    }
+  ],
+  "generated_at": "2026-07-11T09:55:14Z",
+  "schema_version": "sisyphus.evidence_graph.v1",
+  "task_id": "TF-20260517-feature-add-spec-validation-pipeline",
+  "unsupported_claims": [],
+  "verify_status": "passed"
+}
