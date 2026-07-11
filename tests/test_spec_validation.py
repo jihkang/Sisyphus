@@ -330,6 +330,24 @@ class SpecValidationTests(unittest.TestCase):
         reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
         self.assertEqual(reloaded["spec_validation"]["status"], "passed")
 
+    def test_validated_task_does_not_use_legacy_global_placeholder_scan(self) -> None:
+        task, _ = self._new_task("validator-doc-authority")
+        self._write_valid_feature_spec(task)
+        task_dir = self.repo_root / task["task_dir"]
+        plan_path = task_dir / "PLAN.md"
+        plan_path.write_text(
+            plan_path.read_text(encoding="utf-8")
+            + "\nThe validator rejects `Criterion 1` when it is an actual field value.\n",
+            encoding="utf-8",
+        )
+        approve_task_plan(self.repo_root, self.config, task["id"], reviewer="reviewer", notes=None)
+        freeze_task_spec(self.repo_root, self.config, task["id"], reviewer="reviewer", notes=None)
+
+        outcome = run_verify(self.repo_root, self.config, task["id"])
+
+        self.assertEqual(outcome.status, "passed")
+        self.assertNotIn("DOC_INCOMPLETE", {gate["code"] for gate in outcome.gates})
+
     def test_spec_freeze_recovers_after_invalid_edit_is_corrected(self) -> None:
         task, _ = self._new_task("freeze-retry")
         self._write_valid_feature_spec(task)

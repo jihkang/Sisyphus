@@ -31,6 +31,7 @@ from .spec_validation import (
     SPEC_VALIDATION_GATE_CODES,
     SPEC_VALIDATION_SOURCES,
     collect_spec_validation_gates,
+    spec_validation_required,
 )
 from .state import load_task_record, save_task_record, utc_now
 from .strategy import sync_test_strategy_from_docs
@@ -132,7 +133,8 @@ def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyO
         for gate in task.get("gates", [])
         if gate.get("code") not in VERIFY_GATE_CODES and gate.get("source") not in TRANSIENT_GATE_SOURCES
     ]
-    gates.extend(_collect_doc_gates(task, task_dir))
+    if not spec_validation_required(task, task_dir):
+        gates.extend(_collect_doc_gates(task, task_dir))
     spec_gates = _collect_spec_gates(task, task_dir)
     gates.extend(spec_gates)
     design_gates = _collect_design_gates(task)
