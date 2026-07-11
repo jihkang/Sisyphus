@@ -9,4 +9,5 @@ htmlcov/
 .DS_Store
 .planning/events.jsonl
 .planning/inbox/
+.planning/cache/
 .planning/tasks/test.zip

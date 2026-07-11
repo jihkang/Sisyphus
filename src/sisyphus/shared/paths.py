@@ -37,3 +37,7 @@ def inbox_failed_dir(repo_root: Path) -> Path:
 
 def event_log_file(repo_root: Path) -> Path:
     return planning_dir(repo_root) / "events.jsonl"
+
+
+def workflow_candidate_index_file(repo_root: Path) -> Path:
+    return planning_dir(repo_root) / "cache" / "workflow-candidates.json"
