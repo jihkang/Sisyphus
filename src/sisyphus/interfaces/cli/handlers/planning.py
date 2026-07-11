@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from ....config import SisyphusConfig
@@ -10,6 +11,7 @@ from ....planning import (
     request_plan_changes,
     revise_task_plan,
 )
+from ....spec_validation import validate_task_spec
 
 
 def handle_plan_approve(
@@ -30,7 +32,11 @@ def handle_plan_approve(
     print(f"plan {outcome.task_id}")
     print(f"plan_status: {outcome.plan_status}")
     print(f"task_status: {outcome.task_status}")
-    return 0
+    if outcome.gates:
+        print("gates:")
+        for gate in outcome.gates:
+            print(f"- {gate['code']}: {gate['message']}")
+    return 1 if outcome.task_status == "blocked" else 0
 
 
 def handle_plan_request_changes(
@@ -98,7 +104,40 @@ def handle_spec_freeze(
     print(f"spec_status: {outcome.spec_status}")
     print(f"task_status: {outcome.task_status}")
     print(f"workflow_phase: {outcome.workflow_phase}")
-    return 0
+    return 0 if outcome.spec_status == "frozen" and outcome.task_status != "blocked" else 1
+
+
+def handle_spec_validate(
+    *,
+    repo_root: Path,
+    config: SisyphusConfig,
+    task_id: str,
+    as_json: bool,
+) -> int:
+    outcome = validate_task_spec(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        persist=True,
+    )
+    if as_json:
+        print(json.dumps(outcome.report, indent=2))
+        return 1 if outcome.status == "failed" else 0
+
+    print(f"spec_validation {outcome.task_id}")
+    print(f"status: {outcome.status}")
+    print(f"report: {outcome.report_path}")
+    summary = outcome.report.get("summary", {})
+    print(f"errors: {summary.get('error_count', 0)}")
+    print(f"warnings: {summary.get('warning_count', 0)}")
+    findings = outcome.report.get("findings", [])
+    if findings:
+        print("findings:")
+        for finding in findings:
+            print(f"- {finding['severity']} {finding['code']}: {finding['message']}")
+    else:
+        print("findings: none")
+    return 1 if outcome.status == "failed" else 0
 
 
 def handle_subtasks_generate(*, repo_root: Path, config: SisyphusConfig, task_id: str) -> int:
@@ -118,5 +157,6 @@ __all__ = [
     "handle_plan_request_changes",
     "handle_plan_revise",
     "handle_spec_freeze",
+    "handle_spec_validate",
     "handle_subtasks_generate",
 ]

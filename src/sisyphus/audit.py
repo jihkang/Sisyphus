@@ -27,6 +27,11 @@ from .gates import dedupe_gates as _dedupe_gates, make_gate as _gate
 from .lifecycle_guard import blocked_phase_for_transition, blocked_stage_for_transition, record_lifecycle_transition
 from .lifecycle_state import LifecycleAction
 from .planning import collect_plan_gates, reopen_task_plan_for_design_replan
+from .spec_validation import (
+    SPEC_VALIDATION_GATE_CODES,
+    SPEC_VALIDATION_SOURCES,
+    collect_spec_validation_gates,
+)
 from .state import load_task_record, save_task_record, utc_now
 from .strategy import sync_test_strategy_from_docs
 
@@ -47,6 +52,7 @@ VERIFY_GATE_CODES = {
     "PLAN_CHANGES_REQUESTED",
     "DESIGN_REPLAN_REQUIRED",
     "DESIGN_ARTIFACTS_MISSING",
+    *SPEC_VALIDATION_GATE_CODES,
 }
 
 TRANSIENT_GATE_SOURCES = {
@@ -57,6 +63,7 @@ TRANSIENT_GATE_SOURCES = {
     "close",
     "plan",
     "conformance",
+    *SPEC_VALIDATION_SOURCES,
 }
 
 
@@ -130,13 +137,20 @@ def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyO
     gates.extend(spec_gates)
     design_gates = _collect_design_gates(task)
     gates.extend(design_gates)
+    validation_gates = collect_spec_validation_gates(
+        task=task,
+        task_dir=task_dir,
+        action="verify",
+        require_existing_report=True,
+    )
+    gates.extend(validation_gates)
     plan_gates = collect_plan_gates(task, action="verify")
     gates.extend(plan_gates)
     conformance_gates = collect_conformance_gates(task, action="verify")
     gates.extend(conformance_gates)
 
     command_results: list[dict] = []
-    if not spec_gates and not design_gates and not plan_gates and not conformance_gates:
+    if not spec_gates and not design_gates and not validation_gates and not plan_gates and not conformance_gates:
         task["stage"] = "audit"
         gates.extend(_collect_test_strategy_gates(task))
         command_results = _run_verify_commands(task, task_dir)
@@ -162,6 +176,9 @@ def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyO
         task["stage"] = "plan_review"
     elif plan_gates:
         task["stage"] = "plan_review"
+    elif validation_gates:
+        task["stage"] = "spec"
+        task["workflow_phase"] = "spec_in_review"
     elif conformance_gates:
         task["stage"] = "audit"
     else:
@@ -337,6 +354,7 @@ def _render_verify_markdown(task: dict, command_results: list[dict]) -> str:
     design = task.get("design", {})
     assessment = design.get("assessment", {})
     missing_artifacts = list(assessment.get("missing_artifacts") or [])
+    spec_validation = task.get("spec_validation") if isinstance(task.get("spec_validation"), dict) else {}
 
     command_lines = []
     if command_results:
@@ -346,6 +364,16 @@ def _render_verify_markdown(task: dict, command_results: list[dict]) -> str:
         command_lines.append("- No verify commands configured")
 
     gate_lines = [f"- `{gate['code']}`: {gate['message']}" for gate in task.get("gates", [])] or ["- None"]
+    spec_validation_lines: list[str] = []
+    if spec_validation:
+        spec_validation_lines = [
+            "## Spec Validation",
+            "",
+            f"- Status: `{spec_validation.get('status', 'missing')}`",
+            f"- Stale: `{'yes' if spec_validation.get('stale') else 'no'}`",
+            f"- Report: `{spec_validation.get('report_path', 'not_recorded')}`",
+            "",
+        ]
 
     return "\n".join(
         [
@@ -358,6 +386,7 @@ def _render_verify_markdown(task: dict, command_results: list[dict]) -> str:
             f"- Status: `{task['verify_status']}`",
             f"- Result: `{result_line}`",
             "",
+            *spec_validation_lines,
             "## Command Results",
             "",
             *command_lines,

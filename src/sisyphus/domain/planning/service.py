@@ -11,6 +11,7 @@ from ...gates import dedupe_gates as _dedupe_gates, make_gate as _gate
 from ...lifecycle_state import LifecycleAction
 from ...state import load_task_record, save_task_record, utc_now
 from ...strategy import sync_test_strategy_from_docs
+from .spec_validation import collect_spec_validation_gates
 
 
 PLAN_PENDING_REVIEW = "pending_review"
@@ -105,12 +106,42 @@ def approve_task_plan(
             task_status=task["status"],
             gates=task["gates"],
         )
+    task = sync_test_strategy_from_docs(task=task, task_dir=task_file.parent)
+    validation_gates = collect_spec_validation_gates(
+        task=task,
+        task_dir=task_file.parent,
+        action="plan approval",
+        refresh=True,
+    )
+    if validation_gates:
+        task["gates"] = _dedupe_gates(
+            [
+                gate
+                for gate in task.get("gates", [])
+                if gate.get("source") not in {"plan", "spec_validation"}
+            ]
+            + validation_gates
+        )
+        task["status"] = "blocked"
+        task["stage"] = "plan_review"
+        task["workflow_phase"] = "plan_revision"
+        save_task_record(task_file=task_file, task=task)
+        return PlanReviewOutcome(
+            task_id=task["id"],
+            plan_status=current_plan_status(task),
+            task_status=task["status"],
+            gates=task["gates"],
+        )
     task["plan_status"] = PLAN_APPROVED
     task["plan_reviewed_at"] = utc_now()
     task["plan_reviewed_by"] = reviewer.strip() or "operator"
     task["plan_review_notes"] = notes
     task["workflow_phase"] = "spec_drafting"
-    task["gates"] = [gate for gate in task.get("gates", []) if gate.get("source") != "plan"]
+    task["gates"] = [
+        gate
+        for gate in task.get("gates", [])
+        if gate.get("source") not in {"plan", "spec_validation"}
+    ]
     _append_review_history(task, action="approve", actor=task["plan_reviewed_by"], notes=notes)
     _restore_task_status_after_plan_gate(task)
     save_task_record(task_file=task_file, task=task)
@@ -159,7 +190,11 @@ def request_plan_changes(
     task["plan_review_notes"] = notes
     task["workflow_phase"] = "needs_user_input" if int(task["plan_review_round"]) >= int(task.get("max_plan_review_rounds", 3)) else "plan_revision"
     task["gates"] = _dedupe_gates(
-        [gate for gate in task.get("gates", []) if gate.get("source") != "plan"] +
+        [
+            gate
+            for gate in task.get("gates", [])
+            if gate.get("source") not in {"plan", "spec_validation"}
+        ] +
         collect_plan_gates(task, action="execution")
     )
     _append_review_history(task, action="request_changes", actor=task["plan_reviewed_by"], notes=notes)
@@ -210,7 +245,11 @@ def revise_task_plan(
     task["plan_reviewed_by"] = author.strip() or "operator"
     task["plan_review_notes"] = notes
     task["workflow_phase"] = "plan_in_review"
-    task["gates"] = [gate for gate in task.get("gates", []) if gate.get("source") != "plan"]
+    task["gates"] = [
+        gate
+        for gate in task.get("gates", [])
+        if gate.get("source") not in {"plan", "spec_validation"}
+    ]
     _append_review_history(task, action="revise", actor=task["plan_reviewed_by"], notes=notes)
     _restore_task_status_after_plan_gate(task)
     task["stage"] = "plan_review"
@@ -280,6 +319,34 @@ def freeze_task_spec(
             task_status=task["status"],
             workflow_phase=task["workflow_phase"],
         )
+    validation_gates = collect_spec_validation_gates(
+        task=task,
+        task_dir=task_file.parent,
+        action="spec freeze",
+        refresh=True,
+    )
+    if validation_gates:
+        task["gates"] = _dedupe_gates(
+            [
+                gate
+                for gate in task.get("gates", [])
+                if gate.get("source") != "spec_validation"
+            ]
+            + validation_gates
+        )
+        task["status"] = "blocked"
+        task["stage"] = "spec"
+        task["workflow_phase"] = "spec_in_review"
+        save_task_record(task_file=task_file, task=task)
+        return SpecFreezeOutcome(
+            task_id=task["id"],
+            spec_status=task["spec_status"],
+            task_status=task["status"],
+            workflow_phase=task["workflow_phase"],
+        )
+    task["gates"] = [
+        gate for gate in task.get("gates", []) if gate.get("source") != "spec_validation"
+    ]
     task["spec_status"] = SPEC_FROZEN
     task["spec_frozen_at"] = utc_now()
     task["spec_reviewed_by"] = reviewer.strip() or "operator"
@@ -307,15 +374,28 @@ def enforce_spec_frozen(
     task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
     _ensure_spec_fields(task)
     spec_gates = collect_spec_execution_gates(task, action=action)
-    task["gates"] = _dedupe_gates(
-        [gate for gate in task.get("gates", []) if gate.get("source") != "spec"] + spec_gates
+    validation_gates = collect_spec_validation_gates(
+        task=task,
+        task_dir=task_file.parent,
+        action=action,
+        require_existing_report=True,
     )
-    if spec_gates:
+    task["gates"] = _dedupe_gates(
+        [
+            gate
+            for gate in task.get("gates", [])
+            if gate.get("source") not in {"spec", "spec_validation"}
+        ]
+        + spec_gates
+        + validation_gates
+    )
+    if spec_gates or validation_gates:
         task["status"] = "blocked"
         task["stage"] = "spec"
         task["workflow_phase"] = "spec_in_review"
         save_task_record(task_file=task_file, task=task)
         return False, task
+    _restore_task_status_after_plan_gate(task)
     save_task_record(task_file=task_file, task=task)
     return True, task
 
@@ -340,6 +420,34 @@ def generate_subtasks(
             workflow_phase=task["workflow_phase"],
             subtasks=list(task.get("subtasks", [])),
         )
+    validation_gates = collect_spec_validation_gates(
+        task=task,
+        task_dir=task_dir,
+        action="subtask generation",
+        require_existing_report=True,
+    )
+    if validation_gates:
+        task["gates"] = _dedupe_gates(
+            [
+                gate
+                for gate in task.get("gates", [])
+                if gate.get("source") != "spec_validation"
+            ]
+            + validation_gates
+        )
+        task["status"] = "blocked"
+        task["stage"] = "spec"
+        task["workflow_phase"] = "spec_in_review"
+        save_task_record(task_file=task_file, task=task)
+        return SubtaskGenerationOutcome(
+            task_id=task["id"],
+            workflow_phase=task["workflow_phase"],
+            subtasks=list(task.get("subtasks", [])),
+        )
+    task["gates"] = [
+        gate for gate in task.get("gates", []) if gate.get("source") != "spec_validation"
+    ]
+    _restore_task_status_after_plan_gate(task)
     task["subtasks"] = _build_subtasks(task)
     task["workflow_phase"] = "execution"
     save_task_record(task_file=task_file, task=task)
@@ -436,7 +544,11 @@ def reopen_task_plan_for_design_replan(
     task["spec_reviewed_by"] = None
     task["spec_review_notes"] = None
     task["gates"] = _dedupe_gates(
-        [gate for gate in task.get("gates", []) if gate.get("source") not in {"plan", "spec"}] +
+        [
+            gate
+            for gate in task.get("gates", [])
+            if gate.get("source") not in {"plan", "spec", "spec_validation"}
+        ] +
         collect_plan_gates(task, action="execution")
     )
     task["status"] = "blocked"

@@ -86,6 +86,14 @@ ACTION_REGISTRY: dict[str, ActionSpec] = {
         description="Revise a task plan after review feedback.",
         lifecycle_action=LifecycleAction.REVISE_PLAN,
     ),
+    "sisyphus.spec_validate": ActionSpec(
+        name="sisyphus.spec_validate",
+        risk=ActionRiskLevel.LOW_RISK_WRITE,
+        allowed_for_policy=True,
+        requires_human=False,
+        mutates_state=True,
+        description="Validate a task spec and persist its deterministic report.",
+    ),
     "sisyphus.subtasks_generate": ActionSpec(
         name="sisyphus.subtasks_generate",
         risk=ActionRiskLevel.LOW_RISK_WRITE,

@@ -178,6 +178,7 @@ sisyphus observe <task-id> --json
 sisyphus plan approve <task-id> --by reviewer
 sisyphus plan request-changes <task-id> --by reviewer --notes "split the work more clearly"
 sisyphus plan revise <task-id> --by worker --notes "updated the plan"
+sisyphus spec validate <task-id> --json
 sisyphus spec freeze <task-id> --by reviewer
 sisyphus subtasks generate <task-id>
 sisyphus verify <task-id>

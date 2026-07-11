@@ -37,6 +37,7 @@ from ...metrics import build_value_metrics_report
 from ...observation import build_task_observation
 from ...retrieval import retrieve_documents
 from ...search_index import read_search_index, rebuild_search_index, search_index_status
+from ...spec_validation import validate_task_spec
 from ...state import load_task_record
 from . import evolution as evolution_handlers
 from . import promotion_tools, search_tools, task_tools, workflow_tools
@@ -197,6 +198,7 @@ class SisyphusMcpCoreService:
                 request_changes=request_plan_changes,
                 revise_plan=revise_task_plan,
                 freeze_spec=freeze_task_spec,
+                validate_spec_fn=validate_task_spec,
                 generate_subtasks_fn=generate_subtasks,
                 verify_task=run_verify,
                 close_task=run_close,
@@ -258,6 +260,7 @@ _TRACEABLE_TASK_TOOLS = {
     "sisyphus.plan_request_changes",
     "sisyphus.plan_revise",
     "sisyphus.spec_freeze",
+    "sisyphus.spec_validate",
     "sisyphus.subtasks_generate",
     "sisyphus.verify_task",
     "sisyphus.close_task",
