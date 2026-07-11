@@ -21,7 +21,11 @@ from .design import (
     evaluate_design_adequacy,
     ensure_task_design_defaults,
 )
+from .evidence_graph import build_evidence_graph, write_evidence_graph
 from .events import new_event_envelope
+from .gates import dedupe_gates as _dedupe_gates, make_gate as _gate
+from .lifecycle_guard import blocked_phase_for_transition, blocked_stage_for_transition, record_lifecycle_transition
+from .lifecycle_state import LifecycleAction
 from .planning import collect_plan_gates, reopen_task_plan_for_design_replan
 from .state import load_task_record, save_task_record, utc_now
 from .strategy import sync_test_strategy_from_docs
@@ -72,6 +76,44 @@ def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyO
     task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
     task_dir = task_file.parent
     task = sync_test_strategy_from_docs(task=task, task_dir=task_dir)
+    lifecycle_transition = record_lifecycle_transition(
+        task,
+        LifecycleAction.VERIFY,
+        gate_sources={"plan", "spec", "conformance", "lifecycle"},
+    )
+    if not lifecycle_transition.allowed:
+        task["updated_at"] = utc_now()
+        task["verify_status"] = "failed"
+        task["status"] = "blocked"
+        task["stage"] = blocked_stage_for_transition(lifecycle_transition)
+        task["workflow_phase"] = blocked_phase_for_transition(lifecycle_transition)
+        task["last_verify_results"] = []
+        task["last_verified_at"] = utc_now()
+        verify_file = task_dir / task["docs"]["verify"]
+        verify_file.write_text(_render_verify_markdown(task, []), encoding="utf-8")
+        save_task_record(task_file=task_file, task=task)
+        build_event_publisher(repo_root, config).publish(
+            new_event_envelope(
+                "verify.completed",
+                source={"module": "audit"},
+                data={
+                    "task_id": task["id"],
+                    "status": task["verify_status"],
+                    "stage": task["stage"],
+                    "gate_count": len(task["gates"]),
+                },
+            )
+        )
+        return VerifyOutcome(
+            task_id=task["id"],
+            status=task["verify_status"],
+            stage=task["stage"],
+            audit_attempts=int(task.get("audit_attempts", 0)),
+            max_audit_attempts=int(task.get("max_audit_attempts", 10)),
+            gates=task["gates"],
+            command_results=[],
+            verify_file=verify_file,
+        )
     _evaluate_and_record_design(task)
 
     task["audit_attempts"] = int(task.get("audit_attempts", 0)) + 1
@@ -127,6 +169,8 @@ def run_verify(repo_root: Path, config: SisyphusConfig, task_id: str) -> VerifyO
 
     verify_file = task_dir / task["docs"]["verify"]
     verify_file.write_text(_render_verify_markdown(task, command_results), encoding="utf-8")
+    task.setdefault("meta", {})["evidence_graph_required"] = True
+    write_evidence_graph(task_dir, build_evidence_graph(task, task_dir, command_results))
     save_task_record(task_file=task_file, task=task)
     build_event_publisher(repo_root, config).publish(
         new_event_envelope(
@@ -348,28 +392,6 @@ def _render_verify_markdown(task: dict, command_results: list[dict]) -> str:
             "",
         ]
     )
-
-
-def _gate(code: str, message: str, source: str) -> dict:
-    return {
-        "code": code,
-        "message": message,
-        "blocking": True,
-        "source": source,
-        "created_at": utc_now(),
-    }
-
-
-def _dedupe_gates(gates: list[dict]) -> list[dict]:
-    seen: set[tuple[str, str]] = set()
-    deduped: list[dict] = []
-    for gate in gates:
-        key = (gate.get("code", ""), gate.get("message", ""))
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(gate)
-    return deduped
 
 
 def _looks_like_unfilled_template(content: str) -> bool:

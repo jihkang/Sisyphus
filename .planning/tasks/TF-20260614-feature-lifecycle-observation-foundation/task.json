@@ -1,0 +1,303 @@
+{
+  "id": "TF-20260614-feature-lifecycle-observation-foundation",
+  "type": "feature",
+  "slug": "lifecycle-observation-foundation",
+  "status": "verified",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-06-14T08:30:34Z",
+  "plan_reviewed_by": "operator",
+  "plan_review_notes": "Proceed sequentially with lifecycle state machine, observation renderer, and RL/eval loop foundation.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "operator",
+      "notes": "Proceed sequentially with lifecycle state machine, observation renderer, and RL/eval loop foundation.",
+      "timestamp": "2026-06-14T08:30:34Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-06-14T08:42:23Z",
+  "spec_reviewed_by": "operator",
+  "spec_review_notes": "Refresh frozen design anchor after implementing lifecycle observation foundation.",
+  "audit_attempts": 2,
+  "max_audit_attempts": 10,
+  "created_at": "2026-06-14T08:18:08Z",
+  "updated_at": "2026-06-14T08:46:01Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260614-feature-lifecycle-observation-foundation",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-lifecycle-observation-foundation",
+  "branch": "feat/lifecycle-observation-foundation",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-06-14T08:46:01Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Verified closed task with green conformance is allowed by lifecycle rules.",
+        "checked": true
+      },
+      {
+        "name": "Observation for an open frozen task lists safe next actions and forbidden gated actions.",
+        "checked": true
+      },
+      {
+        "name": "Reward scoring produces positive components for closed, verified, conformance-green outcomes.",
+        "checked": true
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Gate dedupe ignores volatile timestamps while preserving subtask-scoped gates.",
+        "checked": true
+      },
+      {
+        "name": "Verified non-promotable tasks can close without promotion gates.",
+        "checked": true
+      },
+      {
+        "name": "Observation remains stable enough to hash deterministically.",
+        "checked": true
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Spec freeze before plan approval is blocked.",
+        "checked": true
+      },
+      {
+        "name": "Worker execution before plan approval/spec freeze is blocked.",
+        "checked": true
+      },
+      {
+        "name": "Close before verification or with yellow/red conformance is blocked.",
+        "checked": true
+      },
+      {
+        "name": "Human-gated close/promotion/approve/freeze actions are forbidden for policy execution.",
+        "checked": true
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Verified closed task with green conformance is allowed by lifecycle rules",
+        "method": ".venv/bin/python -m unittest tests.test_lifecycle_rules -v"
+      },
+      {
+        "target": "Observation for an open frozen task lists safe next actions and forbidden gated actions",
+        "method": ".venv/bin/python -m unittest tests.test_mcp_core.McpCoreTests.test_reads_task_resources -v"
+      },
+      {
+        "target": "Reward scoring produces positive components for closed, verified, conformance-green outcomes",
+        "method": ".venv/bin/python -m unittest tests.test_reward -v"
+      },
+      {
+        "target": "Gate dedupe ignores volatile timestamps while preserving subtask-scoped gates",
+        "method": ".venv/bin/python -m unittest tests.test_lifecycle_rules.LifecycleRulesTests.test_gate_dedupe_ignores_created_at_but_preserves_subtask_scope -v"
+      },
+      {
+        "target": "Observation remains stable enough to hash deterministically",
+        "method": ".venv/bin/python -m sisyphus.cli --repo /Users/jihokang/Documents/Sisyphus observe TF-20260614-feature-lifecycle-observation-foundation"
+      },
+      {
+        "target": "Close before verification or with yellow/red conformance is blocked",
+        "method": ".venv/bin/python -m unittest tests.test_sisyphus.SisyphusVerifyTests.test_close_blocks_on_conformance_warning -v"
+      },
+      {
+        "target": "Full regression suite",
+        "method": ".venv/bin/python -m unittest discover -s tests -v"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "design": {
+    "mode": "light",
+    "decision_reason": "adds a small lifecycle/observation layer over existing task state without changing storage format",
+    "confidence": "medium",
+    "layer_impact": "layer-adding",
+    "layer_decision_reason": "new modules define reusable lifecycle, observation, action, reward, trace, hash, and gate boundaries",
+    "required_artifacts": [],
+    "artifacts": {
+      "connection_diagram": null,
+      "sequence_diagram": null,
+      "boundary_note": null
+    },
+    "frozen": {
+      "mode": "light",
+      "layer_impact": "layer-adding",
+      "required_artifacts": [],
+      "artifacts": {
+        "connection_diagram": null,
+        "sequence_diagram": null,
+        "boundary_note": null
+      },
+      "anchor_summary": "mode=light, layer=layer-adding",
+      "frozen_at": "2026-06-14T08:42:23Z"
+    },
+    "assessment": {
+      "status": "appropriate",
+      "summary": "design depth matches the current task shape",
+      "replan_required": false,
+      "escalation_reason": null,
+      "missing_artifacts": []
+    }
+  },
+  "promotion": {
+    "required": true,
+    "required_override": null,
+    "required_reason": "feature tasks are promotable by default",
+    "required_source": "classified",
+    "status": "promotion_pending",
+    "strategy": "direct",
+    "remote_name": null,
+    "parent_artifact_id": null,
+    "parent_task_id": null,
+    "base_override": null,
+    "base_branch": "main",
+    "base_source": null,
+    "base_reason": null,
+    "resolved_parent_branch": null,
+    "retarget_required": false,
+    "reverify_required": false,
+    "retarget_required_at": null,
+    "retarget_parent_task_id": null,
+    "retarget_parent_branch": null,
+    "retarget_merge_target": null,
+    "head_branch": "feat/lifecycle-observation-foundation",
+    "pr_number": null,
+    "pr_url": null,
+    "receipt_path": "artifacts/promotion/merge_receipt.json",
+    "execution_receipt_path": null,
+    "changeset_path": "CHANGESET.md",
+    "commit_message": null,
+    "repo_full_name": null,
+    "title": null,
+    "head_sha": null,
+    "merge_commit_sha": null,
+    "committed_at": null,
+    "pushed_at": null,
+    "pr_opened_at": null,
+    "merged_at": null,
+    "merged_by": null,
+    "merge_method": null,
+    "recorded_at": null
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": "design depth matches the current task shape",
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_design_anchor_at": "2026-06-14T08:42:23Z",
+    "last_design_anchor_source": "planning.freeze_task_spec",
+    "last_checkpoint_type": "design_assessment",
+    "last_checkpoint_source": "audit.design",
+    "last_checkpoint_at": "2026-06-14T08:46:01Z",
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": [
+      {
+        "id": "0244dde3b03e4e858b5ab2b321a2da5e",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=none, layer=layer-preserving",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-06-14T08:30:52Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "6f4f7df51b1a4fca9374bea40e4f4fac",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=light, layer=layer-adding",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-06-14T08:42:23Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "149b0e9c13244ba0b313a205905923e3",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-06-14T08:42:27Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "327fb5e1cf43462b9b2c7dfa29ef1ee3",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-06-14T08:46:01Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      }
+    ]
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "promotion": {
+      "status": "promotion_pending",
+      "recorded_at": null,
+      "repo_full_name": null,
+      "pr_number": null,
+      "title": null,
+      "url": null,
+      "head_branch": "feat/lifecycle-observation-foundation",
+      "base_branch": "main",
+      "head_sha": null,
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "merged_by": null,
+      "merge_method": null,
+      "receipt_path": "artifacts/promotion/merge_receipt.json",
+      "changeset_path": "CHANGESET.md",
+      "parent_artifact_id": null,
+      "parent_task_id": null
+    },
+    "source_event_id": "evt-83240e8efe3c",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "lifecycle-observation-foundation",
+    "owned_paths": [],
+    "requested_adopt_paths": []
+  }
+}

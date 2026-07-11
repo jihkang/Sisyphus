@@ -3,18 +3,18 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
-import json
 
 from .config import SisyphusConfig
-from .paths import agent_dir
-from .state import load_task_record, utc_now
-from .utils import find_unknown_fields
-
-
-DEFAULT_STALE_AFTER_SECONDS = 900
-ACTIVE_AGENT_STATUSES = {"queued", "running", "waiting"}
-FINAL_AGENT_STATUSES = {"completed", "failed", "cancelled"}
-AGENT_STATUSES = ACTIVE_AGENT_STATUSES | FINAL_AGENT_STATUSES
+from .domain.agent.models import (
+    ACTIVE_AGENT_STATUSES,
+    AGENT_STATUSES,
+    DEFAULT_STALE_AFTER_SECONDS,
+    FINAL_AGENT_STATUSES,
+)
+from .domain.agent import repository as agent_repository
+from .shared.clock import utc_now
+from .shared.mappings import find_unknown_fields
+from .state import load_task_record
 
 
 class AgentTrackingError(RuntimeError):
@@ -57,7 +57,7 @@ def register_agent(
     _validate_status(status)
     _ensure_task_exists(repo_root, config, task_id)
 
-    agent_file = _agent_file(repo_root, config.task_dir, task_id, agent_id)
+    agent_file = agent_repository.agent_file(repo_root, config.task_dir, task_id, agent_id)
     if agent_file.exists():
         raise AgentTrackingError(f"agent already exists: {agent_id}")
 
@@ -79,7 +79,7 @@ def register_agent(
         "last_heartbeat_at": now,
         "error": None,
     }
-    _save_agent_record(agent_file, agent)
+    agent_repository.save_agent_record(agent_file, agent)
     return agent
 
 
@@ -100,22 +100,25 @@ def update_agent(
     agent_id: str,
     **changes: object,
 ) -> dict:
-    agent, agent_file = load_agent_record(repo_root, config, task_id, agent_id, stale_after_seconds=None)
-    agent.pop("raw_status", None)
-    persisted_status = str(changes.get("status") or agent["status"])
-    _apply_agent_changes(agent, changes)
+    _validate_agent_id(agent_id)
+    agent_file = agent_repository.agent_file(repo_root, config.task_dir, task_id, agent_id)
+    if not agent_file.exists():
+        raise FileNotFoundError(f"agent not found: {agent_id}")
 
-    now = utc_now()
-    agent["updated_at"] = now
-    if persisted_status in ACTIVE_AGENT_STATUSES:
-        agent["last_heartbeat_at"] = now
-        agent["finished_at"] = None
-    elif agent.get("finished_at") is None:
-        agent["finished_at"] = now
-        agent["pid"] = None
+    def mutate(agent: dict) -> None:
+        persisted_status = str(changes.get("status") or agent["status"])
+        _apply_agent_changes(agent, changes)
 
-    _save_agent_record(agent_file, agent)
-    return agent
+        now = utc_now()
+        agent["updated_at"] = now
+        if persisted_status in ACTIVE_AGENT_STATUSES:
+            agent["last_heartbeat_at"] = now
+            agent["finished_at"] = None
+        elif agent.get("finished_at") is None:
+            agent["finished_at"] = now
+            agent["pid"] = None
+
+    return agent_repository.update_agent_record(agent_file, mutate)
 
 
 def load_agent_record(
@@ -126,10 +129,10 @@ def load_agent_record(
     stale_after_seconds: int | None = DEFAULT_STALE_AFTER_SECONDS,
 ) -> tuple[dict, Path]:
     _validate_agent_id(agent_id)
-    agent_file = _agent_file(repo_root, config.task_dir, task_id, agent_id)
+    agent_file = agent_repository.agent_file(repo_root, config.task_dir, task_id, agent_id)
     if not agent_file.exists():
         raise FileNotFoundError(f"agent not found: {agent_id}")
-    agent = json.loads(agent_file.read_text(encoding="utf-8"))
+    agent = agent_repository.read_agent_record(agent_file)
     return _enrich_agent(agent, stale_after_seconds), agent_file
 
 
@@ -140,21 +143,13 @@ def list_agents(
     task_id: str | None = None,
     stale_after_seconds: int | None = DEFAULT_STALE_AFTER_SECONDS,
 ) -> list[dict]:
-    agent_files: list[Path] = []
-    if task_id:
-        root = agent_dir(repo_root, config.task_dir, task_id)
-        if root.exists():
-            agent_files = sorted(root.glob("*.json"))
-    else:
-        root = repo_root / config.task_dir
-        if root.exists():
-            agent_files = sorted(root.glob("*/agents/*.json"))
+    agent_files = agent_repository.list_agent_files(repo_root, config.task_dir, task_id=task_id)
 
     agents: list[dict] = []
     for agent_file in agent_files:
         try:
-            raw = json.loads(agent_file.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
+            raw = agent_repository.read_agent_record(agent_file)
+        except ValueError:
             continue
         agents.append(_enrich_agent(raw, stale_after_seconds))
 
@@ -171,15 +166,6 @@ def list_agents(
 
 def _ensure_task_exists(repo_root: Path, config: SisyphusConfig, task_id: str) -> None:
     load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
-
-
-def _agent_file(repo_root: Path, task_dir_name: str, task_id: str, agent_id: str) -> Path:
-    return agent_dir(repo_root, task_dir_name, task_id) / f"{agent_id}.json"
-
-
-def _save_agent_record(agent_file: Path, agent: dict) -> None:
-    agent_file.parent.mkdir(parents=True, exist_ok=True)
-    agent_file.write_text(json.dumps(agent, indent=2) + "\n", encoding="utf-8")
 
 
 def _enrich_agent(agent: dict, stale_after_seconds: int | None) -> dict:

@@ -1,0 +1,259 @@
+{
+  "id": "TF-20260711-feature-add-indexed-workflow-candidate-selection",
+  "type": "feature",
+  "slug": "add-indexed-workflow-candidate-selection",
+  "status": "verified",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-07-11T09:03:18Z",
+  "plan_reviewed_by": "operator-directed-codex",
+  "plan_review_notes": "Approved against the revised seven-step non-authoritative index plan, including exact guard equivalence, corruption fallback, direct-edit invalidation, deterministic ordering, and the 500-record zero-warm-read performance contract. User explicitly directed complete execution.",
+  "plan_review_round": 1,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 1,
+      "action": "request_changes",
+      "actor": "operator-directed-codex",
+      "notes": "Define the candidate index schema, cache path, atomic persistence, and invalidation fingerprint explicitly. State that the cache is derived and non-authoritative, with complete cold rebuild on missing/version-mismatched/malformed index and per-record fallback for malformed task JSON. Prove candidate filtering is exactly equivalent to the current early-return guards and that _advance_task remains the lifecycle authority. Require immediate detection of created/deleted/externally edited task.json files and deterministic updated_at/id ordering. Add a measurable warm-cache contract: hundreds of unchanged closed tasks cause zero task.json reads and only candidate IDs reach _advance_task. Require focused correctness, corruption recovery, and full regression/coverage/build/CI/promotion verification.",
+      "timestamp": "2026-07-11T09:02:55Z"
+    },
+    {
+      "round": 1,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Revised implementation plan:\n1. Characterize current run_workflow_cycle ordering and the exact _advance_task early-return guards. Establish a read-count baseline with hundreds of closed tasks and one eligible task.\n2. Add domain/workflow/candidates.py with a versioned derived index under .planning/cache/workflow-candidates.json. Each entry records relative task path, mtime_ns, ctime_ns, size, task_id, updated_at, and eligible. Persist with existing atomic JSON storage and ignore the cache in Git.\n3. On each refresh, enumerate task.json files and compare fingerprints. Reuse unchanged projections without reading task JSON; parse and minimally normalize only new/changed files; remove deleted entries. Rebuild from empty on missing, malformed, wrong-version, or structurally invalid cache. Skip malformed task records until their fingerprint changes.\n4. Compute eligibility from the same guards as _advance_task: auto_loop_enabled, closed status, needs_user_input/promotion_pending/retarget_required phases, and current plan approval. Keep _advance_task as final lifecycle authority. Sort eligible IDs by updated_at then id exactly as before.\n5. Wire run_workflow_cycle to candidate IDs and remove its full list_task_records normalization pass. Do not change _advance_task transitions, provider execution, verification, close, or public workflow imports.\n6. Add tests for cold build, warm reuse, deterministic ordering, new/deleted/reactivated/directly edited task files, malformed task/index recovery, schema-version invalidation, atomic write-if-changed behavior, and workflow integration. The performance regression must prove 500 unchanged closed records incur zero task.json reads on the warm refresh and never reach _advance_task.\n7. Update architecture and cache ignore rules. Run targeted tests, full unit suite, branch coverage >=80%, uv lock check, offline package build, Sisyphus verify, all CI jobs, PR merge, merge receipt, and close.",
+      "timestamp": "2026-07-11T09:03:10Z"
+    },
+    {
+      "round": 1,
+      "action": "approve",
+      "actor": "operator-directed-codex",
+      "notes": "Approved against the revised seven-step non-authoritative index plan, including exact guard equivalence, corruption fallback, direct-edit invalidation, deterministic ordering, and the 500-record zero-warm-read performance contract. User explicitly directed complete execution.",
+      "timestamp": "2026-07-11T09:03:18Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-07-11T09:03:28Z",
+  "spec_reviewed_by": "operator-directed-codex",
+  "spec_review_notes": "Freeze the approved non-authoritative workflow candidate index scope and measurable warm-cache contract. User explicitly directed complete execution.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-07-11T09:02:34Z",
+  "updated_at": "2026-07-11T09:11:18Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260711-feature-add-indexed-workflow-candidate-selection",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-add-indexed-workflow-candidate-selection",
+  "branch": "feat/add-indexed-workflow-candidate-selection",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-07-11T09:11:18Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Requested conversation workflow succeeds",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Minimal valid input still behaves predictably",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Unexpected failure surfaces an actionable error",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Requested conversation workflow succeeds",
+        "method": "sisyphus verify"
+      },
+      {
+        "target": "Minimal valid input still behaves predictably",
+        "method": "targeted regression test"
+      },
+      {
+        "target": "Unexpected failure surfaces an actionable error",
+        "method": "manual review"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "design": {
+    "mode": "none",
+    "decision_reason": "existing contract only",
+    "confidence": "medium",
+    "layer_impact": "layer-preserving",
+    "layer_decision_reason": null,
+    "required_artifacts": [],
+    "artifacts": {
+      "connection_diagram": null,
+      "sequence_diagram": null,
+      "boundary_note": null
+    },
+    "frozen": {
+      "mode": "none",
+      "layer_impact": "layer-preserving",
+      "required_artifacts": [],
+      "artifacts": {
+        "connection_diagram": null,
+        "sequence_diagram": null,
+        "boundary_note": null
+      },
+      "anchor_summary": "mode=none, layer=layer-preserving",
+      "frozen_at": "2026-07-11T09:03:28Z"
+    },
+    "assessment": {
+      "status": "appropriate",
+      "summary": "design depth matches the current task shape",
+      "replan_required": false,
+      "escalation_reason": null,
+      "missing_artifacts": []
+    }
+  },
+  "promotion": {
+    "required": true,
+    "required_override": null,
+    "required_reason": "feature tasks are promotable by default",
+    "required_source": "classified",
+    "status": "promotion_pending",
+    "strategy": "direct",
+    "remote_name": null,
+    "parent_artifact_id": null,
+    "parent_task_id": null,
+    "base_override": null,
+    "base_branch": "main",
+    "base_source": null,
+    "base_reason": null,
+    "resolved_parent_branch": null,
+    "retarget_required": false,
+    "reverify_required": false,
+    "retarget_required_at": null,
+    "retarget_parent_task_id": null,
+    "retarget_parent_branch": null,
+    "retarget_merge_target": null,
+    "head_branch": "feat/add-indexed-workflow-candidate-selection",
+    "pr_number": null,
+    "pr_url": null,
+    "receipt_path": "artifacts/promotion/merge_receipt.json",
+    "execution_receipt_path": null,
+    "changeset_path": "CHANGESET.md",
+    "commit_message": null,
+    "repo_full_name": null,
+    "title": null,
+    "head_sha": null,
+    "merge_commit_sha": null,
+    "committed_at": null,
+    "pushed_at": null,
+    "pr_opened_at": null,
+    "merged_at": null,
+    "merged_by": null,
+    "merge_method": null,
+    "recorded_at": null
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": "design depth matches the current task shape",
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_design_anchor_at": "2026-07-11T09:03:28Z",
+    "last_design_anchor_source": "planning.freeze_task_spec",
+    "last_checkpoint_type": "design_assessment",
+    "last_checkpoint_source": "audit.design",
+    "last_checkpoint_at": "2026-07-11T09:11:18Z",
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": [
+      {
+        "id": "d8b4692039f04ab39b2b3ba0972b5790",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=none, layer=layer-preserving",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-07-11T09:03:28Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "ef83f09fd8394080ab6393d01bf92c27",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-07-11T09:11:18Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      }
+    ]
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "promotion": {
+      "status": "promotion_pending",
+      "recorded_at": null,
+      "repo_full_name": null,
+      "pr_number": null,
+      "title": null,
+      "url": null,
+      "head_branch": "feat/add-indexed-workflow-candidate-selection",
+      "base_branch": "main",
+      "head_sha": null,
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "merged_by": null,
+      "merge_method": null,
+      "receipt_path": "artifacts/promotion/merge_receipt.json",
+      "changeset_path": "CHANGESET.md",
+      "parent_artifact_id": null,
+      "parent_task_id": null
+    },
+    "source_event_id": "evt-939d63d98b10",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "add-indexed-workflow-candidate-selection",
+    "owned_paths": [
+      "src/sisyphus/domain/workflow",
+      "src/sisyphus/domain/task/repository.py",
+      "src/sisyphus/shared/paths.py",
+      ".gitignore",
+      "docs/architecture.md",
+      "tests"
+    ],
+    "requested_adopt_paths": [],
+    "evidence_graph_required": true
+  }
+}

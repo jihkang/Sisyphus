@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from .utils import find_unknown_fields
+from .shared.mappings import find_unknown_fields
 
 ARTIFACT_RECORD_SCHEMA_VERSION = "sisyphus.artifact_record.v1"
 ARTIFACT_RECORD_KIND_ATOMIC = "artifact"
@@ -529,7 +529,8 @@ class CompositeArtifactRecord(ArtifactRecord):
     record_kind: str = field(init=False, default=ARTIFACT_RECORD_KIND_COMPOSITE)
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        # Zero-argument super() is unsafe for slotted dataclasses on Python 3.11-3.13.
+        ArtifactRecord.__post_init__(self)
         object.__setattr__(self, "composition_rule", _require_string(self.composition_rule, "composition_rule"))
         object.__setattr__(
             self,
@@ -553,7 +554,7 @@ class CompositeArtifactRecord(ArtifactRecord):
         )
 
     def to_dict(self) -> dict[str, object]:
-        data = super().to_dict()
+        data = ArtifactRecord.to_dict(self)
         data["composition_rule"] = self.composition_rule
         data["child_artifacts"] = [artifact.to_dict() for artifact in self.child_artifacts]
         data["task_specs"] = [task_spec.to_dict() for task_spec in self.task_specs]

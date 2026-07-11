@@ -5,6 +5,7 @@ from pathlib import Path
 import uuid
 
 from .design import ensure_task_design_defaults, summarize_design_anchor
+from .gates import dedupe_gates as _dedupe_gates, make_gate as _gate
 
 
 CONFORMANCE_GREEN = "green"
@@ -672,44 +673,3 @@ def _subtask_has_verification_mapping(subtask: dict, verification_targets: list[
     if not title:
         return False
     return title in verification_targets
-
-
-def _gate(
-    code: str,
-    message: str,
-    *,
-    source: str,
-    severity: str,
-    checkpoint_type: str | None = None,
-    subtask_id: str | None = None,
-) -> dict:
-    gate = {
-        "code": code,
-        "message": message,
-        "blocking": True,
-        "source": source,
-        "created_at": utc_now(),
-        "severity": severity,
-    }
-    if checkpoint_type:
-        gate["checkpoint_type"] = checkpoint_type
-    if subtask_id:
-        gate["subtask_id"] = subtask_id
-    return gate
-
-
-def _dedupe_gates(gates: list[dict]) -> list[dict]:
-    seen: set[tuple[str, str, str | None, str | None]] = set()
-    deduped: list[dict] = []
-    for gate in gates:
-        key = (
-            gate.get("code", ""),
-            gate.get("message", ""),
-            gate.get("checkpoint_type"),
-            gate.get("subtask_id"),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(gate)
-    return deduped

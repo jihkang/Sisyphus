@@ -1,6 +1,6 @@
 # Sisyphus Architecture
 
-This document describes the current architecture of Sisyphus as of 2026-04-26.
+This document describes the current architecture of Sisyphus as of 2026-07-11.
 
 Sisyphus is a graph-native work system that runs inside a target Git repository and manages repository-local work state, task documents, worktrees, execution, verification, and closeout.
 
@@ -19,6 +19,8 @@ This means:
 - reconstructability matters as much as execution convenience
 
 The task runtime is still the operator-facing control surface, but feature work now passes through an artifact projection, DSL, obligation queue, and convergence loop before verification and promotion decisions are considered closed.
+
+The package uses a staged ownership model. Stable top-level modules such as `sisyphus.cli`, `sisyphus.state`, `sisyphus.workflow`, `sisyphus.planning`, and `sisyphus.mcp_core` preserve public imports, while implementation authority is moving into `interfaces`, `domain`, `infra`, and `shared`. The `compat` package is explicitly legacy-facing; it is not a second implementation root.
 
 For visual diagrams of the current task runtime, artifact-governed feature-change path, target artifact authority, and adapter boundaries, see [runtime-relationship-diagrams.md](./runtime-relationship-diagrams.md).
 
@@ -221,48 +223,34 @@ Snapshot fingerprints allow the daemon to detect stale projected inputs. When a 
 
 ## System Shape
 
-At a high level, the current implementation is organized as a layered orchestration stack:
+At a high level, the current implementation is organized around responsibility boundaries rather than top-level file names:
 
 ```text
-+------------------------------------------------------------------+
-| Layer 1. Interfaces                                               |
-| CLI commands, Python API, Discord bot, MCP clients                |
-| src/sisyphus/cli.py, api.py, discord_bot.py                       |
-+------------------------------------------------------------------+
-| Layer 2. Intake and Service Loop                                  |
-| Conversation queue, inbox processing, daemon/service loop         |
-| src/sisyphus/daemon.py, service.py                                |
-+------------------------------------------------------------------+
-| Layer 3. Workflow and Policy                                      |
-| Workflow transitions, plan/spec gates, subtask generation         |
-| src/sisyphus/workflow.py, planning.py                             |
-+------------------------------------------------------------------+
-| Layer 4. Execution Adapters                                       |
-| Provider wrappers, prompt assembly, tracked agent runtime         |
-| src/sisyphus/provider_wrapper.py, codex_prompt.py, agent_runtime.py |
-+------------------------------------------------------------------+
-| Layer 5. Persistence and Workspace                                |
-| Task JSON, agent JSON, task docs, templates, git worktrees        |
-| src/sisyphus/state.py, agents.py, templates.py, gitops.py         |
-+------------------------------------------------------------------+
-| Layer 6. Verification and Closeout                                |
-| Strategy extraction, audits, verify commands, close gates         |
-| src/sisyphus/strategy.py, audit.py, closeout.py                   |
-+------------------------------------------------------------------+
-| Layer 7. Artifact DSL and Obligation Runtime                      |
-| Artifact records, projection snapshots, evaluation, DSL compiler  |
-| src/sisyphus/artifacts.py, artifact_projection.py, dsl.py         |
-| src/sisyphus/feature_change_dsl.py, obligation_runtime.py         |
-+------------------------------------------------------------------+
-| Layer 8. Core Integration Services                                |
-| Event bus, MCP core service, shared adapter logic                 |
-| src/sisyphus/bus.py, bus_jsonl.py, events.py, mcp_core.py         |
-+------------------------------------------------------------------+
-| Layer 9. MCP Gateway                                              |
-| Official MCP SDK stdio gateway, tool/resource binding             |
-| src/sisyphus/mcp_server.py                                        |
-+------------------------------------------------------------------+
++--------------------------------------------------------------------+
+| Stable public and compatibility surfaces                           |
+| cli.py, state.py, workflow.py, planning.py, mcp_core.py, compat/   |
++--------------------------------------------------------------------+
+| Interfaces                                                         |
+| interfaces/cli/{parser,dispatch,handlers}, interfaces/mcp/*, api.py |
++--------------------------------------------------------------------+
+| Intake and runtime coordination                                    |
+| daemon.py, service.py, provider_wrapper.py, agent_runtime.py        |
++--------------------------------------------------------------------+
+| Domain authority                                                   |
+| domain/{inbox,task,agent,lifecycle,planning,promotion,workflow}     |
++--------------------------------------------------------------------+
+| Artifact, evaluation, and evolution services                       |
+| artifacts.py, dsl.py, obligation_runtime.py, eval/, evolution/      |
++--------------------------------------------------------------------+
+| Infrastructure and shared primitives                               |
+| infra/{config,persistence}, shared/{clock,coerce,mappings,paths}     |
++--------------------------------------------------------------------+
+| Repository workspace integration                                   |
+| templates.py, gitops.py, task docs, worktrees, .planning state      |
++--------------------------------------------------------------------+
 ```
+
+The top-level facades are intentionally stable. New business rules belong in `domain`; parsing and response shaping belong in `interfaces`; file/config mechanics belong in `infra`; dependency-light primitives belong in `shared`. A facade should delegate rather than reacquire implementation responsibility.
 
 ## Layer Diagram
 
@@ -270,33 +258,26 @@ The main dependency flow is downward. Upper layers coordinate lower layers and s
 
 ```mermaid
 flowchart TD
-    A[Interfaces\nCLI / API / Discord Bot]
-    B[Intake and Service Loop\nqueue / daemon / service]
-    C[Workflow and Policy\nworkflow / planning]
-    D[Execution Adapters\nprovider wrapper / prompt / agent runtime]
-    E[Persistence and Workspace\nstate / agents / templates / gitops]
-    F[Verification and Closeout\nstrategy / audit / closeout]
-    I[Artifact DSL and Obligations\nprojection / evaluation / compiler / queue]
+    P[Public facades and compat\ncli / state / workflow / mcp_core]
+    I[Interfaces\nCLI / API / MCP / Discord]
+    R[Intake and runtime\ndaemon / service / providers / agents]
+    D[Domain authority\ninbox / task / lifecycle / planning / promotion / workflow]
+    A[Artifact and evaluation\nDSL / obligations / eval / evolution]
+    F[Infrastructure\nconfig / persistence / shared primitives]
+    W[Repository workspace\nplanning state / docs / git worktrees]
 
-    A --> B
-    A --> C
-    B --> C
-    B --> E
-    C --> D
-    C --> E
-    C --> F
-    C --> I
-    D --> E
-    F --> E
-    F --> I
-    I --> E
-    G[Core Integration Services\nbus / events / MCP core]
-    H[MCP Gateway\nMCP SDK stdio transport]
-    B --> G
-    C --> G
-    F --> G
-    I --> G
-    H --> G
+    P --> I
+    P --> D
+    I --> R
+    I --> D
+    R --> D
+    R --> F
+    D --> A
+    D --> F
+    A --> F
+    F --> W
+    R --> W
+    D --> W
 ```
 
 ## MCP Boundary
@@ -307,29 +288,49 @@ MCP is the shared product interface for Codex, Claude, and any future agent clie
 flowchart LR
     A[Codex / Claude / Other Client]
     B[MCP Gateway\nmcp_server.py]
-    C[MCP Core Service\nmcp_core.py]
+    C[MCP Interface Service\ninterfaces/mcp/service.py]
+    R[Registries and adapters\ntools / resources / schemas]
     D[Sisyphus Core\nworkflow / planning / audit / closeout]
     E[State + Docs + Agents]
     F[Event Bus]
 
     A --> B
     B --> C
+    C --> R
+    R --> D
+    R --> E
     C --> D
     C --> E
     D --> F
     C --> F
 ```
 
-The intended responsibilities are:
+The current responsibilities are:
 
 - `mcp_server.py`: official MCP Python SDK server, stdio transport, tool/resource binding.
-- `mcp_core.py`: repo-aware tool/resource resolution and response shaping.
+- `interfaces/mcp/service.py`: repo-aware service composition and request dispatch.
+- `interfaces/mcp/registry.py`, `tools.py`, and `resources.py`: tool/resource registration and shared adapter contracts.
+- `interfaces/mcp/*_tools.py` and `*_resources.py`: bounded workflow, promotion, search, task, repository, and evolution surfaces.
+- `mcp_core.py` and `compat/mcp_core.py`: stable compatibility imports over the interface implementation.
 - `bus.py` and related modules: publication surface for visualization, monitoring, and other apps.
 - sisyphus core modules: workflow, conformance, verification, and persistence policy.
 
+## Observation and Action Boundary
+
+`task://<task-id>/observation` is the canonical compact agent-facing state. `observation.py` projects task, verification, conformance, evidence, document, subtask, and promotion state into one response with explicit allowed and forbidden next actions.
+
+The action boundary is split across:
+
+- `action_space.py`: action definitions and risk levels
+- `lifecycle_state.py` and `lifecycle_rules.py`: lifecycle actions, phases, and transition rules
+- `lifecycle_guard.py`: transition checks and gate projection
+- `interfaces/mcp/*_tools.py`: transport adapters that invoke guarded core operations
+
+Agents should choose from the observation rather than reconstructing lifecycle state from chat history. Human-only and review-gated actions remain operator decisions even when the transport can technically invoke them.
+
 ## Evolution Control Plane
 
-The repository now also contains a separate read-only evolution control plane in [`src/sisyphus/evolution/`](../src/sisyphus/evolution/). This subsystem is intentionally adjacent to the live orchestration workflow rather than embedded inside it.
+The repository also contains a bounded evolution control plane in [`src/sisyphus/evolution/`](../src/sisyphus/evolution/). Evaluation remains isolated and append-only; review-gated bridge operations may request normal Sisyphus follow-up tasks without granting evolution lifecycle authority.
 
 The current implemented slices are:
 
@@ -342,14 +343,17 @@ The current implemented slices are:
 - hard-guard evaluation and weighted scoring in `constraints.py` and `fitness.py`
 - stable reporting projection in `report.py`
 - read-only orchestration and append-only run persistence in `orchestrator.py`
-- read-only CLI views in `cli.py` backed by `evolution/surface.py`
+- CLI execution and read views through `interfaces/cli/handlers/evolution.py` and `evolution/surface.py`
+- review-gated follow-up requests and task handoff in `followup.py`, `bridge.py`, and `operator.py`
+- promotion, verification, receipt projection, and invalidation contracts in `promotion.py`, `verification.py`, `receipts.py`, and `invalidation.py`
+- MCP evolution tools and resources through `interfaces/mcp/evolution.py`
 
-The following pieces are still future work:
+The following pieces remain intentionally bounded or future work:
 
-- follow-up task handoff into the Sisyphus lifecycle
-- richer MCP evolution tools/resources beyond the current read surfaces
 - broader artifact protocols beyond feature-change
 - agent/tool execution policies beyond the current local verifier runner
+- autonomous approval or promotion, which remains outside the evolution authority boundary
+- large-scale scheduling and distributed evaluation workers
 
 ### Evolution Authority Boundary
 
@@ -404,8 +408,9 @@ flowchart LR
     end
 
     RepoState --> Dataset
-    Report -. future follow-up request .-> Workflow
-    MCP -. future evolution MCP surface .-> Report
+    Report --> Bridge[Review-gated follow-up bridge]
+    Bridge --> Workflow
+    MCP --> Report
 ```
 
 ### Evolution Evaluation Loop
@@ -421,10 +426,10 @@ flowchart TD
     F --> H[Build reviewable report]
     G --> H
     H --> I[Append-only run artifacts]
-    I --> J[Future follow-up request or MCP projection]
+    I --> J[Review-gated follow-up request or MCP projection]
 ```
 
-Today this loop is implemented as a planning and evaluation model layer through the read-only orchestrator, bounded candidate materialization, and full worktree-backed harness execution inside isolated evaluation worktrees. It still does not land approved results through the normal Sisyphus lifecycle.
+Today this loop includes planning, bounded candidate materialization, isolated worktree-backed evaluation, reviewable reporting, and review-gated follow-up task creation. It does not approve, freeze, verify, or promote its own results; those actions continue through the normal Sisyphus lifecycle.
 
 ## Class Diagram
 
@@ -577,7 +582,9 @@ classDiagram
 
 The interface layer exposes the system to operators and automation.
 
-- `cli.py` defines command entrypoints such as `request`, `ingest`, `daemon`, `serve`, `verify`, `close`, `plan`, `spec`, and `agents`.
+- `interfaces/cli/parser.py` defines the command grammar, `dispatch.py` maps parsed paths to calls, and `handlers/` owns command-specific presentation and adaptation.
+- `cli.py` and `interfaces/cli/app.py` preserve the public function surface while delegating implementation to those split modules.
+- `interfaces/mcp/` owns MCP registration, schemas, tools, resources, and response shaping.
 - `api.py` provides a library-facing wrapper around queueing, processing, and running the workflow until stable.
 - `discord_bot.py` is an optional external integration path that feeds the same orchestration model.
 
@@ -587,8 +594,9 @@ This layer should stay thin. It is mostly argument parsing, command dispatch, an
 
 This layer converts a user request into repository-local events and drives the orchestration loop.
 
-- `daemon.py` serializes conversation requests into inbox event JSON files.
-- The daemon processes pending events, creates tasks, and moves events into processed or failed inbox folders.
+- `domain/inbox/models.py` validates typed conversation and pull-request event contracts before they cross the queue boundary.
+- `infra/persistence/inbox.py` atomically persists and claims events across pending, processing, processed, and failed folders.
+- `daemon.py` coordinates validated event routing, creates tasks, and isolates malformed or failed events without stopping the loop.
 - `service.py` wraps the daemon loop and can emit task notifications based on state changes.
 
 This is the operational backbone of the system. It separates request intake from workflow advancement.
@@ -597,8 +605,10 @@ This is the operational backbone of the system. It separates request intake from
 
 This layer contains the orchestration rules for task progression.
 
-- `workflow.py` advances tasks through plan approval, spec freeze, subtask generation, subtask execution, verification, and closeout.
-- `planning.py` defines plan and spec status rules, plan review rounds, and blocking gates.
+- `domain/workflow/service.py` advances tasks through plan approval, spec freeze, subtask generation, subtask execution, verification, and closeout; `workflow.py` is its stable facade.
+- `domain/workflow/candidates.py` maintains a versioned, non-authoritative scheduling index and reparses only new or fingerprint-changed task records before delegating to the workflow service.
+- `domain/planning/service.py` defines plan/spec transitions and review rounds; `planning.py` preserves public imports.
+- `domain/lifecycle/rules.py`, `lifecycle_state.py`, and `lifecycle_guard.py` centralize allowed transitions and gate projection.
 
 This layer acts as the state machine, even though it is implemented as direct field transitions rather than a formal state machine framework.
 
@@ -617,9 +627,15 @@ This layer is intentionally adapter-shaped. The orchestration logic does not nee
 
 This layer stores state and provisions task workspaces.
 
-- `state.py` defines the task record shape and persists task JSON.
-- `agents.py` tracks per-agent lifecycle as JSON files with heartbeat-based status derivation.
+- `domain/task/models.py` defines task defaults and `domain/task/repository.py` persists task JSON; `state.py` re-exports the stable surface.
+- `domain/agent/models.py` and `domain/agent/repository.py` own agent records; `agents.py` is the stable facade.
+- `infra/persistence/` provides locked atomic JSON storage, file locks, and the inbox lifecycle repository.
+- `infra/config/loader.py` owns configuration loading; `config.py` re-exports it.
+- `shared/` contains dependency-light clock, coercion, mapping, and path primitives.
 - `templates.py` materializes task document templates into the task directory.
+
+The ignored `.planning/cache/workflow-candidates.json` file is derived scheduling data. Missing, malformed, or version-mismatched cache state is rebuilt from task records and never overrides `task.json` lifecycle authority.
+
 - `gitops.py` creates and removes task branches and worktrees.
 - `creation.py` combines task record creation, worktree setup, and rollback behavior.
 
@@ -657,8 +673,9 @@ This layer exposes Sisyphus to external consumers without moving the source of t
 - `events.py` defines a domain-event envelope.
 - `bus.py` defines a pluggable publisher interface.
 - `bus_jsonl.py` provides a default JSONL publisher.
-- `mcp_adapter.py` exposes MCP-friendly tool and resource operations without coupling the core to a specific MCP server implementation.
-- `mcp_server.py` binds those operations to the official MCP Python SDK stdio server entrypoint.
+- `interfaces/mcp/` exposes MCP-friendly tool and resource operations without moving lifecycle authority into the transport.
+- `mcp_adapter.py` remains a compatibility adapter for existing consumers.
+- `mcp_server.py` binds the interface service to the official MCP Python SDK stdio server entrypoint.
 
 This layer is intentionally replaceable. It is where web apps, bots, and MCP servers attach.
 
@@ -733,7 +750,7 @@ sequenceDiagram
     actor User
     participant CLI as CLI/API
     participant Daemon as daemon.py
-    participant Inbox as .planning/inbox/*.json
+    participant Inbox as typed inbox model + repository
     participant Creation as creation.py + gitops.py
     participant TaskDir as .planning/tasks/<task-id>/
     participant State as state.py
@@ -747,9 +764,9 @@ sequenceDiagram
 
     User->>CLI: request("Add an agent dashboard")
     CLI->>Daemon: queue_conversation_event(message, title, task_type, provider, auto_run)
-    Daemon->>Inbox: write pending event JSON
+    Daemon->>Inbox: validate and atomically enqueue pending JSON
     CLI->>Daemon: process_inbox_event(event_path)
-    Daemon->>Inbox: read event JSON
+    Daemon->>Inbox: claim pending JSON into processing and validate again
     Daemon->>Creation: create_task_workspace(task_type, slug)
     Creation->>Creation: create branch + git worktree
     Creation->>TaskDir: create task directory
@@ -816,12 +833,13 @@ The main data handoff points are:
 - provider result to agent record and subtask status
 - task docs to parsed `test_strategy`
 - verify command results to `VERIFY.md` and `task.json`
+- task state to the compact observation and action-registry decision surface
 - task and conformance changes to domain events on the event bus
 - repository-local state and task docs to MCP tool/resource responses
 
 The most important persistent channels are:
 
-- `.planning/inbox/pending`, `.planning/inbox/processed`, `.planning/inbox/failed`
+- `.planning/inbox/pending`, `.planning/inbox/processing`, `.planning/inbox/processed`, `.planning/inbox/failed`
 - `.planning/tasks/<task-id>/task.json`
 - `.planning/tasks/<task-id>/*.md`
 - `.planning/tasks/<task-id>/agents/*.json`
@@ -836,7 +854,8 @@ The central record is `task.json`. Important fields include:
 - review state: `plan_status`, `spec_status`, `plan_review_round`
 - workspace state: `task_dir`, `worktree_path`, `branch`, `base_branch`
 - verification state: `verify_profile`, `verify_commands`, `verify_status`, `audit_attempts`
-- policy state: `gates`, `test_strategy`, `subtasks`
+- policy state: `gates`, `test_strategy`, `subtasks`, `conformance`, `design`
+- delivery state: `promotion`, merge receipt, changeset, and retarget/reverify flags
 - metadata: `meta`
 
 Supporting artifacts live next to `task.json`:
@@ -847,6 +866,10 @@ Supporting artifacts live next to `task.json`:
 - `VERIFY.md`
 - `LOG.md`
 - `agents/*.json`
+- `artifacts/projection/feature-change.json`
+- `artifacts/obligations/compiled.json`
+- `artifacts/evidence/evidence-graph.json`
+- `artifacts/promotion/*.json`
 
 ## Architectural Characteristics
 
@@ -868,18 +891,20 @@ Supporting artifacts live next to `task.json`:
 
 The current architecture works best when module responsibilities stay disciplined:
 
-- `cli.py` and `api.py` should remain thin entry layers.
-- `daemon.py` should own queue processing and event lifecycle, not detailed business policy.
-- `workflow.py` should coordinate transitions, not absorb template parsing or low-level git logic.
-- `planning.py`, `audit.py`, and `closeout.py` should remain policy modules.
-- `state.py`, `agents.py`, and `gitops.py` should remain infrastructure modules.
+- top-level facade and `compat` modules should delegate and preserve imports, not accumulate new business rules.
+- `interfaces/cli` and `interfaces/mcp` should own parsing, dispatch, transport schemas, and presentation only.
+- `daemon.py` should own queue coordination and event routing, not persistence mechanics or detailed business policy.
+- `domain/workflow/service.py` should coordinate transitions, not absorb template parsing or low-level git logic.
+- workflow candidate indexes must remain derived hints; `_advance_task` and canonical task records retain transition authority.
+- domain planning, lifecycle, promotion, and task services should remain transport-independent.
+- `infra` should own configuration and persistence mechanics; `shared` should remain small and dependency-light.
 - provider-specific behavior should stay behind `provider_wrapper.py` and wrapper entrypoints.
 
 ## Suggested Future Refactoring Directions
 
 These are not required for the current design, but they are the most likely pressure points as the project grows:
 
-- Introduce a more explicit task state transition model to reduce string-based implicit rules.
+- Continue moving residual implicit string transitions behind the action registry and lifecycle rules.
 - Separate verification policy from verify command execution more cleanly.
 - Add stronger schema validation for `task.json` and agent records.
 - Make task document parsing more resilient or move structured strategy data into a dedicated machine-readable file.

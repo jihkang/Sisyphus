@@ -52,6 +52,7 @@ from sisyphus.daemon import (
 )
 from sisyphus.discovery import detect_repo_root
 from sisyphus.discord_bot import build_discord_source_context, queue_discord_conversation
+from sisyphus.evidence_graph import read_evidence_graph, write_evidence_graph
 from sisyphus.events import new_event_envelope
 from sisyphus.metrics import (
     MANUAL_INTERVENTION_REQUIRED_EVENT,
@@ -59,7 +60,7 @@ from sisyphus.metrics import (
     build_value_metrics_report,
 )
 from sisyphus.paths import event_log_file, inbox_failed_dir, inbox_processed_dir
-from sisyphus.planning import approve_task_plan, freeze_task_spec, request_plan_changes, revise_task_plan
+from sisyphus.planning import approve_task_plan, freeze_task_spec, generate_subtasks, request_plan_changes, revise_task_plan
 from sisyphus.provider_wrapper import run_provider_wrapper
 from sisyphus.service import TaskNotificationTracker, build_task_update_summary, run_service_step
 from sisyphus.state import build_task_record, create_task_record, list_task_records, load_task_record, save_task_record
@@ -109,6 +110,20 @@ class SisyphusVerifyTests(unittest.TestCase):
 
     def test_verify_blocks_in_spec_stage_for_unfilled_feature_docs(self) -> None:
         task = self._new_feature_task("spec-check")
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="ready to inspect docs",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="spec frozen",
+        )
 
         outcome = run_verify(self.repo_root, self.config, task["id"])
 
@@ -206,6 +221,13 @@ class SisyphusVerifyTests(unittest.TestCase):
             reviewer="reviewer-1",
             notes="ready to implement",
         )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="spec frozen",
+        )
         outcome = run_verify(self.repo_root, self.config, task["id"])
 
         self.assertEqual(outcome.status, "passed")
@@ -218,6 +240,12 @@ class SisyphusVerifyTests(unittest.TestCase):
         self.assertEqual(reloaded["workflow_phase"], "verified")
         self.assertEqual(reloaded["gates"], [])
         self.assertEqual(reloaded["last_verify_results"][0]["status"], "passed")
+        evidence_graph = read_evidence_graph(task_dir)
+        self.assertIsNotNone(evidence_graph)
+        assert evidence_graph is not None
+        self.assertEqual(evidence_graph["task_id"], task["id"])
+        self.assertEqual(evidence_graph["verify_status"], "passed")
+        self.assertGreaterEqual(len(evidence_graph["curated_evidence"]), 2)
 
     def test_verify_reopens_plan_when_design_is_underdesigned(self) -> None:
         task = self._new_feature_task("design-replan")
@@ -477,6 +505,108 @@ class SisyphusVerifyTests(unittest.TestCase):
         gate_codes = {gate["code"] for gate in outcome.gates}
         self.assertIn("PLAN_APPROVAL_REQUIRED", gate_codes)
 
+    def test_verify_requires_spec_freeze_before_audit_side_effects(self) -> None:
+        task = self._new_feature_task("verify-needs-spec-freeze")
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="plan approved",
+        )
+
+        outcome = run_verify(self.repo_root, self.config, task["id"])
+
+        self.assertEqual(outcome.status, "failed")
+        self.assertEqual(outcome.stage, "spec")
+        self.assertEqual(outcome.audit_attempts, 0)
+        self.assertIn("SPEC_FREEZE_REQUIRED", {gate["code"] for gate in outcome.gates})
+
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded["status"], "blocked")
+        self.assertEqual(reloaded["audit_attempts"], 0)
+
+    def test_plan_revision_requires_requested_changes(self) -> None:
+        task = self._new_feature_task("revise-without-request")
+
+        outcome = revise_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            author="author-1",
+            notes="try revise",
+        )
+
+        self.assertEqual(outcome.task_status, "blocked")
+        self.assertIn("PLAN_REVISION_NOT_REQUESTED", {gate["code"] for gate in outcome.gates})
+
+    def test_subtask_generation_requires_frozen_spec(self) -> None:
+        task = self._new_feature_task("subtasks-need-spec")
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="plan approved",
+        )
+
+        outcome = generate_subtasks(self.repo_root, self.config, task["id"])
+
+        self.assertEqual(outcome.workflow_phase, "spec_in_review")
+        self.assertEqual(outcome.subtasks, [])
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertIn("SPEC_FREEZE_REQUIRED", {gate["code"] for gate in reloaded["gates"]})
+
+    def test_execute_promotion_requires_verify_before_git_side_effects(self) -> None:
+        task = self._new_feature_task("promotion-needs-verify")
+        approve_task_plan(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="plan approved",
+        )
+        freeze_task_spec(
+            repo_root=self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            reviewer="reviewer-1",
+            notes="spec frozen",
+        )
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["promotion"]["required"] = True
+        persisted["promotion"]["status"] = "promotion_pending"
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        result = execute_promotion(self.repo_root, config=self.config, task_id=task["id"])
+
+        self.assertIsNotNone(result.error)
+        self.assertIn("VERIFY_REQUIRED", result.error or "")
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertIn("VERIFY_REQUIRED", {gate["code"] for gate in reloaded["gates"]})
+
+    def test_record_merged_pull_request_rejects_closed_task(self) -> None:
+        task = self._new_feature_task("closed-record-merge")
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "closed"
+        persisted["stage"] = "done"
+        persisted["workflow_phase"] = "closed"
+        persisted["closed_at"] = "2026-06-14T09:00:00Z"
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        result = record_merged_pull_request(
+            self.repo_root,
+            config=self.config,
+            task_id=task["id"],
+            pr_number=1,
+            title="Closed task merge",
+        )
+
+        self.assertIsNotNone(result.error)
+        self.assertIn("TASK_CLOSED", result.error or "")
+
     def test_close_requires_verified_task(self) -> None:
         task = self._new_feature_task("close-check")
 
@@ -540,6 +670,110 @@ class SisyphusVerifyTests(unittest.TestCase):
         self.assertEqual(reloaded["status"], "verified")
         self.assertEqual(reloaded["stage"], "promotion")
         self.assertEqual(reloaded["workflow_phase"], "promotion_pending")
+
+    def test_close_blocks_on_conformance_warning(self) -> None:
+        task = self._new_feature_task("close-conformance-warning")
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "verified"
+        persisted["stage"] = "done"
+        persisted["workflow_phase"] = "verified"
+        persisted["verify_status"] = "passed"
+        persisted["plan_status"] = "approved"
+        persisted["spec_status"] = "frozen"
+        persisted["promotion"] = {
+            "required": False,
+            "status": "not_required",
+            "strategy": "direct",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        append_conformance_log(
+            persisted,
+            checkpoint_type="post_exec",
+            status="yellow",
+            summary="implementation drift requires review",
+            source="test",
+            resolved=False,
+            drift=1,
+        )
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        outcome = run_close(self.repo_root, self.config, task["id"], allow_dirty=False)
+
+        self.assertFalse(outcome.closed)
+        gate_codes = {gate["code"] for gate in outcome.gates}
+        self.assertIn("CONFORMANCE_WARNING_UNRESOLVED", gate_codes)
+        reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])
+        self.assertEqual(reloaded["status"], "blocked")
+
+    def test_close_blocks_new_verified_task_missing_evidence_graph(self) -> None:
+        task = self._new_feature_task("close-missing-evidence")
+        task_file = self.repo_root / task["task_dir"] / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "verified"
+        persisted["stage"] = "done"
+        persisted["workflow_phase"] = "verified"
+        persisted["verify_status"] = "passed"
+        persisted["last_verified_at"] = "2026-06-14T00:00:00Z"
+        persisted.setdefault("meta", {})["evidence_graph_required"] = True
+        persisted["plan_status"] = "approved"
+        persisted["spec_status"] = "frozen"
+        persisted["promotion"] = {
+            "required": False,
+            "status": "not_required",
+            "strategy": "direct",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+
+        outcome = run_close(self.repo_root, self.config, task["id"], allow_dirty=False)
+
+        self.assertFalse(outcome.closed)
+        self.assertIn("EVIDENCE_GRAPH_MISSING", {gate["code"] for gate in outcome.gates})
+
+    def test_close_blocks_unsupported_high_importance_evidence(self) -> None:
+        task = self._new_feature_task("close-unsupported-evidence")
+        task_dir = self.repo_root / task["task_dir"]
+        task_file = task_dir / "task.json"
+        persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        persisted["status"] = "verified"
+        persisted["stage"] = "done"
+        persisted["workflow_phase"] = "verified"
+        persisted["verify_status"] = "passed"
+        persisted["last_verified_at"] = "2026-06-14T00:00:00Z"
+        persisted.setdefault("meta", {})["evidence_graph_required"] = True
+        persisted["plan_status"] = "approved"
+        persisted["spec_status"] = "frozen"
+        persisted["promotion"] = {
+            "required": False,
+            "status": "not_required",
+            "strategy": "direct",
+            "receipt_path": persisted["docs"]["promotion"],
+        }
+        task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
+        write_evidence_graph(
+            task_dir,
+            {
+                "schema_version": "sisyphus.evidence_graph.v1",
+                "task_id": task["id"],
+                "curated_evidence": [
+                    {
+                        "id": "ev-001",
+                        "claim": "Unit tests pass.",
+                        "verdict": "unsupported",
+                        "importance": "high",
+                        "blocking": True,
+                    }
+                ],
+                "unsupported_claims": [],
+                "blocking_gaps": [],
+            },
+        )
+
+        outcome = run_close(self.repo_root, self.config, task["id"], allow_dirty=False)
+
+        self.assertFalse(outcome.closed)
+        self.assertIn("EVIDENCE_UNSUPPORTED_HIGH_IMPORTANCE", {gate["code"] for gate in outcome.gates})
 
     def test_close_succeeds_when_required_promotion_is_recorded(self) -> None:
         task = self._new_feature_task("close-promotion-recorded")
@@ -2010,6 +2244,7 @@ class SisyphusDaemonTests(unittest.TestCase):
         task = outcome.task
         task_file = self.repo_root / task["task_dir"] / "task.json"
         persisted = json.loads(task_file.read_text(encoding="utf-8"))
+        self._mark_task_promotion_ready(persisted)
         persisted["promotion"]["required"] = True
         persisted["promotion"]["required_source"] = "override"
         persisted["promotion"]["required_reason"] = "test override"
@@ -2090,6 +2325,7 @@ class SisyphusDaemonTests(unittest.TestCase):
         reloaded["promotion"]["status"] = "pushed"
         reloaded["promotion"]["head_sha"] = head_sha
         reloaded["promotion"]["remote_name"] = "origin"
+        self._mark_task_promotion_ready(reloaded)
         task_file.write_text(json.dumps(reloaded, indent=2) + "\n", encoding="utf-8")
 
         gh_result = subprocess.CompletedProcess(
@@ -2150,6 +2386,7 @@ class SisyphusDaemonTests(unittest.TestCase):
         persisted["promotion"]["required"] = True
         persisted["promotion"]["strategy"] = "stacked"
         persisted["promotion"]["parent_task_id"] = parent["id"]
+        self._mark_task_promotion_ready(persisted)
         child_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
 
         child_worktree = Path(child["worktree_path"])
@@ -2217,6 +2454,7 @@ class SisyphusDaemonTests(unittest.TestCase):
         persisted_child["promotion"]["required"] = True
         persisted_child["promotion"]["strategy"] = "stacked"
         persisted_child["promotion"]["parent_task_id"] = parent["id"]
+        self._mark_task_promotion_ready(persisted_child)
         child_file.write_text(json.dumps(persisted_child, indent=2) + "\n", encoding="utf-8")
 
         child_worktree = Path(child["worktree_path"])
@@ -2265,6 +2503,7 @@ class SisyphusDaemonTests(unittest.TestCase):
         persisted["promotion"]["strategy"] = "stacked"
         persisted["promotion"]["parent_task_id"] = parent["id"]
         persisted["promotion"]["base_override"] = "release/2026"
+        self._mark_task_promotion_ready(persisted)
         child_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
 
         child_worktree = Path(child["worktree_path"])
@@ -3286,6 +3525,127 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertEqual(args.command, "request")
         self.assertTrue(args.no_run)
 
+    def test_parser_accepts_episode_check_surface(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "episode",
+                "check",
+                "TF-20260614-feature-demo",
+                "--episode-id",
+                "ep-demo",
+                "--json",
+            ]
+        )
+
+        self.assertEqual(args.repo_root, str(self.repo_root))
+        self.assertEqual(args.command, "episode")
+        self.assertEqual(args.episode_command, "check")
+        self.assertEqual(args.task_id, "TF-20260614-feature-demo")
+        self.assertEqual(args.episode_id, "ep-demo")
+        self.assertTrue(args.json)
+
+    def test_parser_accepts_eval_loop_surface(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "eval",
+                "loop",
+                "TF-20260614-feature-demo",
+                "--episode-id",
+                "ep-demo",
+                "--max-action-count",
+                "12",
+                "--json",
+            ]
+        )
+
+        self.assertEqual(args.repo_root, str(self.repo_root))
+        self.assertEqual(args.command, "eval")
+        self.assertEqual(args.eval_command, "loop")
+        self.assertEqual(args.task_id, "TF-20260614-feature-demo")
+        self.assertEqual(args.episode_id, "ep-demo")
+        self.assertEqual(args.max_action_count, 12)
+        self.assertTrue(args.json)
+
+    def test_parser_accepts_eval_test_first_surface(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "eval",
+                "test-first",
+                "TF-20260614-feature-demo",
+                "--episode-id",
+                "ep-demo",
+                "--json",
+            ]
+        )
+
+        self.assertEqual(args.repo_root, str(self.repo_root))
+        self.assertEqual(args.command, "eval")
+        self.assertEqual(args.eval_command, "test-first")
+        self.assertEqual(args.task_id, "TF-20260614-feature-demo")
+        self.assertEqual(args.episode_id, "ep-demo")
+        self.assertTrue(args.json)
+
+    def test_parser_accepts_benchmark_run_surface(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "benchmark",
+                "run",
+                "--fixtures-dir",
+                "benchmarks/tasks",
+                "--json",
+            ]
+        )
+
+        self.assertEqual(args.repo_root, str(self.repo_root))
+        self.assertEqual(args.command, "benchmark")
+        self.assertEqual(args.benchmark_command, "run")
+        self.assertEqual(args.fixtures_dir, "benchmarks/tasks")
+        self.assertTrue(args.json)
+
+    def test_parser_accepts_dataset_export_surface(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--repo",
+                str(self.repo_root),
+                "dataset",
+                "export",
+                "--format",
+                "rl",
+                "--task-id",
+                "TF-20260614-feature-demo",
+                "--output",
+                "artifacts/dataset.jsonl",
+                "--max-action-count",
+                "12",
+            ]
+        )
+
+        self.assertEqual(args.repo_root, str(self.repo_root))
+        self.assertEqual(args.command, "dataset")
+        self.assertEqual(args.dataset_command, "export")
+        self.assertEqual(args.format, "rl")
+        self.assertEqual(args.task_id, "TF-20260614-feature-demo")
+        self.assertEqual(args.output, "artifacts/dataset.jsonl")
+        self.assertEqual(args.max_action_count, 12)
+
     def test_parser_accepts_serve_and_discord_bot_commands(self) -> None:
         parser = build_parser()
 
@@ -3637,6 +3997,17 @@ class SisyphusDaemonTests(unittest.TestCase):
         self.assertTrue(root.joinpath("feature", "PLAN.md").is_file())
         self.assertTrue(root.joinpath("issue", "BRIEF.md").is_file())
         self.assertTrue(root.joinpath("issue", "REPRO.md").is_file())
+
+    def _mark_task_promotion_ready(self, task: dict) -> None:
+        task["status"] = "verified"
+        task["stage"] = "done"
+        task["workflow_phase"] = "verified"
+        task["plan_status"] = "approved"
+        task["spec_status"] = "frozen"
+        task["verify_status"] = "passed"
+        task.setdefault("conformance", {})["status"] = "green"
+        task.setdefault("promotion", {})["required"] = True
+        task["promotion"].setdefault("status", "promotion_pending")
 
     def _init_git_repo(self, repo_root: Path, initial_branch: str) -> None:
         self._run_git(repo_root, "init", "-b", initial_branch)

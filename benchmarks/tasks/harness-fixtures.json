@@ -1,0 +1,509 @@
+{
+  "schema_version": "sisyphus.benchmark.fixtures.v1",
+  "fixtures": [
+    {
+      "scenario": "bugfix_basic",
+      "title": "Existing failing test is fixed",
+      "drift_present": false,
+      "results": {
+        "plain_agent": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.2,
+          "action_count": 11,
+          "unrelated_diff_ratio": 0.12,
+          "reproducibility_score": 0.3,
+          "human_intervention_count": 0
+        },
+        "sisyphus_basic": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.45,
+          "action_count": 13,
+          "unrelated_diff_ratio": 0.08,
+          "reproducibility_score": 0.55,
+          "human_intervention_count": 1
+        },
+        "sisyphus_observation": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.55,
+          "action_count": 10,
+          "unrelated_diff_ratio": 0.05,
+          "reproducibility_score": 0.65,
+          "human_intervention_count": 1
+        },
+        "sisyphus_observation_evidence": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.9,
+          "action_count": 11,
+          "unrelated_diff_ratio": 0.04,
+          "reproducibility_score": 0.85,
+          "human_intervention_count": 1
+        },
+        "sisyphus_full_trace": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.92,
+          "action_count": 12,
+          "unrelated_diff_ratio": 0.04,
+          "reproducibility_score": 0.95,
+          "human_intervention_count": 1
+        }
+      }
+    },
+    {
+      "scenario": "feature_small",
+      "title": "Small feature is implemented against frozen scope",
+      "drift_present": false,
+      "results": {
+        "plain_agent": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.25,
+          "action_count": 16,
+          "unrelated_diff_ratio": 0.16,
+          "reproducibility_score": 0.35,
+          "human_intervention_count": 0
+        },
+        "sisyphus_basic": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.5,
+          "action_count": 17,
+          "unrelated_diff_ratio": 0.08,
+          "reproducibility_score": 0.55,
+          "human_intervention_count": 1
+        },
+        "sisyphus_observation": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.62,
+          "action_count": 13,
+          "unrelated_diff_ratio": 0.05,
+          "reproducibility_score": 0.68,
+          "human_intervention_count": 1
+        },
+        "sisyphus_observation_evidence": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.88,
+          "action_count": 14,
+          "unrelated_diff_ratio": 0.04,
+          "reproducibility_score": 0.82,
+          "human_intervention_count": 1
+        },
+        "sisyphus_full_trace": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.9,
+          "action_count": 15,
+          "unrelated_diff_ratio": 0.04,
+          "reproducibility_score": 0.94,
+          "human_intervention_count": 1
+        }
+      }
+    },
+    {
+      "scenario": "refactor_safe",
+      "title": "Refactor preserves behavior and limits unrelated diff",
+      "drift_present": false,
+      "results": {
+        "plain_agent": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.2,
+          "action_count": 14,
+          "unrelated_diff_ratio": 0.22,
+          "reproducibility_score": 0.35,
+          "human_intervention_count": 0
+        },
+        "sisyphus_basic": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.48,
+          "action_count": 15,
+          "unrelated_diff_ratio": 0.12,
+          "reproducibility_score": 0.55,
+          "human_intervention_count": 1
+        },
+        "sisyphus_observation": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.6,
+          "action_count": 12,
+          "unrelated_diff_ratio": 0.08,
+          "reproducibility_score": 0.7,
+          "human_intervention_count": 1
+        },
+        "sisyphus_observation_evidence": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.86,
+          "action_count": 13,
+          "unrelated_diff_ratio": 0.05,
+          "reproducibility_score": 0.84,
+          "human_intervention_count": 1
+        },
+        "sisyphus_full_trace": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.9,
+          "action_count": 14,
+          "unrelated_diff_ratio": 0.05,
+          "reproducibility_score": 0.96,
+          "human_intervention_count": 1
+        }
+      }
+    },
+    {
+      "scenario": "docs_sync",
+      "title": "Documentation updates stay aligned with code state",
+      "drift_present": false,
+      "results": {
+        "plain_agent": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.18,
+          "action_count": 8,
+          "unrelated_diff_ratio": 0.1,
+          "reproducibility_score": 0.3,
+          "human_intervention_count": 0
+        },
+        "sisyphus_basic": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.48,
+          "action_count": 9,
+          "unrelated_diff_ratio": 0.06,
+          "reproducibility_score": 0.55,
+          "human_intervention_count": 1
+        },
+        "sisyphus_observation": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.58,
+          "action_count": 7,
+          "unrelated_diff_ratio": 0.04,
+          "reproducibility_score": 0.66,
+          "human_intervention_count": 1
+        },
+        "sisyphus_observation_evidence": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.84,
+          "action_count": 8,
+          "unrelated_diff_ratio": 0.03,
+          "reproducibility_score": 0.8,
+          "human_intervention_count": 1
+        },
+        "sisyphus_full_trace": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.88,
+          "action_count": 9,
+          "unrelated_diff_ratio": 0.03,
+          "reproducibility_score": 0.94,
+          "human_intervention_count": 1
+        }
+      }
+    },
+    {
+      "scenario": "failure_gated",
+      "title": "Verification failure blocks close",
+      "drift_present": false,
+      "results": {
+        "plain_agent": {
+          "task_success": false,
+          "verify_passed": false,
+          "close_succeeded": true,
+          "false_close": true,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.05,
+          "action_count": 9,
+          "unrelated_diff_ratio": 0.18,
+          "reproducibility_score": 0.2,
+          "human_intervention_count": 0
+        },
+        "sisyphus_basic": {
+          "task_success": false,
+          "verify_passed": false,
+          "close_succeeded": false,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.35,
+          "action_count": 10,
+          "unrelated_diff_ratio": 0.08,
+          "reproducibility_score": 0.55,
+          "human_intervention_count": 1
+        },
+        "sisyphus_observation": {
+          "task_success": false,
+          "verify_passed": false,
+          "close_succeeded": false,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.45,
+          "action_count": 7,
+          "unrelated_diff_ratio": 0.06,
+          "reproducibility_score": 0.65,
+          "human_intervention_count": 1
+        },
+        "sisyphus_observation_evidence": {
+          "task_success": false,
+          "verify_passed": false,
+          "close_succeeded": false,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.7,
+          "action_count": 8,
+          "unrelated_diff_ratio": 0.04,
+          "reproducibility_score": 0.78,
+          "human_intervention_count": 1
+        },
+        "sisyphus_full_trace": {
+          "task_success": false,
+          "verify_passed": false,
+          "close_succeeded": false,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.74,
+          "action_count": 9,
+          "unrelated_diff_ratio": 0.04,
+          "reproducibility_score": 0.92,
+          "human_intervention_count": 1
+        }
+      }
+    },
+    {
+      "scenario": "spec_drift",
+      "title": "Implementation drift from frozen spec is detected",
+      "drift_present": true,
+      "results": {
+        "plain_agent": {
+          "task_success": false,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": true,
+          "conformance_green": false,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.1,
+          "action_count": 13,
+          "unrelated_diff_ratio": 0.26,
+          "reproducibility_score": 0.25,
+          "human_intervention_count": 0
+        },
+        "sisyphus_basic": {
+          "task_success": false,
+          "verify_passed": true,
+          "close_succeeded": false,
+          "false_close": false,
+          "conformance_green": false,
+          "spec_drift_detected": true,
+          "evidence_completeness": 0.42,
+          "action_count": 14,
+          "unrelated_diff_ratio": 0.12,
+          "reproducibility_score": 0.6,
+          "human_intervention_count": 1
+        },
+        "sisyphus_observation": {
+          "task_success": false,
+          "verify_passed": true,
+          "close_succeeded": false,
+          "false_close": false,
+          "conformance_green": false,
+          "spec_drift_detected": true,
+          "evidence_completeness": 0.58,
+          "action_count": 9,
+          "unrelated_diff_ratio": 0.08,
+          "reproducibility_score": 0.72,
+          "human_intervention_count": 1
+        },
+        "sisyphus_observation_evidence": {
+          "task_success": false,
+          "verify_passed": true,
+          "close_succeeded": false,
+          "false_close": false,
+          "conformance_green": false,
+          "spec_drift_detected": true,
+          "evidence_completeness": 0.82,
+          "action_count": 10,
+          "unrelated_diff_ratio": 0.05,
+          "reproducibility_score": 0.84,
+          "human_intervention_count": 1
+        },
+        "sisyphus_full_trace": {
+          "task_success": false,
+          "verify_passed": true,
+          "close_succeeded": false,
+          "false_close": false,
+          "conformance_green": false,
+          "spec_drift_detected": true,
+          "evidence_completeness": 0.86,
+          "action_count": 11,
+          "unrelated_diff_ratio": 0.05,
+          "reproducibility_score": 0.96,
+          "human_intervention_count": 1
+        }
+      }
+    },
+    {
+      "scenario": "promotion_ready",
+      "title": "Promotion readiness checks complete evidence before merge",
+      "drift_present": false,
+      "results": {
+        "plain_agent": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.18,
+          "action_count": 12,
+          "unrelated_diff_ratio": 0.14,
+          "reproducibility_score": 0.3,
+          "human_intervention_count": 0
+        },
+        "sisyphus_basic": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.55,
+          "action_count": 13,
+          "unrelated_diff_ratio": 0.08,
+          "reproducibility_score": 0.62,
+          "human_intervention_count": 2
+        },
+        "sisyphus_observation": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.68,
+          "action_count": 10,
+          "unrelated_diff_ratio": 0.05,
+          "reproducibility_score": 0.72,
+          "human_intervention_count": 2
+        },
+        "sisyphus_observation_evidence": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.94,
+          "action_count": 11,
+          "unrelated_diff_ratio": 0.04,
+          "reproducibility_score": 0.9,
+          "human_intervention_count": 2
+        },
+        "sisyphus_full_trace": {
+          "task_success": true,
+          "verify_passed": true,
+          "close_succeeded": true,
+          "false_close": false,
+          "conformance_green": true,
+          "spec_drift_detected": false,
+          "evidence_completeness": 0.96,
+          "action_count": 12,
+          "unrelated_diff_ratio": 0.04,
+          "reproducibility_score": 0.98,
+          "human_intervention_count": 2
+        }
+      }
+    }
+  ]
+}

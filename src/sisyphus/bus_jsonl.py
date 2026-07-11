@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .config import SisyphusConfig
 from .events import EventEnvelope, normalize_event_envelope
-from .paths import event_log_file
+from .shared.paths import event_log_file
 
 
 @dataclass(slots=True)

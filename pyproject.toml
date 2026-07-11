@@ -15,6 +15,9 @@ dependencies = [
 [project.optional-dependencies]
 discord = ["discord.py>=2.4,<3"]
 
+[dependency-groups]
+dev = ["coverage==7.15.0"]
+
 [project.scripts]
 sisyphus = "sisyphus.cli:main"
 sisyphus-mcp = "sisyphus.mcp_server:main"
@@ -27,3 +30,17 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 sisyphus = ["py.typed", "templates_data/*/*.md", "declarations/*.json"]
+
+[tool.coverage.run]
+branch = true
+relative_files = true
+source = ["sisyphus"]
+
+[tool.coverage.report]
+fail_under = 80
+precision = 1
+show_missing = true
+skip_covered = true
+
+[tool.coverage.xml]
+output = "coverage.xml"
