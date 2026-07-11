@@ -23,6 +23,8 @@ def build_task_record(
     config: SisyphusConfig,
     task_type: str,
     slug: str,
+    *,
+    spec_validation_required: bool = False,
 ) -> dict:
     task_id = task_id_for(task_type=task_type, slug=slug)
     branch = branch_name(
@@ -94,6 +96,7 @@ def build_task_record(
         "meta": {
             "sequence": None,
             "close_override_used": False,
+            "spec_validation_required": spec_validation_required,
         },
     }
 

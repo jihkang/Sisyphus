@@ -71,6 +71,14 @@ def handle_status(
         gate_count = len(task.get("gates", []))
         task_conformance = format_conformance_summary(extract_conformance_summary(task))
         subtask_conformance = summarize_subtask_conformance(task)
+        validation = task.get("spec_validation") if isinstance(task.get("spec_validation"), dict) else {}
+        validation_text = ""
+        if validation.get("status"):
+            validation_text = (
+                f" spec_validation={validation['status']}"
+                f"/{validation.get('error_count', 0)}e"
+                f"/{validation.get('warning_count', 0)}w"
+            )
         print(
             f"{task.get('id')} "
             f"[{task.get('type')}] "
@@ -81,6 +89,7 @@ def handle_status(
             f"phase={task.get('workflow_phase', '-')} "
             f"audit={task.get('audit_attempts', 0)}/{task.get('max_audit_attempts', 10)} "
             f"gates={gate_count}"
+            f"{validation_text}"
             f"{f' conformance={task_conformance}' if task_conformance else ''}"
         )
         if subtask_conformance:

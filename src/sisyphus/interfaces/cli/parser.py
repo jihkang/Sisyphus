@@ -85,6 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
     spec_freeze_parser.add_argument("task_id")
     spec_freeze_parser.add_argument("--by", dest="reviewer", default="operator")
     spec_freeze_parser.add_argument("--notes")
+    spec_validate_parser = spec_subparsers.add_parser("validate")
+    spec_validate_parser.add_argument("task_id")
+    spec_validate_parser.add_argument("--json", action="store_true")
 
     subtasks_parser = subparsers.add_parser("subtasks")
     subtasks_subparsers = subtasks_parser.add_subparsers(dest="subtasks_command", required=True)

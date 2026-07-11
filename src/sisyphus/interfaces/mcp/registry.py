@@ -41,6 +41,7 @@ WORKFLOW_TOOL_NAMES = frozenset(
         "sisyphus.plan_request_changes",
         "sisyphus.plan_revise",
         "sisyphus.spec_freeze",
+        "sisyphus.spec_validate",
         "sisyphus.subtasks_generate",
         "sisyphus.verify_task",
         "sisyphus.close_task",

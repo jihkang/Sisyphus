@@ -607,7 +607,7 @@ This layer contains the orchestration rules for task progression.
 
 - `domain/workflow/service.py` advances tasks through plan approval, spec freeze, subtask generation, subtask execution, verification, and closeout; `workflow.py` is its stable facade.
 - `domain/workflow/candidates.py` maintains a versioned, non-authoritative scheduling index and reparses only new or fingerprint-changed task records before delegating to the workflow service.
-- `domain/planning/service.py` defines plan/spec transitions and review rounds; `planning.py` preserves public imports.
+- `domain/planning/service.py` defines plan/spec transitions and review rounds; `domain/planning/spec_validation.py` owns deterministic spec-quality rules and the atomic `artifacts/spec-validation/latest.json` report; top-level facades preserve public imports.
 - `domain/lifecycle/rules.py`, `lifecycle_state.py`, and `lifecycle_guard.py` centralize allowed transitions and gate projection.
 
 This layer acts as the state machine, even though it is implemented as direct field transitions rather than a formal state machine framework.

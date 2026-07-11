@@ -63,6 +63,7 @@ COMMAND_SPECS: tuple[CliCommandSpec, ...] = (
     CliCommandSpec(("plan", "request-changes"), "handle_plan_request_changes", ("task_id", "reviewer", "notes")),
     CliCommandSpec(("plan", "revise"), "handle_plan_revise", ("task_id", "author", "notes")),
     CliCommandSpec(("spec", "freeze"), "handle_spec_freeze", ("task_id", "reviewer", "notes")),
+    CliCommandSpec(("spec", "validate"), "handle_spec_validate", ("task_id", ("json", "as_json"))),
     CliCommandSpec(("subtasks", "generate"), "handle_subtasks_generate", ("task_id",)),
     CliCommandSpec(("agents",), "handle_agents", ("task_id", ("json", "as_json"), "stale_after_seconds")),
     CliCommandSpec(

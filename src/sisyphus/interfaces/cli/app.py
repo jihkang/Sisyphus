@@ -221,6 +221,21 @@ def handle_spec_freeze(
     )
 
 
+def handle_spec_validate(
+    task_id: str,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    return planning_handlers.handle_spec_validate(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        as_json=as_json,
+    )
+
+
 def handle_subtasks_generate(task_id: str, repo_root: str | Path | None = None) -> int:
     repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
@@ -698,6 +713,7 @@ CLI_HANDLERS = {
     "handle_plan_request_changes": handle_plan_request_changes,
     "handle_plan_revise": handle_plan_revise,
     "handle_spec_freeze": handle_spec_freeze,
+    "handle_spec_validate": handle_spec_validate,
     "handle_subtasks_generate": handle_subtasks_generate,
     "handle_agents": handle_agents,
     "handle_agent_start": handle_agent_start,

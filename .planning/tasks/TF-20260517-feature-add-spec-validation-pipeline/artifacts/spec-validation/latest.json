@@ -1,0 +1,14 @@
+{
+  "schema_version": "sisyphus.spec_validation.v1",
+  "task_id": "TF-20260517-feature-add-spec-validation-pipeline",
+  "status": "passed",
+  "checked_at": "2026-07-11T09:55:26Z",
+  "source_fingerprint": "53825fb3066a8b6f615770c6cdad94e699e4a79706df023a3d2c2405af89237f",
+  "summary": {
+    "error_count": 0,
+    "warning_count": 0,
+    "finding_count": 0
+  },
+  "gate_codes": [],
+  "findings": []
+}

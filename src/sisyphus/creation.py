@@ -31,6 +31,7 @@ def create_task_workspace(
         config=config,
         task_type=task_type,
         slug=slug,
+        spec_validation_required=True,
     )
     task_path = repo_root / task["task_dir"]
     task_file = task_path / "task.json"

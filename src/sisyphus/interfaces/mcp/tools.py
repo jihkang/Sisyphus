@@ -447,6 +447,30 @@ def mcp_tool_definitions() -> list[dict[str, object]]:
             "outputSchema": {"type": "object", "properties": {"task_id": {"type": "string"}, "spec_status": {"type": "string"}, "task_status": {"type": "string"}, "workflow_phase": {"type": "string"}}},
         },
         {
+            "name": "sisyphus.spec_validate",
+            "description": "Validate a task spec and persist a deterministic report.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "persist": {"type": "boolean"},
+                },
+                "required": ["task_id"],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "status": {"type": "string"},
+                    "stale": {"type": "boolean"},
+                    "report_path": {"type": "string"},
+                    "gates": {"type": "array"},
+                    "report": {"type": "object"},
+                },
+            },
+        },
+        {
             "name": "sisyphus.subtasks_generate",
             "description": "Generate subtasks from the current strategy.",
             "inputSchema": {

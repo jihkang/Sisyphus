@@ -25,6 +25,7 @@ def mcp_resource_definitions() -> list[dict[str, object]]:
         {"uri": "task://<task-id>/repro", "description": "Task repro markdown for issue tasks."},
         {"uri": "task://<task-id>/verify", "description": "Task verification markdown."},
         {"uri": "task://<task-id>/log", "description": "Task log markdown."},
+        {"uri": "task://<task-id>/spec-validation", "description": "Latest persisted task spec-validation report."},
         {"uri": "task://<task-id>/promotion", "description": "Recorded promotion receipt JSON for a merged pull request."},
         {"uri": "task://<task-id>/changeset", "description": "Human-readable merged pull request changeset markdown."},
         {"uri": "task://<task-id>/agents", "description": "Tracked agent records for a task."},

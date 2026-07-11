@@ -169,6 +169,7 @@ class InterfaceStructureTests(unittest.TestCase):
             ["plan", "request-changes", "TF-1"],
             ["plan", "revise", "TF-1"],
             ["spec", "freeze", "TF-1"],
+            ["spec", "validate", "TF-1"],
             ["subtasks", "generate", "TF-1"],
             ["agents"],
             ["agent", "start", "TF-1", "worker-1", "--role", "worker"],

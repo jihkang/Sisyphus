@@ -11,6 +11,7 @@ from ...evidence_graph import evidence_resource_payload
 from ...observation import build_task_observation
 from ...promotion_state import promotion_summary
 from ...state import load_task_record
+from ...spec_validation import spec_validation_resource_payload
 
 
 def read_task_resource(
@@ -40,6 +41,8 @@ def read_task_resource(
         return evidence_payload(task, task_dir)
     if resource_name == "timeline":
         return _task_timeline_resource(task)
+    if resource_name == "spec-validation":
+        return spec_validation_resource_payload(task, task_dir)
     if resource_name == "promotion":
         doc_path = task_dir / str(task["docs"].get("promotion"))
         if not doc_path.exists():

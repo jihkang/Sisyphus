@@ -16,6 +16,7 @@ from ...planning import (
     revise_task_plan,
 )
 from ...shared.coerce import optional_str
+from ...spec_validation import validate_task_spec
 
 
 def _plan_approve(
@@ -107,6 +108,30 @@ def _spec_freeze(
         "spec_status": outcome.spec_status,
         "task_status": outcome.task_status,
         "workflow_phase": outcome.workflow_phase,
+    }
+
+
+def _spec_validate(
+    *,
+    repo_root: Path,
+    config: SisyphusConfig,
+    args: dict[str, object],
+    validate_spec_fn=validate_task_spec,
+    **_: object,
+) -> dict[str, object]:
+    outcome = validate_spec_fn(
+        repo_root=repo_root,
+        config=config,
+        task_id=str(args["task_id"]),
+        persist=bool(args.get("persist", True)),
+    )
+    return {
+        "task_id": outcome.task_id,
+        "status": outcome.status,
+        "stale": outcome.stale,
+        "report_path": str(outcome.report_path),
+        "gates": outcome.gates,
+        "report": outcome.report,
     }
 
 
@@ -216,6 +241,7 @@ TOOL_EXECUTORS = MappingProxyType(
         "sisyphus.plan_request_changes": _plan_request_changes,
         "sisyphus.plan_revise": _plan_revise,
         "sisyphus.spec_freeze": _spec_freeze,
+        "sisyphus.spec_validate": _spec_validate,
         "sisyphus.subtasks_generate": _subtasks_generate,
         "sisyphus.verify_task": _verify_task,
         "sisyphus.close_task": _close_task,
@@ -235,6 +261,7 @@ def call_workflow_tool(
     request_changes=request_plan_changes,
     revise_plan=revise_task_plan,
     freeze_spec=freeze_task_spec,
+    validate_spec_fn=validate_task_spec,
     generate_subtasks_fn=generate_subtasks,
     verify_task=run_verify,
     close_task=run_close,
@@ -252,6 +279,7 @@ def call_workflow_tool(
         request_changes=request_changes,
         revise_plan=revise_plan,
         freeze_spec=freeze_spec,
+        validate_spec_fn=validate_spec_fn,
         generate_subtasks_fn=generate_subtasks_fn,
         verify_task=verify_task,
         close_task=close_task,
