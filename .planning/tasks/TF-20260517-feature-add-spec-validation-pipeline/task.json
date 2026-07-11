@@ -41,7 +41,7 @@
   "audit_attempts": 0,
   "max_audit_attempts": 10,
   "created_at": "2026-05-17T08:07:02Z",
-  "updated_at": "2026-05-17T08:15:51Z",
+  "updated_at": "2026-07-11T09:46:12Z",
   "closed_at": null,
   "repo_root": "/Users/jihokang/Documents/Sisyphus",
   "task_dir": ".planning/tasks/TF-20260517-feature-add-spec-validation-pipeline",
@@ -293,6 +293,16 @@
       "tests/test_sisyphus.py",
       "tests/test_golden.py"
     ],
-    "requested_adopt_paths": []
+    "requested_adopt_paths": [],
+    "spec_validation_required": true
+  },
+  "spec_validation": {
+    "status": "passed",
+    "stale": false,
+    "checked_at": "2026-07-11T09:46:12Z",
+    "report_path": "artifacts/spec-validation/latest.json",
+    "source_fingerprint": "dfb684d00556534a73da5d6ba7ab255a65c7abef5ff21a71c23ba91a8a1b8749",
+    "error_count": 0,
+    "warning_count": 0
   }
 }
