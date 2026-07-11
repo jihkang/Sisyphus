@@ -1,0 +1,261 @@
+{
+  "id": "TF-20260710-feature-harden-documentation-governance-and-coverage",
+  "type": "feature",
+  "slug": "harden-documentation-governance-and-coverage",
+  "status": "verified",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-07-10T16:45:45Z",
+  "plan_reviewed_by": "operator",
+  "plan_review_notes": "Operator explicitly requested a complete plan and execution of all remaining repository-review work. Approve this bounded documentation/governance/coverage slice exactly as revised; LICENSE remains conditional on the operator's separate legal choice.",
+  "plan_review_round": 1,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 1,
+      "action": "request_changes",
+      "actor": "operator",
+      "notes": "Replace the generic plan with a concrete low-risk slice: audit architecture references against current compat/interfaces/domain/infra/shared packages; add CONTRIBUTING.md and RELEASES.md; add coverage.py as a locked development dependency and a dedicated CI coverage job while preserving the Python 3.11-3.14 and build matrix; update README links and commands; validate documentation links, lock consistency, coverage output, full tests, and package build. Do not add LICENSE until the operator selects MIT or Apache-2.0, and do not alter runtime behavior.",
+      "timestamp": "2026-07-10T16:45:29Z"
+    },
+    {
+      "round": 1,
+      "action": "revise",
+      "actor": "codex",
+      "notes": "Implementation order: (1) mechanically validate all architecture module paths and rewrite stale responsibility/future-work sections around the current compat/interfaces/domain/infra/shared boundaries; (2) add contributor setup, review, test, task-lifecycle, and PR guidance plus a SemVer-oriented release policy; (3) add coverage.py to a locked development dependency group, configure branch/source/report settings, and add a dedicated coverage CI job with XML and summary output while retaining the existing 3.11-3.14 test matrix and package build; (4) update README navigation and local commands; (5) verify lock consistency, documentation paths, coverage suite, full unittest suite, YAML syntax, and package build. LICENSE remains a conditional final edit after operator selection.",
+      "timestamp": "2026-07-10T16:45:36Z"
+    },
+    {
+      "round": 1,
+      "action": "approve",
+      "actor": "operator",
+      "notes": "Operator explicitly requested a complete plan and execution of all remaining repository-review work. Approve this bounded documentation/governance/coverage slice exactly as revised; LICENSE remains conditional on the operator's separate legal choice.",
+      "timestamp": "2026-07-10T16:45:45Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-07-10T16:45:51Z",
+  "spec_reviewed_by": "operator",
+  "spec_review_notes": "Freeze the approved layer-preserving operational slice. Runtime behavior stays unchanged; LICENSE remains outside the frozen implementation until the operator explicitly chooses the license.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-07-10T16:44:47Z",
+  "updated_at": "2026-07-11T08:37:06Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260710-feature-harden-documentation-governance-and-coverage",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260710-feature-harden-documentation-governance-and-coverage",
+  "branch": "feat/harden-documentation-governance-and-coverage",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-07-11T08:37:06Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Requested conversation workflow succeeds",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Minimal valid input still behaves predictably",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Unexpected failure surfaces an actionable error",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Requested conversation workflow succeeds",
+        "method": "sisyphus verify"
+      },
+      {
+        "target": "Minimal valid input still behaves predictably",
+        "method": "targeted regression test"
+      },
+      {
+        "target": "Unexpected failure surfaces an actionable error",
+        "method": "manual review"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": null,
+      "trigger": null,
+      "status": "not_needed"
+    }
+  },
+  "design": {
+    "mode": "none",
+    "decision_reason": "existing contract only",
+    "confidence": "medium",
+    "layer_impact": "layer-preserving",
+    "layer_decision_reason": null,
+    "required_artifacts": [],
+    "artifacts": {
+      "connection_diagram": null,
+      "sequence_diagram": null,
+      "boundary_note": null
+    },
+    "frozen": {
+      "mode": "none",
+      "layer_impact": "layer-preserving",
+      "required_artifacts": [],
+      "artifacts": {
+        "connection_diagram": null,
+        "sequence_diagram": null,
+        "boundary_note": null
+      },
+      "anchor_summary": "mode=none, layer=layer-preserving",
+      "frozen_at": "2026-07-10T16:45:51Z"
+    },
+    "assessment": {
+      "status": "appropriate",
+      "summary": "design depth matches the current task shape",
+      "replan_required": false,
+      "escalation_reason": null,
+      "missing_artifacts": []
+    }
+  },
+  "promotion": {
+    "required": true,
+    "required_override": null,
+    "required_reason": "feature tasks are promotable by default",
+    "required_source": "classified",
+    "status": "promotion_pending",
+    "strategy": "direct",
+    "remote_name": null,
+    "parent_artifact_id": null,
+    "parent_task_id": null,
+    "base_override": null,
+    "base_branch": "main",
+    "base_source": null,
+    "base_reason": null,
+    "resolved_parent_branch": null,
+    "retarget_required": false,
+    "reverify_required": false,
+    "retarget_required_at": null,
+    "retarget_parent_task_id": null,
+    "retarget_parent_branch": null,
+    "retarget_merge_target": null,
+    "head_branch": "feat/harden-documentation-governance-and-coverage",
+    "pr_number": null,
+    "pr_url": null,
+    "receipt_path": "artifacts/promotion/merge_receipt.json",
+    "execution_receipt_path": null,
+    "changeset_path": "CHANGESET.md",
+    "commit_message": null,
+    "repo_full_name": null,
+    "title": null,
+    "head_sha": null,
+    "merge_commit_sha": null,
+    "committed_at": null,
+    "pushed_at": null,
+    "pr_opened_at": null,
+    "merged_at": null,
+    "merged_by": null,
+    "merge_method": null,
+    "recorded_at": null
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": "design depth matches the current task shape",
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_design_anchor_at": "2026-07-10T16:45:51Z",
+    "last_design_anchor_source": "planning.freeze_task_spec",
+    "last_checkpoint_type": "design_assessment",
+    "last_checkpoint_source": "audit.design",
+    "last_checkpoint_at": "2026-07-11T08:37:06Z",
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": [
+      {
+        "id": "65346f47088a41849d12918de5170f19",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=none, layer=layer-preserving",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-07-10T16:45:51Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "eff07aa5d5be4fd581de2c78bf921b31",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-07-11T08:37:06Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      }
+    ]
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "promotion": {
+      "status": "promotion_pending",
+      "recorded_at": null,
+      "repo_full_name": null,
+      "pr_number": null,
+      "title": null,
+      "url": null,
+      "head_branch": "feat/harden-documentation-governance-and-coverage",
+      "base_branch": "main",
+      "head_sha": null,
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "merged_by": null,
+      "merge_method": null,
+      "receipt_path": "artifacts/promotion/merge_receipt.json",
+      "changeset_path": "CHANGESET.md",
+      "parent_artifact_id": null,
+      "parent_task_id": null
+    },
+    "source_event_id": "evt-666c6bb3669f",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "harden-documentation-governance-and-coverage",
+    "owned_paths": [
+      "docs/architecture.md",
+      "CONTRIBUTING.md",
+      "RELEASES.md",
+      "README.md",
+      "pyproject.toml",
+      "uv.lock",
+      ".github/workflows/ci.yml",
+      "LICENSE"
+    ],
+    "requested_adopt_paths": [],
+    "evidence_graph_required": true
+  }
+}

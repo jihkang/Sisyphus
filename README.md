@@ -353,10 +353,20 @@ Reproduce the CI environment and run the full suite:
 
 ```bash
 uv lock --check
-uv sync --frozen --all-extras
+uv sync --frozen --all-extras --group dev
 uv run --frozen python -m unittest discover -s tests -v
+uv run --frozen --all-extras --group dev coverage run -m unittest discover -s tests
+uv run --frozen --all-extras --group dev coverage report
 uv build --no-sources
 ```
+
+Coverage includes branch measurement and enforces the repository-wide floor configured in `pyproject.toml`. CI publishes both a job summary and a downloadable XML/text report.
+
+## Project Governance
+
+- Architecture and ownership boundaries: [docs/architecture.md](docs/architecture.md)
+- Contribution workflow and verification requirements: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Versioning and release gates: [RELEASES.md](RELEASES.md)
 
 ## Notes
 
