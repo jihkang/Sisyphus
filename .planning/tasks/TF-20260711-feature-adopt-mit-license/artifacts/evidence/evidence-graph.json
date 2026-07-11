@@ -1,0 +1,148 @@
+{
+  "blocking_gaps": [],
+  "claims": [
+    {
+      "blocking": true,
+      "id": "claim-verify-passed",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Sisyphus verification passed."
+    },
+    {
+      "blocking": false,
+      "id": "claim-conformance-green",
+      "importance": "medium",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Task conformance is green."
+    }
+  ],
+  "curated_evidence": [
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification command passed.",
+      "id": "ev-command-001",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-11T11:33:21Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license/src /Users/jihokang/Documents/Sisyphus/.venv/bin/python -m unittest discover -s tests",
+        "exit_code": 0,
+        "output_excerpt": "workflow_phase: execution"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification command passed.",
+      "id": "ev-command-002",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-11T11:33:21Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && env UV_CACHE_DIR=/tmp/uv-cache /opt/homebrew/bin/uv lock --check",
+        "exit_code": 0,
+        "output_excerpt": "Resolved 42 packages in 0.87ms"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification command passed.",
+      "id": "ev-command-003",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-11T11:33:21Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && env UV_CACHE_DIR=/tmp/uv-cache /opt/homebrew/bin/uv build --no-sources --offline --clear",
+        "exit_code": 0,
+        "output_excerpt": "Successfully built dist/sisyphus-0.1.0-py3-none-any.whl"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification command passed.",
+      "id": "ev-command-004",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-11T11:33:21Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && tar -tzf dist/sisyphus-0.1.0.tar.gz sisyphus-0.1.0/LICENSE",
+        "exit_code": 0,
+        "output_excerpt": "sisyphus-0.1.0/LICENSE"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification command passed.",
+      "id": "ev-command-005",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-11T11:33:21Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260711-feature-adopt-mit-license && unzip -l dist/sisyphus-0.1.0-py3-none-any.whl sisyphus-0.1.0.dist-info/licenses/LICENSE",
+        "exit_code": 0,
+        "output_excerpt": "     1064                     1 file"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Task conformance is green.",
+      "id": "ev-conformance-summary",
+      "importance": "medium",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-11T11:33:21Z",
+      "reproducibility": "high",
+      "source": {
+        "resource": "task://TF-20260711-feature-adopt-mit-license/conformance"
+      },
+      "supports": [
+        "claim-conformance-green"
+      ],
+      "type": "conformance",
+      "verdict": "supports"
+    }
+  ],
+  "generated_at": "2026-07-11T11:33:21Z",
+  "schema_version": "sisyphus.evidence_graph.v1",
+  "task_id": "TF-20260711-feature-adopt-mit-license",
+  "unsupported_claims": [],
+  "verify_status": "passed"
+}

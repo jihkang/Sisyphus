@@ -1,0 +1,14 @@
+{
+  "schema_version": "sisyphus.spec_validation.v1",
+  "task_id": "TF-20260711-feature-adopt-mit-license",
+  "status": "passed",
+  "checked_at": "2026-07-11T11:32:21Z",
+  "source_fingerprint": "7b175e6773c6d54db2904a0fc24a62bc53f59e648b00881a4a05ba8fdd81027b",
+  "summary": {
+    "error_count": 0,
+    "warning_count": 0,
+    "finding_count": 0
+  },
+  "gate_codes": [],
+  "findings": []
+}
