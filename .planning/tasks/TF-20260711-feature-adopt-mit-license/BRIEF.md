@@ -9,21 +9,25 @@
 
 ## Problem
 
-- Adopt MIT license
-- Original request: Adopt the MIT License for the Sisyphus repository. Add the canonical MIT license text at the repository root with Copyright (c) 2026 jihkang, declare the license in Python package metadata, and link the license from README. Preserve all existing runtime behavior.
+- The repository has no root license file, so users and package consumers do not have an explicit grant of rights.
+- Python package metadata and the README likewise do not identify a license.
 
 ## Desired Outcome
 
-- The repository behavior matches the requested conversation outcome.
-- The resulting change stays scoped to this task branch and worktree.
+- GitHub and package consumers can identify Sisyphus as MIT licensed.
+- The root license text, package metadata, and README all state the same license.
+- Runtime behavior remains unchanged.
 
 ## Acceptance Criteria
 
-- [ ] The requested workflow is implemented or corrected.
-- [ ] The task docs reflect the actual implementation and verification scope.
-- [ ] Verification notes are ready to be updated after implementation.
+- [ ] Root `LICENSE` contains the canonical MIT text and `Copyright (c) 2026 jihkang`.
+- [ ] Python package metadata declares the root license file.
+- [ ] README links to the MIT license.
+- [ ] Source and wheel distributions include the license text.
+- [ ] The full existing test suite still passes.
 
 ## Constraints
 
-- Preserve existing repository conventions unless the task requires a deliberate change.
-- Re-read the task docs before verify and close.
+- Do not change runtime code or behavior.
+- Use the operator-selected MIT license without adding incompatible terms.
+- Keep the change limited to licensing, package metadata, and task evidence.

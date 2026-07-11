@@ -2,53 +2,55 @@
 
 ## Implementation Plan
 
-1. Inspect the current code path related to: Adopt MIT license.
-2. Implement the requested behavior for: Adopt the MIT License for the Sisyphus repository. Add the canonical MIT license text at the repository root with Copyright (c) 2026 jihkang, declare the license in Python package metadata, and link the license from README. Preserve all existing runtime behavior..
-3. Update tests and task docs to match the final behavior.
+1. Add the canonical MIT license text at the repository root with the operator-selected copyright holder and year.
+2. Point Python project metadata at the root license file so built distributions carry the same license declaration.
+3. Add a concise README license section linking to the authoritative file.
+4. Build both distribution formats, inspect their contents and metadata, and run the full regression suite.
 
 ## Risks
 
-- The conversation request may omit edge conditions that still matter in the current codebase.
-- The change may affect adjacent flows if the requested behavior touches shared state.
+- A malformed or noncanonical license text could create legal ambiguity. Mitigation: use the standard MIT text verbatim.
+- Package metadata could name MIT without shipping the license file. Mitigation: inspect both sdist and wheel contents after an offline build.
+- Metadata edits could affect packaging unexpectedly. Mitigation: run the full test and build workflows without touching runtime modules.
 
 ## Design Evaluation
 
 - Design Mode: `none`
-- Decision Reason: `existing contract only`
-- Confidence: `medium`
+- Decision Reason: `documentation and package metadata only`
+- Confidence: `high`
 - Layer Impact: `layer-preserving`
-- Layer Decision Reason: `n/a`
+- Layer Decision Reason: `no runtime or ownership boundary changes`
 - Required Design Artifacts: `none`
 
 ## Design Artifacts
 
-- Connection Diagram: `n/a`
-- Sequence Diagram: `n/a`
-- Boundary Note: `n/a`
+- Connection Diagram: `not required for a metadata-only change`
+- Sequence Diagram: `not required for a metadata-only change`
+- Boundary Note: `LICENSE is authoritative; README and package metadata reference it`
 
 ## Test Strategy
 
 ### Normal Cases
 
-- [ ] Requested conversation workflow succeeds
+- [ ] Root license text, package metadata, and README consistently identify MIT
 
 ### Edge Cases
 
-- [ ] Minimal valid input still behaves predictably
+- [ ] Source and wheel distributions both include the root license text
 
 ### Exception Cases
 
-- [ ] Unexpected failure surfaces an actionable error
+- [ ] Existing runtime behavior and tests remain unchanged after metadata edits
 
 ## Verification Mapping
 
-- `Requested conversation workflow succeeds` -> `sisyphus verify`
-- `Minimal valid input still behaves predictably` -> `targeted regression test`
-- `Unexpected failure surfaces an actionable error` -> `manual review`
+- `Root license text, package metadata, and README consistently identify MIT` -> `manual text and metadata review`
+- `Source and wheel distributions both include the root license text` -> `offline package build and archive inspection`
+- `Existing runtime behavior and tests remain unchanged after metadata edits` -> `full unittest suite`
 
 ## External LLM Review
 
 - Required: `no`
-- Provider: `n/a`
-- Purpose: `n/a`
-- Trigger: `n/a`
+- Provider: `not required`
+- Purpose: `the operator explicitly selected the standard MIT license`
+- Trigger: `review again only if the operator changes the license choice or copyright holder`
