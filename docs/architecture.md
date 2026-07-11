@@ -606,6 +606,7 @@ This is the operational backbone of the system. It separates request intake from
 This layer contains the orchestration rules for task progression.
 
 - `domain/workflow/service.py` advances tasks through plan approval, spec freeze, subtask generation, subtask execution, verification, and closeout; `workflow.py` is its stable facade.
+- `domain/workflow/candidates.py` maintains a versioned, non-authoritative scheduling index and reparses only new or fingerprint-changed task records before delegating to the workflow service.
 - `domain/planning/service.py` defines plan/spec transitions and review rounds; `planning.py` preserves public imports.
 - `domain/lifecycle/rules.py`, `lifecycle_state.py`, and `lifecycle_guard.py` centralize allowed transitions and gate projection.
 
@@ -632,6 +633,9 @@ This layer stores state and provisions task workspaces.
 - `infra/config/loader.py` owns configuration loading; `config.py` re-exports it.
 - `shared/` contains dependency-light clock, coercion, mapping, and path primitives.
 - `templates.py` materializes task document templates into the task directory.
+
+The ignored `.planning/cache/workflow-candidates.json` file is derived scheduling data. Missing, malformed, or version-mismatched cache state is rebuilt from task records and never overrides `task.json` lifecycle authority.
+
 - `gitops.py` creates and removes task branches and worktrees.
 - `creation.py` combines task record creation, worktree setup, and rollback behavior.
 
@@ -891,6 +895,7 @@ The current architecture works best when module responsibilities stay discipline
 - `interfaces/cli` and `interfaces/mcp` should own parsing, dispatch, transport schemas, and presentation only.
 - `daemon.py` should own queue coordination and event routing, not persistence mechanics or detailed business policy.
 - `domain/workflow/service.py` should coordinate transitions, not absorb template parsing or low-level git logic.
+- workflow candidate indexes must remain derived hints; `_advance_task` and canonical task records retain transition authority.
 - domain planning, lifecycle, promotion, and task services should remain transport-independent.
 - `infra` should own configuration and persistence mechanics; `shared` should remain small and dependency-light.
 - provider-specific behavior should stay behind `provider_wrapper.py` and wrapper entrypoints.
@@ -904,7 +909,6 @@ These are not required for the current design, but they are the most likely pres
 - Add stronger schema validation for `task.json` and agent records.
 - Make task document parsing more resilient or move structured strategy data into a dedicated machine-readable file.
 - Isolate follow-up task logic and auto-loop policy from core daemon intake for simpler testing.
-- Add an indexed or dirty-set workflow candidate path before operating repositories with very large task histories.
 
 ## Summary
 

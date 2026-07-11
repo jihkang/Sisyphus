@@ -25,7 +25,8 @@ from ...planning import (
     generate_subtasks,
 )
 from ...provider_wrapper import run_provider_wrapper
-from ...state import list_task_records, load_task_record, save_task_record, update_task_record
+from ...state import load_task_record, save_task_record, update_task_record
+from .candidates import list_workflow_candidate_ids
 
 
 PLANNER_ROLE = "planner"
@@ -35,10 +36,9 @@ REVIEWER_ROLE = "reviewer"
 
 def run_workflow_cycle(repo_root: Path, config: SisyphusConfig) -> int:
     progressed = 0
-    tasks = list_task_records(repo_root=repo_root, task_dir_name=config.task_dir)
-    tasks = sorted(tasks, key=lambda task: (task.get("updated_at", ""), task.get("id", "")))
-    for task in tasks:
-        if _advance_task(repo_root=repo_root, config=config, task_id=task["id"]):
+    task_ids = list_workflow_candidate_ids(repo_root=repo_root, task_dir_name=config.task_dir)
+    for task_id in task_ids:
+        if _advance_task(repo_root=repo_root, config=config, task_id=task_id):
             progressed += 1
     return progressed
 
