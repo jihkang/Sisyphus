@@ -41,7 +41,7 @@
   "audit_attempts": 3,
   "max_audit_attempts": 10,
   "created_at": "2026-05-17T08:07:02Z",
-  "updated_at": "2026-07-11T09:55:26Z",
+  "updated_at": "2026-07-11T09:58:29Z",
   "closed_at": null,
   "repo_root": "/Users/jihokang/Documents/Sisyphus",
   "task_dir": ".planning/tasks/TF-20260517-feature-add-spec-validation-pipeline",
