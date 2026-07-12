@@ -8,6 +8,7 @@ from .conformance import build_execution_contract
 from .config import SisyphusConfig
 from .context_pack import build_task_execution_context_pack
 from .discipline import build_sisyphus_worker_discipline
+from .observation import build_task_observation
 from .shared.mappings import project_fields
 from .state import load_task_record
 
@@ -19,6 +20,8 @@ class CodexPrompt:
     prompt: str
     context_pack: dict[str, object] | None = None
     context_pack_path: Path | None = None
+    observation_hash: str | None = None
+    owned_paths: tuple[str, ...] = ()
 
 
 def build_codex_prompt(
@@ -76,6 +79,55 @@ def build_codex_prompt(
         prompt="\n\n".join(body).strip() + "\n",
         context_pack=context_pack,
         context_pack_path=context_pack_path,
+        owned_paths=_owned_paths(task),
+    )
+
+
+def build_local_worker_prompt(
+    repo_root: Path,
+    config: SisyphusConfig,
+    task_id: str,
+    *,
+    extra_instruction: str | None = None,
+    worker_name: str = "local model",
+    max_doc_chars: int = 6000,
+) -> CodexPrompt:
+    task, task_file = load_task_record(
+        repo_root=repo_root,
+        task_dir_name=config.task_dir,
+        task_id=task_id,
+    )
+    task_dir = task_file.parent
+    workdir = _resolve_workdir(repo_root=repo_root, task=task)
+    observation = build_task_observation(task, task_dir)
+    owned_paths = _owned_paths(task)
+    sections = [
+        f"You are the bounded local {worker_name} coding worker for this Sisyphus task.",
+        "Inspect the assigned worktree through the provided JSON actions, make only scoped changes, and run a configured test after the latest mutation.",
+        "The observation and frozen task docs are authoritative. Do not attempt lifecycle actions or edit .planning state.",
+        "Use one action per turn. The surrounding runtime, not your text, decides whether completion is valid.",
+    ]
+    if extra_instruction:
+        sections.append(f"Additional operator instruction: {extra_instruction}")
+    body = [
+        "\n".join(sections),
+        "## Task Observation",
+        json.dumps(observation, separators=(",", ":"), ensure_ascii=True),
+        "## Execution Contract",
+        build_execution_contract(task),
+        "## Owned Write Scope",
+        "\n".join(f"- {path}" for path in owned_paths) if owned_paths else "- repository scope except protected paths",
+    ]
+    for name, content in _load_docs(task=task, task_dir=task_dir):
+        if not name.startswith(("BRIEF ", "PLAN ", "REPRO ", "FIX_PLAN ")):
+            continue
+        body.extend([f"## {name}", _bounded_doc(content.strip(), max_doc_chars)])
+    return CodexPrompt(
+        task_id=str(task["id"]),
+        workdir=workdir,
+        prompt="\n\n".join(body).strip() + "\n",
+        observation_hash=str(observation.get("observation_hash") or "") or None,
+        owned_paths=owned_paths,
     )
 
 
@@ -189,3 +241,23 @@ def _build_task_snapshot(task: dict) -> dict[str, object]:
             "docs": dict,
         },
     )
+
+
+def _owned_paths(task: dict) -> tuple[str, ...]:
+    meta = task.get("meta")
+    if not isinstance(meta, dict):
+        return ()
+    paths = meta.get("owned_paths")
+    if not isinstance(paths, list):
+        return ()
+    return tuple(str(path) for path in paths if isinstance(path, str) and path.strip())
+
+
+def _bounded_doc(content: str, limit: int) -> str:
+    limit = max(limit, 256)
+    if len(content) <= limit:
+        return content
+    return content[:limit] + f"\n\n... task document truncated by {len(content) - limit} characters"
+
+
+__all__ = ["CodexPrompt", "build_codex_prompt", "build_local_worker_prompt"]
