@@ -1436,6 +1436,248 @@ class SisyphusAgentTests(unittest.TestCase):
         self.assertIn("Additional operator instruction: focus on the first subtask", kwargs["stdin_text"])
         self.assertEqual(kwargs["env"]["GIT_CONFIG_VALUE_0"], expected_repo_root)
 
+    def test_gemma_wrapper_builds_bounded_local_agent_launch(self) -> None:
+        with mock.patch("sisyphus.provider_wrapper.Path.cwd", return_value=self.repo_root):
+            with mock.patch("sisyphus.provider_wrapper.local_provider_available", return_value=True):
+                with mock.patch("sisyphus.cli.handle_agent_run", return_value=0) as mocked_run:
+                    with mock.patch("sisyphus.provider_wrapper._finalize_default_launch", return_value=0):
+                        exit_code = run_provider_wrapper(
+                            "gemma",
+                            [
+                                self.task["id"],
+                                "worker-gemma",
+                                "--provider-arg=--base-url",
+                                "--provider-arg",
+                                "http://127.0.0.1:9999/v1",
+                                "--provider-arg=--model",
+                                "--provider-arg",
+                                "gemma-test",
+                                "--provider-arg=--test-command",
+                                "--provider-arg",
+                                "python -m unittest discover -s tests",
+                            ],
+                        )
+
+        self.assertEqual(exit_code, 0)
+        kwargs = mocked_run.call_args.kwargs
+        command = kwargs["command"]
+        self.assertEqual(kwargs["provider"], "gemma")
+        self.assertEqual(command[:2], [sys.executable, "-c"])
+        self.assertIn("sisyphus.providers.local_openai", command[2])
+        self.assertIn("--workspace", command)
+        self.assertEqual(Path(command[command.index("--workspace") + 1]).resolve(), self.repo_root.resolve())
+        self.assertIn("--receipt", command)
+        self.assertIn("--output-last-message", command)
+        self.assertIn("## Task Observation", kwargs["stdin_text"])
+        self.assertIn("You are the bounded local Gemma coding worker", kwargs["stdin_text"])
+        self.assertIn("PYTHONPATH", kwargs["env"])
+
+    def test_gemma_wrapper_uses_effective_fallback_provider_when_endpoint_is_unavailable(self) -> None:
+        with mock.patch("sisyphus.provider_wrapper.Path.cwd", return_value=self.repo_root):
+            with mock.patch("sisyphus.provider_wrapper.local_provider_available", return_value=False):
+                with mock.patch("sisyphus.provider_wrapper._resolve_codex_executable", return_value="codex.cmd"):
+                    with mock.patch("sisyphus.cli.handle_agent_run", return_value=0) as mocked_run:
+                        with mock.patch("sisyphus.provider_wrapper._finalize_default_launch", return_value=0):
+                            exit_code = run_provider_wrapper(
+                                "gemma",
+                                [self.task["id"], "worker-gemma-fallback"],
+                            )
+
+        self.assertEqual(exit_code, 0)
+        kwargs = mocked_run.call_args.kwargs
+        self.assertEqual(kwargs["provider"], "codex")
+        self.assertEqual(kwargs["command"][:5], ["codex.cmd", "exec", "--full-auto", "--sandbox", "workspace-write"])
+        self.assertIn("Gemma local provider was unavailable; falling back to codex.", kwargs["stdin_text"])
+
+    def test_gemma_wrapper_rejects_completed_receipt_without_code_level_result(self) -> None:
+        self._initialize_agent_test_git_repo()
+
+        def fake_handle_agent_run(**kwargs):
+            command = kwargs["command"]
+            output_path = Path(command[command.index("--output-last-message") + 1])
+            receipt_path = Path(command[command.index("--receipt") + 1])
+            output_path.write_text("STATUS: completed\nImplemented the timer feature.\n", encoding="utf-8")
+            receipt_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "sisyphus.local_agent_run.v1",
+                        "status": "completed",
+                        "completion_facts": {"completion_ready": True},
+                        "events": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return 0
+
+        with mock.patch("sisyphus.provider_wrapper.Path.cwd", return_value=self.repo_root):
+            with mock.patch("sisyphus.provider_wrapper.local_provider_available", return_value=True):
+                with mock.patch("sisyphus.cli.handle_agent_run", side_effect=fake_handle_agent_run):
+                    with mock.patch("sisyphus.provider_wrapper.update_agent") as mocked_update:
+                        exit_code = run_provider_wrapper(
+                            "gemma",
+                            [self.task["id"], "worker-gemma-no-code"],
+                        )
+
+        self.assertEqual(exit_code, 1)
+        mocked_update.assert_called_once()
+        self.assertEqual(mocked_update.call_args.kwargs["status"], "failed")
+        self.assertIn("code-level result", mocked_update.call_args.kwargs["error"])
+
+    def test_gemma_wrapper_accepts_completed_receipt_with_code_and_test_evidence(self) -> None:
+        self._initialize_agent_test_git_repo()
+
+        def fake_handle_agent_run(**kwargs):
+            command = kwargs["command"]
+            output_path = Path(command[command.index("--output-last-message") + 1])
+            receipt_path = Path(command[command.index("--receipt") + 1])
+            (self.repo_root / "src").mkdir(exist_ok=True)
+            (self.repo_root / "src" / "timer.py").write_text(
+                "def seconds(minutes):\n    return minutes * 60\n",
+                encoding="utf-8",
+            )
+            output_path.write_text("STATUS: completed\nImplemented and tested the timer feature.\n", encoding="utf-8")
+            receipt_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "sisyphus.local_agent_run.v1",
+                        "status": "completed",
+                        "completion_facts": {
+                            "completion_ready": True,
+                            "changed_files": ["src/timer.py"],
+                            "baseline_test_step": 1,
+                            "last_mutation_step": 2,
+                            "last_successful_test_step": 3,
+                        },
+                        "events": [
+                            {
+                                "step": 1,
+                                "action": "run_test",
+                                "arguments": {"command_id": 0},
+                                "test_first_phase": "run_baseline_tests",
+                                "ok": False,
+                                "blocked": False,
+                                "result": {"exit_code": 1},
+                            },
+                            {
+                                "step": 2,
+                                "action": "write_file",
+                                "arguments": {"path": "src/timer.py", "content_chars": 46},
+                                "test_first_phase": "implement_change",
+                                "ok": True,
+                                "blocked": False,
+                                "result": {"path": "src/timer.py"},
+                            },
+                            {
+                                "step": 3,
+                                "action": "run_test",
+                                "arguments": {"command_id": 0},
+                                "test_first_phase": "rerun_tests",
+                                "ok": True,
+                                "blocked": False,
+                                "result": {"exit_code": 0},
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return 0
+
+        with mock.patch("sisyphus.provider_wrapper.Path.cwd", return_value=self.repo_root):
+            with mock.patch("sisyphus.provider_wrapper.local_provider_available", return_value=True):
+                with mock.patch("sisyphus.cli.handle_agent_run", side_effect=fake_handle_agent_run):
+                    with mock.patch("sisyphus.provider_wrapper.update_agent") as mocked_update:
+                        exit_code = run_provider_wrapper(
+                            "gemma",
+                            [self.task["id"], "worker-gemma-with-code"],
+                        )
+
+        self.assertEqual(exit_code, 0)
+        mocked_update.assert_not_called()
+        episode_paths = list(
+            (self.repo_root / self.task["task_dir"] / "artifacts" / "episodes").glob("*.jsonl")
+        )
+        self.assertEqual(len(episode_paths), 1)
+        episode_actions = [
+            json.loads(line)["action"]["name"]
+            for line in episode_paths[0].read_text(encoding="utf-8").splitlines()
+        ]
+        self.assertEqual(
+            episode_actions,
+            ["local_agent.run_test", "local_agent.write_file", "local_agent.run_test"],
+        )
+
+    def test_gemma_wrapper_rejects_missing_structured_last_message(self) -> None:
+        self._initialize_agent_test_git_repo()
+
+        def fake_handle_agent_run(**kwargs):
+            command = kwargs["command"]
+            receipt_path = Path(command[command.index("--receipt") + 1])
+            (self.repo_root / "result.py").write_text("VALUE = 1\n", encoding="utf-8")
+            receipt_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "sisyphus.local_agent_run.v1",
+                        "status": "completed",
+                        "completion_facts": {
+                            "completion_ready": True,
+                            "changed_files": ["result.py"],
+                            "baseline_test_step": 1,
+                            "last_mutation_step": 2,
+                            "last_successful_test_step": 3,
+                        },
+                        "events": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return 0
+
+        with mock.patch("sisyphus.provider_wrapper.Path.cwd", return_value=self.repo_root):
+            with mock.patch("sisyphus.provider_wrapper.local_provider_available", return_value=True):
+                with mock.patch("sisyphus.cli.handle_agent_run", side_effect=fake_handle_agent_run):
+                    with mock.patch("sisyphus.provider_wrapper.update_agent") as mocked_update:
+                        exit_code = run_provider_wrapper(
+                            "gemma",
+                            [self.task["id"], "worker-gemma-no-last-message"],
+                        )
+
+        self.assertEqual(exit_code, 1)
+        mocked_update.assert_called_once()
+        self.assertIn("structured final status", mocked_update.call_args.kwargs["error"])
+
+    def _initialize_agent_test_git_repo(self) -> None:
+        subprocess.run(
+            ["git", "init", "-b", "main"],
+            cwd=self.repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=self.repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=self.repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(["git", "add", "."], cwd=self.repo_root, check=True, capture_output=True, text=True)
+        subprocess.run(
+            ["git", "commit", "-m", "initial"],
+            cwd=self.repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
     def test_codex_wrapper_converts_blocked_last_message_into_failure(self) -> None:
         def fake_handle_agent_run(**kwargs):
             output_path = Path(kwargs["command"][kwargs["command"].index("--output-last-message") + 1])

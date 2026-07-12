@@ -1,0 +1,168 @@
+{
+  "blocking_gaps": [],
+  "claims": [
+    {
+      "blocking": true,
+      "id": "claim-verify-passed",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Sisyphus verification passed."
+    },
+    {
+      "blocking": false,
+      "id": "claim-conformance-green",
+      "importance": "medium",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "status": "supports",
+      "text": "Task conformance is green."
+    }
+  ],
+  "curated_evidence": [
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification command passed.",
+      "id": "ev-command-001",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-12T06:59:38Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_local_provider tests.test_sisyphus.SisyphusAgentTests",
+        "exit_code": 0,
+        "output_excerpt": "exit_code: 0"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification command passed.",
+      "id": "ev-command-002",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-12T06:59:38Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests",
+        "exit_code": 0,
+        "output_excerpt": "workflow_phase: execution"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification command passed.",
+      "id": "ev-command-003",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-12T06:59:38Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=/tmp/sisyphus-gemma-task-coverage .venv/bin/python -m coverage run --branch -m unittest discover -s tests",
+        "exit_code": 0,
+        "output_excerpt": "workflow_phase: execution"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification command passed.",
+      "id": "ev-command-004",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-12T06:59:38Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src COVERAGE_FILE=/tmp/sisyphus-gemma-task-coverage .venv/bin/python -m coverage report --fail-under=80",
+        "exit_code": 0,
+        "output_excerpt": "56 files skipped due to complete coverage."
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification command passed.",
+      "id": "ev-command-005",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-12T06:59:38Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python /opt/homebrew/bin/uv lock --check",
+        "exit_code": 0,
+        "output_excerpt": "Resolved 42 packages in 3ms"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Sisyphus verification command passed.",
+      "id": "ev-command-006",
+      "importance": "high",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-12T06:59:38Z",
+      "reproducibility": "high",
+      "source": {
+        "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python /opt/homebrew/bin/uv build --no-sources --offline --clear",
+        "exit_code": 0,
+        "output_excerpt": "Successfully built dist/sisyphus-0.1.0-py3-none-any.whl"
+      },
+      "supports": [
+        "claim-verify-passed"
+      ],
+      "type": "command_output",
+      "verdict": "supports"
+    },
+    {
+      "blocking": false,
+      "claim": "Task conformance is green.",
+      "id": "ev-conformance-summary",
+      "importance": "medium",
+      "linked_spec_section": null,
+      "linked_subtask": null,
+      "observed_at": "2026-07-12T06:59:38Z",
+      "reproducibility": "high",
+      "source": {
+        "resource": "task://TF-20260614-feature-connect-gemma-12b-local-model-provider/conformance"
+      },
+      "supports": [
+        "claim-conformance-green"
+      ],
+      "type": "conformance",
+      "verdict": "supports"
+    }
+  ],
+  "generated_at": "2026-07-12T06:59:38Z",
+  "schema_version": "sisyphus.evidence_graph.v1",
+  "task_id": "TF-20260614-feature-connect-gemma-12b-local-model-provider",
+  "unsupported_claims": [],
+  "verify_status": "passed"
+}

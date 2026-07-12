@@ -2,24 +2,32 @@
   "id": "TF-20260614-feature-connect-gemma-12b-local-model-provider",
   "type": "feature",
   "slug": "connect-gemma-12b-local-model-provider",
-  "status": "open",
-  "stage": "spec",
-  "plan_status": "pending_review",
-  "plan_reviewed_at": null,
-  "plan_reviewed_by": null,
-  "plan_review_notes": null,
+  "status": "verified",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-07-11T11:44:56Z",
+  "plan_reviewed_by": "codex",
+  "plan_review_notes": "Approved the full design for a bounded local OpenAI coding agent, deterministic compaction, scoped workspace tools, code-and-test completion gating, fake-provider coverage, and real Gemma 12B E2E evidence.",
   "plan_review_round": 0,
   "max_plan_review_rounds": 3,
-  "plan_review_history": [],
-  "workflow_phase": "plan_in_review",
-  "spec_status": "draft",
-  "spec_frozen_at": null,
-  "spec_reviewed_by": null,
-  "spec_review_notes": null,
-  "audit_attempts": 0,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "codex",
+      "notes": "Approved the full design for a bounded local OpenAI coding agent, deterministic compaction, scoped workspace tools, code-and-test completion gating, fake-provider coverage, and real Gemma 12B E2E evidence.",
+      "timestamp": "2026-07-11T11:44:56Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-07-11T11:45:04Z",
+  "spec_reviewed_by": "codex",
+  "spec_review_notes": "Frozen after deterministic spec validation passed with zero findings and the full provider/action/compaction/security design was reviewed.",
+  "audit_attempts": 3,
   "max_audit_attempts": 10,
   "created_at": "2026-06-14T11:40:30Z",
-  "updated_at": "2026-06-14T11:40:31Z",
+  "updated_at": "2026-07-12T06:59:38Z",
   "closed_at": null,
   "repo_root": "/Users/jihokang/Documents/Sisyphus",
   "task_dir": ".planning/tasks/TF-20260614-feature-connect-gemma-12b-local-model-provider",
@@ -27,78 +35,242 @@
   "branch": "feat/connect-gemma-12b-local-model-provider",
   "base_branch": "main",
   "verify_profile": "default",
-  "verify_commands": [],
-  "verify_status": "not_run",
-  "last_verified_at": null,
-  "last_verify_results": [],
+  "verify_commands": [
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_local_provider tests.test_sisyphus.SisyphusAgentTests",
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests",
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=/tmp/sisyphus-gemma-task-coverage .venv/bin/python -m coverage run --branch -m unittest discover -s tests",
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src COVERAGE_FILE=/tmp/sisyphus-gemma-task-coverage .venv/bin/python -m coverage report --fail-under=80",
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python /opt/homebrew/bin/uv lock --check",
+    "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python /opt/homebrew/bin/uv build --no-sources --offline --clear"
+  ],
+  "verify_status": "passed",
+  "last_verified_at": "2026-07-12T06:59:38Z",
+  "last_verify_results": [
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_local_provider tests.test_sisyphus.SisyphusAgentTests",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_local_provider tests.test_sisyphus.SisyphusAgentTests",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-07-12T06:59:04Z",
+      "finished_at": "2026-07-12T06:59:07Z",
+      "duration_ms": null,
+      "output_excerpt": "exit_code: 0"
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-07-12T06:59:07Z",
+      "finished_at": "2026-07-12T06:59:21Z",
+      "duration_ms": null,
+      "output_excerpt": "workflow_phase: execution"
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=/tmp/sisyphus-gemma-task-coverage .venv/bin/python -m coverage run --branch -m unittest discover -s tests",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=/tmp/sisyphus-gemma-task-coverage .venv/bin/python -m coverage run --branch -m unittest discover -s tests",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-07-12T06:59:21Z",
+      "finished_at": "2026-07-12T06:59:36Z",
+      "duration_ms": null,
+      "output_excerpt": "workflow_phase: execution"
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src COVERAGE_FILE=/tmp/sisyphus-gemma-task-coverage .venv/bin/python -m coverage report --fail-under=80",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env -u SISYPHUS_REPO_ROOT -u SISYPHUS_MCP_DEBUG_LOG PYTHONPATH=/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider/src COVERAGE_FILE=/tmp/sisyphus-gemma-task-coverage .venv/bin/python -m coverage report --fail-under=80",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-07-12T06:59:36Z",
+      "finished_at": "2026-07-12T06:59:37Z",
+      "duration_ms": null,
+      "output_excerpt": "56 files skipped due to complete coverage."
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python /opt/homebrew/bin/uv lock --check",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python /opt/homebrew/bin/uv lock --check",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-07-12T06:59:37Z",
+      "finished_at": "2026-07-12T06:59:37Z",
+      "duration_ms": null,
+      "output_excerpt": "Resolved 42 packages in 3ms"
+    },
+    {
+      "name": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python /opt/homebrew/bin/uv build --no-sources --offline --clear",
+      "command": "cd /Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260614-feature-connect-gemma-12b-local-model-provider && env UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python /opt/homebrew/bin/uv build --no-sources --offline --clear",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at": "2026-07-12T06:59:37Z",
+      "finished_at": "2026-07-12T06:59:38Z",
+      "duration_ms": null,
+      "output_excerpt": "Successfully built dist/sisyphus-0.1.0-py3-none-any.whl"
+    }
+  ],
   "test_strategy": {
     "normal_cases": [
       {
-        "name": "Requested conversation workflow succeeds",
-        "checked": false
+        "name": "Local provider configuration and health probing select the requested endpoint and model",
+        "checked": true
+      },
+      {
+        "name": "A fake model reads a fixture, writes an in-scope implementation, reruns its configured test, and completes with a receipt",
+        "checked": true
+      },
+      {
+        "name": "Existing Codex launch behavior remains unchanged and unavailable Gemma uses only the configured fallback",
+        "checked": true
+      },
+      {
+        "name": "A real Gemma 12B Sisyphus fixture produces a scoped code change and a post-change passing test",
+        "checked": true
       }
     ],
     "edge_cases": [
       {
-        "name": "Minimal valid input still behaves predictably",
-        "checked": false
+        "name": "Forced low history budget triggers deterministic compaction while retaining changed-file and test state",
+        "checked": true
+      },
+      {
+        "name": "A `.planning`-only change does not satisfy the code-level completion gate",
+        "checked": true
+      },
+      {
+        "name": "Read output, search results, model responses, and test output are truncated without changing control flow",
+        "checked": true
+      },
+      {
+        "name": "A model retry after malformed JSON remains within the action and protocol-error budgets",
+        "checked": true
       }
     ],
     "exception_cases": [
       {
-        "name": "Unexpected failure surfaces an actionable error",
-        "checked": false
+        "name": "Path traversal, symlink escape, protected path writes, and out-of-owned-scope writes are rejected without filesystem mutation",
+        "checked": true
+      },
+      {
+        "name": "Unknown actions and arbitrary command text are rejected rather than executed",
+        "checked": true
+      },
+      {
+        "name": "Endpoint timeout, invalid response JSON, and exhausted action budget fail with actionable receipts",
+        "checked": true
+      },
+      {
+        "name": "`completed` without a non-planning diff or without a passing test after the latest mutation is rejected",
+        "checked": true
+      },
+      {
+        "name": "Blocked or failed model finish status marks the tracked agent failed and cannot advance lifecycle state",
+        "checked": true
       }
     ],
     "verification_methods": [
       {
-        "target": "Requested conversation workflow succeeds",
-        "method": "sisyphus verify"
+        "target": "Local provider configuration and health probing select the requested endpoint and model",
+        "method": "tests/test_local_provider.py configuration and fake HTTP tests"
       },
       {
-        "target": "Minimal valid input still behaves predictably",
-        "method": "targeted regression test"
+        "target": "A fake model reads a fixture, writes an in-scope implementation, reruns its configured test, and completes with a receipt",
+        "method": "tests/test_local_provider.py bounded-loop integration test"
       },
       {
-        "target": "Unexpected failure surfaces an actionable error",
-        "method": "manual review"
+        "target": "Existing Codex launch behavior remains unchanged and unavailable Gemma uses only the configured fallback",
+        "method": "tests/test_sisyphus.py provider-wrapper regression tests"
+      },
+      {
+        "target": "A real Gemma 12B Sisyphus fixture produces a scoped code change and a post-change passing test",
+        "method": "operator-managed llama-server E2E receipt plus fixture git diff and unittest output"
+      },
+      {
+        "target": "Forced low history budget triggers deterministic compaction while retaining changed-file and test state",
+        "method": "tests/test_local_provider.py compaction test and real E2E receipt compaction_count assertion"
+      },
+      {
+        "target": "A .planning-only change does not satisfy the code-level completion gate",
+        "method": "tests/test_local_provider.py completion-gate test"
+      },
+      {
+        "target": "Read output, search results, model responses, and test output are truncated without changing control flow",
+        "method": "tests/test_local_provider.py output-boundary tests"
+      },
+      {
+        "target": "A model retry after malformed JSON remains within the action and protocol-error budgets",
+        "method": "tests/test_local_provider.py malformed-response recovery test"
+      },
+      {
+        "target": "Path traversal, symlink escape, protected path writes, and out-of-owned-scope writes are rejected without filesystem mutation",
+        "method": "tests/test_local_provider.py workspace security tests"
+      },
+      {
+        "target": "Unknown actions and arbitrary command text are rejected rather than executed",
+        "method": "tests/test_local_provider.py action-registry tests"
+      },
+      {
+        "target": "Endpoint timeout, invalid response JSON, and exhausted action budget fail with actionable receipts",
+        "method": "tests/test_local_provider.py provider failure tests"
+      },
+      {
+        "target": "completed without a non-planning diff or without a passing test after the latest mutation is rejected",
+        "method": "tests/test_local_provider.py ordered completion-gate tests"
+      },
+      {
+        "target": "Blocked or failed model finish status marks the tracked agent failed and cannot advance lifecycle state",
+        "method": "tests/test_sisyphus.py tracked-provider finalization tests"
+      },
+      {
+        "target": "Full repository behavior remains intact",
+        "method": "python -m unittest discover -s tests"
+      },
+      {
+        "target": "Coverage and package metadata remain valid",
+        "method": "coverage run --branch -m unittest discover -s tests && coverage report --fail-under=80` and `uv build --no-sources --offline --clear"
       }
     ],
     "external_llm": {
       "required": false,
-      "provider": null,
-      "purpose": null,
-      "trigger": null,
+      "provider": "not applicable; Gemma 12B is the system under test",
+      "purpose": "the real-model run is deterministic verification evidence for the bounded runtime, not an independent review opinion",
+      "trigger": "use an independent reviewer only if claims expand beyond the measured fixture",
       "status": "not_needed"
     }
   },
   "design": {
-    "mode": "none",
-    "decision_reason": "existing contract only",
+    "mode": "full",
+    "decision_reason": "introduces a local-model provider contract, a bounded code-action runtime, and an automatic context-compaction boundary",
     "confidence": "medium",
-    "layer_impact": "layer-preserving",
-    "layer_decision_reason": null,
-    "required_artifacts": [],
+    "layer_impact": "layer-adding",
+    "layer_decision_reason": "adds provider, workspace-tool, and local-agent orchestration responsibilities used by the shared provider wrapper",
+    "required_artifacts": [
+      "connection_diagram",
+      "sequence_diagram",
+      "boundary_note"
+    ],
     "artifacts": {
-      "connection_diagram": null,
-      "sequence_diagram": null,
-      "boundary_note": null
+      "connection_diagram": "the connection diagram below defines provider, policy, executor, and evidence ownership",
+      "sequence_diagram": "the sequence diagram below defines one bounded model/tool turn and completion acceptance",
+      "boundary_note": "the model proposes JSON actions only; Sisyphus validates paths and commands, mutates the worktree, records receipts, and retains all lifecycle judgment"
     },
     "frozen": {
-      "mode": "none",
-      "layer_impact": "layer-preserving",
-      "required_artifacts": [],
+      "mode": "full",
+      "layer_impact": "layer-adding",
+      "required_artifacts": [
+        "connection_diagram",
+        "sequence_diagram",
+        "boundary_note"
+      ],
       "artifacts": {
-        "connection_diagram": null,
-        "sequence_diagram": null,
-        "boundary_note": null
+        "connection_diagram": "the connection diagram below defines provider, policy, executor, and evidence ownership",
+        "sequence_diagram": "the sequence diagram below defines one bounded model/tool turn and completion acceptance",
+        "boundary_note": "the model proposes JSON actions only; Sisyphus validates paths and commands, mutates the worktree, records receipts, and retains all lifecycle judgment"
       },
-      "anchor_summary": null,
-      "frozen_at": null
+      "anchor_summary": "mode=full, layer=layer-adding, required=connection_diagram,sequence_diagram,boundary_note, recorded=3",
+      "frozen_at": "2026-07-11T11:45:04Z"
     },
     "assessment": {
-      "status": "not_assessed",
-      "summary": null,
+      "status": "appropriate",
+      "summary": "design depth matches the current task shape",
       "replan_required": false,
       "escalation_reason": null,
       "missing_artifacts": []
@@ -149,21 +321,66 @@
   "conformance": {
     "policy": "required",
     "status": "green",
-    "summary": null,
+    "summary": "design depth matches the current task shape",
     "last_spec_anchor_at": null,
     "last_spec_anchor_source": null,
-    "last_design_anchor_at": null,
-    "last_design_anchor_source": null,
-    "last_checkpoint_type": null,
-    "last_checkpoint_source": null,
-    "last_checkpoint_at": null,
+    "last_design_anchor_at": "2026-07-11T11:45:04Z",
+    "last_design_anchor_source": "planning.freeze_task_spec",
+    "last_checkpoint_type": "design_assessment",
+    "last_checkpoint_source": "audit.design",
+    "last_checkpoint_at": "2026-07-12T06:59:04Z",
     "drift_count": 0,
     "warning_count": 0,
     "unresolved_warning_count": 0,
     "resolved_warning_count": 0,
     "last_warning": null,
     "last_failure": null,
-    "history": []
+    "history": [
+      {
+        "id": "9237bb88954d41f085d543c0d244ee61",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=full, layer=layer-adding, required=connection_diagram,sequence_diagram,boundary_note, recorded=3",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-07-11T11:45:04Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "c6afe8c9aeb04d988440a5a7d89c5de0",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-07-12T06:52:32Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "b9794bf00283491cab013fe2f2eccb69",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-07-12T06:56:13Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "41e076d628f24334ad7faef6abcd0938",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-07-12T06:59:04Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      }
+    ]
   },
   "docs": {
     "brief": "BRIEF.md",
@@ -201,12 +418,25 @@
     "auto_loop_enabled": false,
     "requested_slug": "connect-gemma-12b-local-model-provider",
     "owned_paths": [
-      "src/sisyphus/agent_runtime.py",
+      "src/sisyphus/provider_wrapper.py",
+      "src/sisyphus/codex_prompt.py",
       "src/sisyphus/providers",
-      "src/sisyphus/cli.py",
       "docs/local-models.md",
+      "docs/local-agent-runtime.md",
+      "tests/test_local_provider.py",
       "tests/test_sisyphus.py"
     ],
-    "requested_adopt_paths": []
+    "requested_adopt_paths": [],
+    "spec_validation_required": true,
+    "evidence_graph_required": true
+  },
+  "spec_validation": {
+    "status": "passed",
+    "stale": false,
+    "checked_at": "2026-07-12T06:43:43Z",
+    "report_path": "artifacts/spec-validation/latest.json",
+    "source_fingerprint": "5bb41f50e125a213a91bc46103fdc5192e37eeb9f2103070fdccefea2629df74",
+    "error_count": 0,
+    "warning_count": 0
   }
 }

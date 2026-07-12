@@ -1,0 +1,14 @@
+{
+  "schema_version": "sisyphus.spec_validation.v1",
+  "task_id": "TF-20260614-feature-connect-gemma-12b-local-model-provider",
+  "status": "passed",
+  "checked_at": "2026-07-12T06:43:43Z",
+  "source_fingerprint": "5bb41f50e125a213a91bc46103fdc5192e37eeb9f2103070fdccefea2629df74",
+  "summary": {
+    "error_count": 0,
+    "warning_count": 0,
+    "finding_count": 0
+  },
+  "gate_codes": [],
+  "findings": []
+}

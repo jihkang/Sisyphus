@@ -1,0 +1,63 @@
+{
+  "schema_version": "sisyphus.local_agent_e2e.v1",
+  "recorded_at": "2026-07-12T06:26:59Z",
+  "model_profile": "Gemma 12B Q4 GGUF",
+  "server": {
+    "implementation": "llama.cpp",
+    "version": "9290",
+    "protocol": "OpenAI-compatible chat completions"
+  },
+  "scenario": {
+    "class": "isolated small bug fix",
+    "summary": "Correct a calculator operator and verify the focused unittest fixture",
+    "changed_files": [
+      "calculator.py"
+    ]
+  },
+  "run": {
+    "status": "completed",
+    "action_count": 6,
+    "compaction_count": 4,
+    "blocked_action_count": 0,
+    "protocol_error_count": 0,
+    "elapsed_seconds_approx": 9,
+    "observation_hash_recorded": true
+  },
+  "test_first": {
+    "status": "satisfied",
+    "baseline_step": 3,
+    "baseline_exit_code": 1,
+    "mutation_step": 4,
+    "post_mutation_test_step": 5,
+    "post_mutation_exit_code": 0,
+    "passing_test_count": 2,
+    "phases": [
+      "select_or_generate_tests",
+      "run_baseline_tests",
+      "implement_change",
+      "rerun_tests",
+      "record_evidence"
+    ],
+    "violations": []
+  },
+  "episode": {
+    "valid_steps": 6,
+    "total_steps": 6,
+    "actions": [
+      "list_files",
+      "read_file",
+      "run_test",
+      "write_file",
+      "run_test",
+      "finish"
+    ]
+  },
+  "sisyphus": {
+    "verify_status": "passed",
+    "terminal_state": "verified_not_closed",
+    "conformance": "green",
+    "evidence": "complete",
+    "evaluation_reward": 2.7
+  },
+  "effectiveness_scope": "Evidence supports the tested isolated small bug-fix class only; it is not a general coding-competence claim."
+}
