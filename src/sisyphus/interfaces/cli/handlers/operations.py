@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import json
 import sys
@@ -10,6 +11,18 @@ from ....dataset_export import export_dataset
 from ....episode_trace import check_episode_trace, read_episode_steps
 from ....eval.loop import run_task_eval_loop
 from ....observation import render_task_observation
+from ....providers.benchmark import (
+    LocalAgentBenchmarkFixtureError,
+    default_local_agent_benchmark_fixture_file,
+    load_local_agent_benchmark_fixtures,
+    render_local_agent_benchmark_markdown,
+    run_local_agent_benchmark,
+)
+from ....providers.local_openai import (
+    LocalProviderConfigError,
+    is_local_openai_provider,
+    parse_local_provider_args,
+)
 from ....state import load_task_record
 from ....test_first import evaluate_test_first_loop
 
@@ -163,6 +176,53 @@ def handle_benchmark_run(*, repo_root: Path, fixtures_dir: str | None, as_json: 
     return 0
 
 
+def handle_local_agent_benchmark(
+    *,
+    repo_root: Path,
+    fixtures_file: str | None,
+    provider: str,
+    provider_args: list[str] | None,
+    output: str | None,
+    as_json: bool,
+) -> int:
+    fixture_path = (
+        Path(fixtures_file)
+        if fixtures_file
+        else default_local_agent_benchmark_fixture_file(repo_root)
+    )
+    if not fixture_path.is_absolute():
+        fixture_path = repo_root / fixture_path
+    output_path = Path(output) if output else None
+    if output_path is not None and not output_path.is_absolute():
+        output_path = repo_root / output_path
+
+    try:
+        if not is_local_openai_provider(provider):
+            raise LocalProviderConfigError(
+                f"local-agent benchmark requires a local provider alias: {provider}"
+            )
+        config = replace(
+            parse_local_provider_args(provider, provider_args),
+            fallback_provider=None,
+        )
+        fixtures = load_local_agent_benchmark_fixtures(fixture_path)
+        result = run_local_agent_benchmark(fixtures, config)
+        rendered = (
+            json.dumps(result.to_dict(), indent=2) + "\n"
+            if as_json
+            else render_local_agent_benchmark_markdown(result)
+        )
+        if output_path is not None:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(rendered, encoding="utf-8")
+    except (LocalAgentBenchmarkFixtureError, LocalProviderConfigError, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    print(rendered, end="")
+    return 0 if result.passed else 1
+
+
 def handle_dataset_export(
     *,
     repo_root: Path,
@@ -196,5 +256,6 @@ __all__ = [
     "handle_episode_check",
     "handle_eval_loop",
     "handle_eval_test_first",
+    "handle_local_agent_benchmark",
     "handle_observe",
 ]

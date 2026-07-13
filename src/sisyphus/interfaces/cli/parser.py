@@ -4,6 +4,7 @@ import argparse
 
 from ...agents import AGENT_STATUSES, DEFAULT_STALE_AFTER_SECONDS
 from ...dataset_export import DATASET_FORMATS
+from ...providers.local_openai import LOCAL_OPENAI_PROVIDERS
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -55,6 +56,20 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_run_parser = benchmark_subparsers.add_parser("run")
     benchmark_run_parser.add_argument("--fixtures-dir")
     benchmark_run_parser.add_argument("--json", action="store_true")
+    local_agent_benchmark_parser = benchmark_subparsers.add_parser("local-agent")
+    local_agent_benchmark_parser.add_argument("--fixtures-file")
+    local_agent_benchmark_parser.add_argument(
+        "--provider",
+        choices=sorted(LOCAL_OPENAI_PROVIDERS),
+        default="gemma",
+    )
+    local_agent_benchmark_parser.add_argument(
+        "--provider-arg",
+        action="append",
+        dest="provider_args",
+    )
+    local_agent_benchmark_parser.add_argument("--output")
+    local_agent_benchmark_parser.add_argument("--json", action="store_true")
 
     dataset_parser = subparsers.add_parser("dataset")
     dataset_subparsers = dataset_parser.add_subparsers(dest="dataset_command", required=True)

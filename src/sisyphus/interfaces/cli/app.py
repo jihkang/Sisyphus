@@ -134,6 +134,25 @@ def handle_benchmark_run(
     )
 
 
+def handle_local_agent_benchmark(
+    fixtures_file: str | None,
+    provider: str,
+    provider_args: list[str] | None,
+    output: str | None,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    return operations_handlers.handle_local_agent_benchmark(
+        repo_root=repo_root,
+        fixtures_file=fixtures_file,
+        provider=provider,
+        provider_args=provider_args,
+        output=output,
+        as_json=as_json,
+    )
+
+
 def handle_dataset_export(
     format: str,
     task_id: str | None,
@@ -708,6 +727,7 @@ CLI_HANDLERS = {
     "handle_eval_loop": handle_eval_loop,
     "handle_eval_test_first": handle_eval_test_first,
     "handle_benchmark_run": handle_benchmark_run,
+    "handle_local_agent_benchmark": handle_local_agent_benchmark,
     "handle_dataset_export": handle_dataset_export,
     "handle_plan_approve": handle_plan_approve,
     "handle_plan_request_changes": handle_plan_request_changes,

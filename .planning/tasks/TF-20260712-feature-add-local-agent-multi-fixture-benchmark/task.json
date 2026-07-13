@@ -1,0 +1,300 @@
+{
+  "id": "TF-20260712-feature-add-local-agent-multi-fixture-benchmark",
+  "type": "feature",
+  "slug": "add-local-agent-multi-fixture-benchmark",
+  "status": "verified",
+  "stage": "done",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-07-12T07:35:53Z",
+  "plan_reviewed_by": "operator-via-codex",
+  "plan_review_notes": "Approved after replacing generic plan text with explicit fixture schema, isolated execution, coding/safety judgment, failure-continuation, compatibility, deterministic test, packaging, and real Gemma evidence requirements. User explicitly directed end-to-end execution.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "operator-via-codex",
+      "notes": "Approved after replacing generic plan text with explicit fixture schema, isolated execution, coding/safety judgment, failure-continuation, compatibility, deterministic test, packaging, and real Gemma evidence requirements. User explicitly directed end-to-end execution.",
+      "timestamp": "2026-07-12T07:35:53Z"
+    }
+  ],
+  "workflow_phase": "verified",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-07-13T12:51:19Z",
+  "spec_reviewed_by": "operator-via-codex",
+  "spec_review_notes": "Re-anchored after parser-only formatting of the already approved Verification Mapping. Scope and acceptance criteria are unchanged; all seven verification methods are now represented in canonical task state. Real-model evidence and test results remain aligned with the frozen plan.",
+  "audit_attempts": 1,
+  "max_audit_attempts": 10,
+  "created_at": "2026-07-12T07:29:12Z",
+  "updated_at": "2026-07-13T12:55:05Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260712-feature-add-local-agent-multi-fixture-benchmark",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260712-feature-add-local-agent-multi-fixture-benchmark",
+  "branch": "feat/add-local-agent-multi-fixture-benchmark",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "passed",
+  "last_verified_at": "2026-07-13T12:55:05Z",
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Multiple coding fixtures execute in isolated workspaces and aggregate",
+        "checked": false
+      },
+      {
+        "name": "JSON and Markdown output expose stable provider, aggregate, and per-case",
+        "checked": false
+      },
+      {
+        "name": "Existing `benchmark run` parsing and dispatch behavior is unchanged.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "A safety fixture rejects unsupported completion without leaving changes.",
+        "checked": false
+      },
+      {
+        "name": "A required compaction count participates in case judgment.",
+        "checked": false
+      },
+      {
+        "name": "Relative fixture/output paths resolve from repo root.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Invalid schema, duplicate IDs, unsafe paths, and empty commands fail before",
+        "checked": false
+      },
+      {
+        "name": "Malformed model responses and provider exceptions produce failed case",
+        "checked": false
+      },
+      {
+        "name": "Exact changed-path mismatch fails a coding judgment even when tests pass.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Fixture loading, isolation, execution, judgment, continuation, and reports",
+        "method": "python -m unittest tests.test_local_agent_benchmark"
+      },
+      {
+        "target": "CLI compatibility and argument binding",
+        "method": "python -m unittest tests.test_interface_structure tests.test_benchmark"
+      },
+      {
+        "target": "Provider/workspace behavior remains unchanged",
+        "method": "python -m unittest tests.test_local_provider"
+      },
+      {
+        "target": "Repository regression coverage",
+        "method": "python -m unittest discover -s tests"
+      },
+      {
+        "target": "Branch coverage threshold",
+        "method": "coverage run --branch -m unittest discover -s tests; coverage report --fail-under=80"
+      },
+      {
+        "target": "Packaging integrity",
+        "method": "uv lock --check; uv build --no-sources --offline --clear"
+      },
+      {
+        "target": "Real-model measured effectiveness and compaction",
+        "method": "committed fixture run against Gemma 12B llama.cpp with JSON artifact review"
+      }
+    ],
+    "external_llm": {
+      "required": false,
+      "provider": null,
+      "purpose": "Gemma 12B is the system under test, not an independent reviewer",
+      "trigger": "Require independent review only if claims expand beyond measured fixtures or the change crosses a trust boundary",
+      "status": "not_needed"
+    }
+  },
+  "design": {
+    "mode": "none",
+    "decision_reason": "new behavior composes existing provider and workspace contracts without adding an architectural layer",
+    "confidence": "high",
+    "layer_impact": "layer-preserving",
+    "layer_decision_reason": "execution remains under providers and presentation remains under interfaces/cli",
+    "required_artifacts": [],
+    "artifacts": {
+      "connection_diagram": null,
+      "sequence_diagram": null,
+      "boundary_note": null
+    },
+    "frozen": {
+      "mode": "none",
+      "layer_impact": "layer-preserving",
+      "required_artifacts": [],
+      "artifacts": {
+        "connection_diagram": null,
+        "sequence_diagram": null,
+        "boundary_note": null
+      },
+      "anchor_summary": "mode=none, layer=layer-preserving",
+      "frozen_at": "2026-07-13T12:51:19Z"
+    },
+    "assessment": {
+      "status": "appropriate",
+      "summary": "design depth matches the current task shape",
+      "replan_required": false,
+      "escalation_reason": null,
+      "missing_artifacts": []
+    }
+  },
+  "promotion": {
+    "required": true,
+    "required_override": null,
+    "required_reason": "feature tasks are promotable by default",
+    "required_source": "classified",
+    "status": "promotion_pending",
+    "strategy": "direct",
+    "remote_name": null,
+    "parent_artifact_id": null,
+    "parent_task_id": null,
+    "base_override": null,
+    "base_branch": "main",
+    "base_source": null,
+    "base_reason": null,
+    "resolved_parent_branch": null,
+    "retarget_required": false,
+    "reverify_required": false,
+    "retarget_required_at": null,
+    "retarget_parent_task_id": null,
+    "retarget_parent_branch": null,
+    "retarget_merge_target": null,
+    "head_branch": "feat/add-local-agent-multi-fixture-benchmark",
+    "pr_number": null,
+    "pr_url": null,
+    "receipt_path": "artifacts/promotion/merge_receipt.json",
+    "execution_receipt_path": null,
+    "changeset_path": "CHANGESET.md",
+    "commit_message": null,
+    "repo_full_name": null,
+    "title": null,
+    "head_sha": null,
+    "merge_commit_sha": null,
+    "committed_at": null,
+    "pushed_at": null,
+    "pr_opened_at": null,
+    "merged_at": null,
+    "merged_by": null,
+    "merge_method": null,
+    "recorded_at": null
+  },
+  "gates": [],
+  "subtasks": [],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": "design depth matches the current task shape",
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_design_anchor_at": "2026-07-13T12:51:19Z",
+    "last_design_anchor_source": "planning.freeze_task_spec",
+    "last_checkpoint_type": "design_assessment",
+    "last_checkpoint_source": "audit.design",
+    "last_checkpoint_at": "2026-07-13T12:55:05Z",
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": [
+      {
+        "id": "74e2e424233a459d85dc0012cf4fdf03",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=none, layer=layer-preserving",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-07-12T07:37:18Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "5b4e6e98501349f3971516a14a97220c",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=none, layer=layer-preserving",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-07-13T12:51:19Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "0eb1b4fdfb4f46cda5393b2ab80a570c",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-07-13T12:55:05Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      }
+    ]
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "promotion": {
+      "status": "promotion_pending",
+      "recorded_at": null,
+      "repo_full_name": null,
+      "pr_number": null,
+      "title": null,
+      "url": null,
+      "head_branch": "feat/add-local-agent-multi-fixture-benchmark",
+      "base_branch": "main",
+      "head_sha": null,
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "merged_by": null,
+      "merge_method": null,
+      "receipt_path": "artifacts/promotion/merge_receipt.json",
+      "changeset_path": "CHANGESET.md",
+      "parent_artifact_id": null,
+      "parent_task_id": null
+    },
+    "source_event_id": "evt-eb0accc1b878",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "add-local-agent-multi-fixture-benchmark",
+    "owned_paths": [
+      "src/sisyphus/providers/benchmark.py",
+      "src/sisyphus/interfaces/cli/parser.py",
+      "src/sisyphus/interfaces/cli/dispatch.py",
+      "src/sisyphus/interfaces/cli/app.py",
+      "src/sisyphus/interfaces/cli/handlers/operations.py",
+      "benchmarks/local-agent",
+      "tests/test_local_agent_benchmark.py",
+      "tests/test_interface_structure.py",
+      "docs/local-agent-benchmark.md",
+      "docs/local-models.md"
+    ],
+    "requested_adopt_paths": [],
+    "evidence_graph_required": true
+  }
+}
