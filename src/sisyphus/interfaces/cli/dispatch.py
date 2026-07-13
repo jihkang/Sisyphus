@@ -58,6 +58,11 @@ COMMAND_SPECS: tuple[CliCommandSpec, ...] = (
     ),
     CliCommandSpec(("eval", "test-first"), "handle_eval_test_first", ("task_id", "episode_id", ("json", "as_json"))),
     CliCommandSpec(("benchmark", "run"), "handle_benchmark_run", ("fixtures_dir", ("json", "as_json"))),
+    CliCommandSpec(
+        ("benchmark", "local-agent"),
+        "handle_local_agent_benchmark",
+        ("fixtures_file", "provider", "provider_args", "output", ("json", "as_json")),
+    ),
     CliCommandSpec(("dataset", "export"), "handle_dataset_export", ("format", "task_id", "output", "max_action_count")),
     CliCommandSpec(("plan", "approve"), "handle_plan_approve", ("task_id", "reviewer", "notes")),
     CliCommandSpec(("plan", "request-changes"), "handle_plan_request_changes", ("task_id", "reviewer", "notes")),

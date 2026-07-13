@@ -120,3 +120,5 @@ sisyphus eval loop <task-id> --episode-id ep-<task-id>-<agent-id> --json
 ```
 
 See [Local Agent Runtime](local-agent-runtime.md) for the action, compaction, and trust boundaries.
+Use [Local Agent Benchmark](local-agent-benchmark.md) to run the bounded worker
+against isolated, committed coding and safety fixtures.

@@ -164,6 +164,7 @@ class InterfaceStructureTests(unittest.TestCase):
             ["eval", "loop", "TF-1"],
             ["eval", "test-first", "TF-1"],
             ["benchmark", "run"],
+            ["benchmark", "local-agent"],
             ["dataset", "export", "--format", "rl"],
             ["plan", "approve", "TF-1"],
             ["plan", "request-changes", "TF-1"],
