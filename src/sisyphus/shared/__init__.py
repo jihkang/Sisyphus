@@ -4,7 +4,9 @@ from .clock import utc_now
 from .coerce import optional_str, optional_str_list, required_str
 from .mappings import find_unknown_fields, project_fields
 from .paths import (
+    PathBoundaryError,
     agent_dir,
+    contained_path,
     event_log_file,
     inbox_dir,
     inbox_failed_dir,
@@ -15,7 +17,9 @@ from .paths import (
 )
 
 __all__ = [
+    "PathBoundaryError",
     "agent_dir",
+    "contained_path",
     "event_log_file",
     "find_unknown_fields",
     "inbox_dir",

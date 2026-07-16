@@ -79,6 +79,10 @@ def run_discord_bot(
     poll_interval_seconds: int,
     allowed_channel_ids: list[int] | None = None,
 ) -> int:
+    normalized_allowed_channel_ids = list(allowed_channel_ids or [])
+    if not normalized_allowed_channel_ids:
+        raise RuntimeError("at least one Discord channel ID is required via --channel-id")
+
     discord = _require_discord()
     resolved_token = token or os.environ.get("DISCORD_BOT_TOKEN")
     if not resolved_token:
@@ -95,7 +99,7 @@ def run_discord_bot(
         repo_root=repo_root,
         config=config,
         poll_interval_seconds=poll_interval_seconds,
-        allowed_channel_ids=allowed_channel_ids or [],
+        allowed_channel_ids=normalized_allowed_channel_ids,
     )
     client.run(resolved_token)
     return 0
@@ -185,7 +189,7 @@ def _build_discord_client_class(discord):
 
         def _is_allowed_channel(self, channel) -> bool:
             if not self.allowed_channel_ids:
-                return True
+                return False
             channel_id = int(getattr(channel, "id", 0))
             parent_id = int(getattr(getattr(channel, "parent", None), "id", 0) or 0)
             return channel_id in self.allowed_channel_ids or parent_id in self.allowed_channel_ids
