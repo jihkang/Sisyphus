@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from .shared.paths import (
+    PathBoundaryError,
     agent_dir,
+    contained_path,
     event_log_file,
     inbox_dir,
     inbox_failed_dir,
@@ -13,7 +15,9 @@ from .shared.paths import (
 )
 
 __all__ = [
+    "PathBoundaryError",
     "agent_dir",
+    "contained_path",
     "event_log_file",
     "inbox_dir",
     "inbox_failed_dir",

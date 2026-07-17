@@ -262,6 +262,7 @@ sisyphus discord-bot --channel-id 123456789012345678
 ```
 
 By default the bot manages the repository in the current directory. To target a different repository, add `--repo`.
+At least one `--channel-id` is required. The bot refuses to start with an empty allowlist.
 
 ## Python Library
 
@@ -367,6 +368,7 @@ Coverage includes branch measurement and enforces the repository-wide floor conf
 
 - Architecture and ownership boundaries: [docs/architecture.md](docs/architecture.md)
 - Contribution workflow and verification requirements: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security support and private reporting: [SECURITY.md](SECURITY.md)
 - Versioning and release gates: [RELEASES.md](RELEASES.md)
 
 ## License

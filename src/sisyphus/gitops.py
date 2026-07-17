@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 
+from .shared.paths import contained_path
+
 
 class GitOperationError(RuntimeError):
     """Raised when Sisyphus git workspace provisioning fails."""
@@ -159,8 +161,8 @@ def remote_url(repo_root: Path, remote_name: str) -> str | None:
 
 
 def copy_relative_path(source_root: Path, target_root: Path, relative_path: str) -> None:
-    source_path = source_root / relative_path
-    target_path = target_root / relative_path
+    source_path = contained_path(source_root, relative_path, require_relative=True)
+    target_path = contained_path(target_root, relative_path, require_relative=True)
     if source_path.is_dir():
         return
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -168,7 +170,7 @@ def copy_relative_path(source_root: Path, target_root: Path, relative_path: str)
 
 
 def remove_relative_path(target_root: Path, relative_path: str) -> None:
-    target_path = target_root / relative_path
+    target_path = contained_path(target_root, relative_path, require_relative=True)
     if not target_path.exists():
         return
     if target_path.is_dir():

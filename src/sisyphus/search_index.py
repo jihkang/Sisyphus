@@ -7,6 +7,7 @@ from typing import Any
 
 from .config import SisyphusConfig
 from .search_document import SearchDocument, project_repo_search_documents
+from .shared.paths import contained_path
 
 
 DEFAULT_SEARCH_INDEX_PATH = Path(".planning") / "search" / "index.jsonl"
@@ -31,12 +32,8 @@ class SearchIndexRebuildResult:
 
 
 def resolve_search_index_path(repo_root: Path, index_path: str | Path | None = None) -> Path:
-    if index_path is None:
-        return repo_root / DEFAULT_SEARCH_INDEX_PATH
-    path = Path(index_path)
-    if path.is_absolute():
-        return path
-    return repo_root / path
+    path = DEFAULT_SEARCH_INDEX_PATH if index_path is None else Path(index_path)
+    return contained_path(repo_root, path)
 
 
 def rebuild_search_index(
