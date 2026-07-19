@@ -1,0 +1,14 @@
+{
+  "schema_version": "sisyphus.spec_validation.v1",
+  "task_id": "TF-20260718-feature-migrate-core-to-clean-architecture",
+  "status": "passed",
+  "checked_at": "2026-07-18T16:47:07Z",
+  "source_fingerprint": "96b366d413af8f117fc8f0dcfe0ffd1876299ac1be1dcb6a651e0d324d22f3c0",
+  "summary": {
+    "error_count": 0,
+    "warning_count": 0,
+    "finding_count": 0
+  },
+  "gate_codes": [],
+  "findings": []
+}

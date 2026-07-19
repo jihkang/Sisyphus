@@ -1,0 +1,546 @@
+{
+  "id": "TF-20260718-feature-migrate-core-to-clean-architecture",
+  "type": "feature",
+  "slug": "migrate-core-to-clean-architecture",
+  "status": "open",
+  "stage": "spec",
+  "plan_status": "approved",
+  "plan_reviewed_at": "2026-07-18T16:49:32Z",
+  "plan_reviewed_by": "operator-directed-codex",
+  "plan_review_notes": "Approved for incremental execution after the operator explicitly directed behavior validation, DDD-oriented implementation, dependency minimization, architecture review, code review, and a measured target score of 9.5. The full layer-adding plan and its three design artifacts passed spec validation with zero findings.",
+  "plan_review_round": 0,
+  "max_plan_review_rounds": 3,
+  "plan_review_history": [
+    {
+      "round": 0,
+      "action": "approve",
+      "actor": "operator-directed-codex",
+      "notes": "Approved for incremental execution after the operator explicitly directed behavior validation, DDD-oriented implementation, dependency minimization, architecture review, code review, and a measured target score of 9.5. The full layer-adding plan and its three design artifacts passed spec validation with zero findings.",
+      "timestamp": "2026-07-18T16:49:32Z"
+    }
+  ],
+  "workflow_phase": "execution",
+  "spec_status": "frozen",
+  "spec_frozen_at": "2026-07-18T16:49:40Z",
+  "spec_reviewed_by": "operator-directed-codex",
+  "spec_review_notes": "Freeze the approved full layer-adding Clean Architecture/DDD migration plan, including dependency, sequence, authority, parity, rollback, and review gates. The operator explicitly directed implementation and validation.",
+  "audit_attempts": 0,
+  "max_audit_attempts": 10,
+  "created_at": "2026-07-18T16:14:11Z",
+  "updated_at": "2026-07-18T16:50:17Z",
+  "closed_at": null,
+  "repo_root": "/Users/jihokang/Documents/Sisyphus",
+  "task_dir": ".planning/tasks/TF-20260718-feature-migrate-core-to-clean-architecture",
+  "worktree_path": "/Users/jihokang/Documents/_worktrees/Sisyphus-TF-20260718-feature-migrate-core-to-clean-architecture",
+  "branch": "feat/migrate-core-to-clean-architecture",
+  "base_branch": "main",
+  "verify_profile": "default",
+  "verify_commands": [],
+  "verify_status": "not_run",
+  "last_verified_at": null,
+  "last_verify_results": [],
+  "test_strategy": {
+    "normal_cases": [
+      {
+        "name": "Existing Python, CLI, and MCP task workflows produce equivalent results through the new application use cases.",
+        "checked": false
+      },
+      {
+        "name": "Existing task and agent records round-trip through centralized mappers without shape or extension-field loss.",
+        "checked": false
+      },
+      {
+        "name": "Planning, workflow, verification, and promotion complete through injected concrete adapters with unchanged receipts and events.",
+        "checked": false
+      }
+    ],
+    "edge_cases": [
+      {
+        "name": "Legacy records with missing defaults or unknown fields remain readable and are preserved on update.",
+        "checked": false
+      },
+      {
+        "name": "Empty verification profiles, disabled event publishing, stale agent records, and tasks without promotion remain compatible.",
+        "checked": false
+      },
+      {
+        "name": "Compatibility facades and installed-wheel imports continue to expose the documented public surface during every migration slice.",
+        "checked": false
+      }
+    ],
+    "exception_cases": [
+      {
+        "name": "Concurrent stale updates, malformed JSON, unsafe paths, and symlink escapes fail with existing safe behavior.",
+        "checked": false
+      },
+      {
+        "name": "Provider, verifier, Git, GitHub, event, and artifact failures leave retryable state and do not skip lifecycle gates.",
+        "checked": false
+      },
+      {
+        "name": "Architecture tests reject new outward domain/application imports, cross-boundary cycles, and business logic added to facades.",
+        "checked": false
+      }
+    ],
+    "verification_methods": [
+      {
+        "target": "Existing Python, CLI, and MCP task workflows produce equivalent results through the new application use cases.",
+        "method": "characterization, interface structure, MCP core, and end-to-end workflow test suites"
+      },
+      {
+        "target": "Existing task and agent records round-trip through centralized mappers without shape or extension-field loss.",
+        "method": "task/agent mapper contract tests using committed golden fixtures"
+      },
+      {
+        "target": "Planning, workflow, verification, and promotion complete through injected concrete adapters with unchanged receipts and events.",
+        "method": "application use-case contract tests plus temporary Git repository integration tests"
+      },
+      {
+        "target": "Legacy records with missing defaults or unknown fields remain readable and are preserved on update.",
+        "method": "legacy record compatibility and unknown-field round-trip tests"
+      },
+      {
+        "target": "Empty verification profiles, disabled event publishing, stale agent records, and tasks without promotion remain compatible.",
+        "method": "edge-case unit and integration matrix for audit, events, agents, and promotion"
+      },
+      {
+        "target": "Compatibility facades and installed-wheel imports continue to expose the documented public surface during every migration slice.",
+        "method": "tests.test_interface_structure plus isolated installed-wheel smoke script"
+      },
+      {
+        "target": "Concurrent stale updates, malformed JSON, unsafe paths, and symlink escapes fail with existing safe behavior.",
+        "method": "persistence concurrency, inbox validation, and path security suites"
+      },
+      {
+        "target": "Provider, verifier, Git, GitHub, event, and artifact failures leave retryable state and do not skip lifecycle gates.",
+        "method": "failure-injection adapter contract and orchestration sequence tests"
+      },
+      {
+        "target": "Architecture tests reject new outward domain/application imports, cross-boundary cycles, and business logic added to facades.",
+        "method": "tests.test_architecture_dependencies with zero final exemptions"
+      }
+    ],
+    "external_llm": {
+      "required": true,
+      "provider": "independent Codex reviewer",
+      "purpose": "independent challenge of dependency direction, compatibility evidence, abstraction balance, and hidden side-effect regressions",
+      "trigger": "after all migration tests pass and before final promotion",
+      "status": "pending"
+    }
+  },
+  "design": {
+    "mode": "full",
+    "decision_reason": "introduces an explicit application layer, reverses persistence and execution dependencies, and changes authority ownership across the core runtime",
+    "confidence": "high",
+    "layer_impact": "layer-adding",
+    "layer_decision_reason": "adds inward-owned application ports and a composition root while moving concrete side effects outward",
+    "required_artifacts": [
+      "connection_diagram",
+      "sequence_diagram",
+      "boundary_note"
+    ],
+    "artifacts": {
+      "connection_diagram": "design/dependency-boundary.md",
+      "sequence_diagram": "design/migration-sequence.md",
+      "boundary_note": "design/authority-boundary.md"
+    },
+    "frozen": {
+      "mode": "full",
+      "layer_impact": "layer-adding",
+      "required_artifacts": [
+        "connection_diagram",
+        "sequence_diagram",
+        "boundary_note"
+      ],
+      "artifacts": {
+        "connection_diagram": "design/dependency-boundary.md",
+        "sequence_diagram": "design/migration-sequence.md",
+        "boundary_note": "design/authority-boundary.md"
+      },
+      "anchor_summary": "mode=full, layer=layer-adding, required=connection_diagram,sequence_diagram,boundary_note, recorded=3",
+      "frozen_at": "2026-07-18T16:49:40Z"
+    },
+    "assessment": {
+      "status": "not_assessed",
+      "summary": null,
+      "replan_required": false,
+      "escalation_reason": null,
+      "missing_artifacts": []
+    }
+  },
+  "promotion": {
+    "required": true,
+    "required_override": null,
+    "required_reason": "feature tasks are promotable by default",
+    "required_source": "classified",
+    "status": "promotion_pending",
+    "strategy": "direct",
+    "remote_name": null,
+    "parent_artifact_id": null,
+    "parent_task_id": null,
+    "base_override": null,
+    "base_branch": "main",
+    "base_source": null,
+    "base_reason": null,
+    "resolved_parent_branch": null,
+    "retarget_required": false,
+    "reverify_required": false,
+    "retarget_required_at": null,
+    "retarget_parent_task_id": null,
+    "retarget_parent_branch": null,
+    "retarget_merge_target": null,
+    "head_branch": "feat/migrate-core-to-clean-architecture",
+    "pr_number": null,
+    "pr_url": null,
+    "receipt_path": "artifacts/promotion/merge_receipt.json",
+    "execution_receipt_path": null,
+    "changeset_path": "CHANGESET.md",
+    "commit_message": null,
+    "repo_full_name": null,
+    "title": null,
+    "head_sha": null,
+    "merge_commit_sha": null,
+    "committed_at": null,
+    "pushed_at": null,
+    "pr_opened_at": null,
+    "merged_at": null,
+    "merged_by": null,
+    "merge_method": null,
+    "recorded_at": null
+  },
+  "gates": [],
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "Existing Python, CLI, and MCP task workflows produce equivalent results through the new application use cases.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_design_anchor_at": null,
+        "last_design_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-002",
+      "title": "Existing task and agent records round-trip through centralized mappers without shape or extension-field loss.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_design_anchor_at": null,
+        "last_design_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-003",
+      "title": "Planning, workflow, verification, and promotion complete through injected concrete adapters with unchanged receipts and events.",
+      "category": "normal",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_design_anchor_at": null,
+        "last_design_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-004",
+      "title": "Legacy records with missing defaults or unknown fields remain readable and are preserved on update.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_design_anchor_at": null,
+        "last_design_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-005",
+      "title": "Empty verification profiles, disabled event publishing, stale agent records, and tasks without promotion remain compatible.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_design_anchor_at": null,
+        "last_design_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-006",
+      "title": "Compatibility facades and installed-wheel imports continue to expose the documented public surface during every migration slice.",
+      "category": "edge",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_design_anchor_at": null,
+        "last_design_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-007",
+      "title": "Concurrent stale updates, malformed JSON, unsafe paths, and symlink escapes fail with existing safe behavior.",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_design_anchor_at": null,
+        "last_design_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-008",
+      "title": "Provider, verifier, Git, GitHub, event, and artifact failures leave retryable state and do not skip lifecycle gates.",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_design_anchor_at": null,
+        "last_design_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    },
+    {
+      "id": "subtask-009",
+      "title": "Architecture tests reject new outward domain/application imports, cross-boundary cycles, and business logic added to facades.",
+      "category": "exception",
+      "status": "queued",
+      "agent_role": "worker",
+      "depends_on": [],
+      "conformance": {
+        "policy": "required",
+        "status": "green",
+        "summary": null,
+        "last_spec_anchor_at": null,
+        "last_spec_anchor_source": null,
+        "last_design_anchor_at": null,
+        "last_design_anchor_source": null,
+        "last_checkpoint_type": null,
+        "last_checkpoint_source": null,
+        "last_checkpoint_at": null,
+        "drift_count": 0,
+        "warning_count": 0,
+        "unresolved_warning_count": 0,
+        "resolved_warning_count": 0,
+        "last_warning": null,
+        "last_failure": null,
+        "history": []
+      }
+    }
+  ],
+  "conformance": {
+    "policy": "required",
+    "status": "green",
+    "summary": "mode=full, layer=layer-adding, required=connection_diagram,sequence_diagram,boundary_note, recorded=3",
+    "last_spec_anchor_at": null,
+    "last_spec_anchor_source": null,
+    "last_design_anchor_at": "2026-07-18T16:49:40Z",
+    "last_design_anchor_source": "planning.freeze_task_spec",
+    "last_checkpoint_type": "design_anchor",
+    "last_checkpoint_source": "planning.freeze_task_spec",
+    "last_checkpoint_at": "2026-07-18T16:49:40Z",
+    "drift_count": 0,
+    "warning_count": 0,
+    "unresolved_warning_count": 0,
+    "resolved_warning_count": 0,
+    "last_warning": null,
+    "last_failure": null,
+    "history": [
+      {
+        "id": "eed9808c44d94112b366e4a2efa49ad0",
+        "checkpoint_type": "design_anchor",
+        "status": "green",
+        "summary": "mode=full, layer=layer-adding, required=connection_diagram,sequence_diagram,boundary_note, recorded=3",
+        "source": "planning.freeze_task_spec",
+        "timestamp": "2026-07-18T16:49:40Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      }
+    ]
+  },
+  "docs": {
+    "brief": "BRIEF.md",
+    "verify": "VERIFY.md",
+    "log": "LOG.md",
+    "changeset": "CHANGESET.md",
+    "promotion": "artifacts/promotion/merge_receipt.json",
+    "plan": "PLAN.md"
+  },
+  "meta": {
+    "sequence": null,
+    "close_override_used": false,
+    "promotion": {
+      "status": "promotion_pending",
+      "recorded_at": null,
+      "repo_full_name": null,
+      "pr_number": null,
+      "title": null,
+      "url": null,
+      "head_branch": "feat/migrate-core-to-clean-architecture",
+      "base_branch": "main",
+      "head_sha": null,
+      "merge_commit_sha": null,
+      "merged_at": null,
+      "merged_by": null,
+      "merge_method": null,
+      "receipt_path": "artifacts/promotion/merge_receipt.json",
+      "changeset_path": "CHANGESET.md",
+      "parent_artifact_id": null,
+      "parent_task_id": null
+    },
+    "source_event_id": "evt-26f717ae545f",
+    "source_event_type": "conversation",
+    "default_provider": "codex",
+    "auto_loop_enabled": false,
+    "requested_slug": "migrate-core-to-clean-architecture",
+    "owned_paths": [
+      "src/sisyphus/application",
+      "src/sisyphus/domain",
+      "src/sisyphus/infra",
+      "src/sisyphus/interfaces",
+      "src/sisyphus/compat",
+      "src/sisyphus",
+      "tests",
+      "docs/architecture.md",
+      "docs/runtime-relationship-diagrams.md"
+    ],
+    "requested_adopt_paths": [],
+    "spec_validation_required": true
+  },
+  "spec_validation": {
+    "status": "passed",
+    "stale": false,
+    "checked_at": "2026-07-18T16:47:07Z",
+    "report_path": "artifacts/spec-validation/latest.json",
+    "source_fingerprint": "96b366d413af8f117fc8f0dcfe0ffd1876299ac1be1dcb6a651e0d324d22f3c0",
+    "error_count": 0,
+    "warning_count": 0
+  }
+}

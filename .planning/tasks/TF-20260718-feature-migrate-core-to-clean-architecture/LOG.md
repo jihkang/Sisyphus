@@ -1,0 +1,28 @@
+# Log
+
+## Timeline
+
+- 2026-07-19: Created the planning-first Clean Architecture migration task from current `main`.
+- 2026-07-19: Read canonical observation, record, conformance, brief, plan, verify, and log resources.
+- 2026-07-19: Replaced the generic plan with a full layer-adding migration design and rollback gates.
+- 2026-07-19: Spec validation passed, the operator-directed plan was approved, the spec was frozen, and nine execution subtasks were generated.
+- 2026-07-19: Recorded a 497-test baseline and 82.8% branch-aware coverage before runtime changes.
+- 2026-07-19: Added architecture fitness tests and removed the planning/lifecycle import cycle.
+- 2026-07-19: Moved lifecycle decisions into a pure typed domain policy while preserving the public dict gate shape.
+- 2026-07-19: Added centralized Task/Agent record mappers with unknown-field and key-order preservation.
+- 2026-07-19: Moved concrete Task/Agent repositories to infra/persistence and retained the legacy import paths as compatibility shims.
+- 2026-07-19: Added application repository ports, typed query services, concrete JSON adapters, and bootstrap.py.
+- 2026-07-19: Passed the expanded full suite with 527 tests after the first migration slice.
+
+## Notes
+
+- Current canonical conformance is green with zero drift at the latest design anchor.
+- The plan intentionally separates the Sisyphus core refactor from the Sisyphus Harness Hermes/GEPA/model-execution roadmap.
+- Public lifecycle_state, lifecycle_rules, Task/Agent repository imports, dictionary results, and persisted record extensions remain compatible.
+- Domain outward-dependency debt has decreased; the remaining allowlist is migration debt scheduled for later phases.
+
+## Follow-ups
+
+- Migrate planning and workflow orchestration behind application ports.
+- Separate verification, provider, event, artifact, and promotion effects.
+- Rewire CLI/MCP/evolution consumers, remove the architecture allowlist, then run final package and merged-main verification.
