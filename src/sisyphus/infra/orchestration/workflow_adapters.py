@@ -16,9 +16,9 @@ from ...application.ports.workflow import (
     TaskRecord,
     VerificationResult,
 )
+from ...application.use_cases.obligations import ObligationConvergenceService
 from ...application.use_cases.planning import PlanningService
 from ...application.use_cases.verification import VerificationService
-from ...obligation_runtime import converge_feature_change_obligations
 from ...shared.paths import task_dir as resolve_task_dir
 from ..config.loader import SisyphusConfig
 from ..documents.conformance_log import append_conformance_log_markdown
@@ -50,16 +50,11 @@ class PlanningWorkflowAdapter:
 
 
 class FeatureObligationAdapter:
-    def __init__(self, repo_root: Path, config: SisyphusConfig) -> None:
-        self._repo_root = repo_root
-        self._config = config
+    def __init__(self, service: ObligationConvergenceService) -> None:
+        self._service = service
 
     def converge(self, task_id: str) -> bool:
-        return converge_feature_change_obligations(
-            repo_root=self._repo_root,
-            config=self._config,
-            task_id=task_id,
-        ).progressed
+        return self._service.converge(task_id).progressed
 
 
 class ConformanceAdapter:

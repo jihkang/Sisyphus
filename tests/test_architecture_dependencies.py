@@ -267,7 +267,7 @@ class ArchitectureDependencyTests(unittest.TestCase):
             + _format_pairs(forbidden),
         )
 
-    def test_workflow_adapter_has_exactly_one_remaining_root_facade_dependency(self) -> None:
+    def test_workflow_adapter_has_no_root_facade_dependencies(self) -> None:
         module = self.modules["sisyphus.infra.orchestration.workflow_adapters"]
         dependencies = _declared_imports(module)
         outward = {
@@ -284,7 +284,10 @@ class ArchitectureDependencyTests(unittest.TestCase):
             )
         }
 
-        self.assertEqual(outward, {"sisyphus.obligation_runtime"})
+        self.assertFalse(
+            outward,
+            "workflow adapter imports root facades:\n" + "\n".join(sorted(outward)),
+        )
 
     def test_domain_models_do_not_own_boundary_mapping_methods(self) -> None:
         violations: set[tuple[str, str]] = set()

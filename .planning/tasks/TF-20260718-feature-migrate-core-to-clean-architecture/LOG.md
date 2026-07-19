@@ -76,6 +76,8 @@
 - 2026-07-19: Re-anchored execution-contract and conformance-summary Evolution targets and bounded mutations to the canonical application source, added deterministic task/subtask record and idempotent log tests, and passed the expanded full suite with 623 tests.
 - 2026-07-19: Promoted legacy task-to-lifecycle projection to an application-owned mapper and replaced closeout's direct persistence, evidence, Git, event, and intervention calls with `CloseoutService` and explicit ports/adapters.
 - 2026-07-19: Reused the same closeout service from workflow and promotion, preserved the public dirty-check patch point and evidence short-circuit behavior, added orchestration/failure-order regressions, and passed the expanded full suite with 629 tests.
+- 2026-07-19: Moved obligation queue execution to `infra/obligations`, extracted queue-to-execution-to-snapshot convergence into `ObligationConvergenceService`, injected canonical verification, and retained the public obligation result identities and function signatures.
+- 2026-07-19: Added convergence ordering, idle, blocked, max-step, and exception-short-circuit contracts; caught and fixed a snapshot-refresh short-circuit introduced during extraction; passed the expanded full suite with 636 tests and reduced workflow adapter root-facade dependencies to zero.
 
 ## Notes
 

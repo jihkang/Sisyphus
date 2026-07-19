@@ -11,6 +11,7 @@ from .agent_execution import (
 from .artifacts import ArtifactStorePort
 from .clock import ClockPort
 from .closeout import CloseoutEvidencePort, WorktreeStatusPort
+from .obligations import ObligationRuntimePort
 from .planning import DesignConformancePort, PlanningDocumentPort, SpecValidationPort
 from .promotion import (
     PromotionTaskPort,
@@ -54,6 +55,7 @@ __all__ = [
     "EvidenceGraphPort",
     "FeatureObligationPort",
     "ManualInterventionPort",
+    "ObligationRuntimePort",
     "PlanningDocumentPort",
     "ProcessExecution",
     "ProcessExecutionRequest",

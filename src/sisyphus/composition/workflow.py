@@ -20,6 +20,7 @@ from ..infra.orchestration.workflow_adapters import (
 )
 from .planning import build_planning_service
 from .closeout import build_closeout_service
+from .obligations import build_obligation_convergence_service
 from .verification import build_verification_service
 
 
@@ -30,13 +31,20 @@ def build_workflow_service(
     provider_runner: ProviderRunner,
 ) -> WorkflowService:
     clock = SystemClock()
+    verification = build_verification_service(repo_root, config)
     return WorkflowService(
         tasks=FileTaskRecordAdapter(repo_root, config),
         planning=PlanningWorkflowAdapter(build_planning_service(repo_root, config)),
-        obligations=FeatureObligationAdapter(repo_root, config),
+        obligations=FeatureObligationAdapter(
+            build_obligation_convergence_service(
+                repo_root,
+                config,
+                verification=verification,
+            )
+        ),
         conformance=ConformanceAdapter(repo_root, config, clock),
         provider=ProviderAdapter(repo_root, provider_runner),
-        verification=VerificationAdapter(build_verification_service(repo_root, config)),
+        verification=VerificationAdapter(verification),
         closeout=build_closeout_service(repo_root, config),
         events=EventPublisherAdapter(repo_root, config),
         interventions=ManualInterventionAdapter(repo_root, config),

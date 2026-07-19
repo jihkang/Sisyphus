@@ -4,6 +4,7 @@ from .agent_execution import AgentExecutionService
 from .agent_launch import AgentLaunchService
 from .agents import AgentManagementService
 from .closeout import CloseoutService
+from .obligations import ObligationConvergenceService
 from .planning import PlanningService
 from .promotion import PromotionService
 from .task_creation import TaskRecordCreationService
@@ -15,6 +16,7 @@ __all__ = [
     "AgentLaunchService",
     "AgentManagementService",
     "CloseoutService",
+    "ObligationConvergenceService",
     "PlanningService",
     "PromotionService",
     "TaskRecordCreationService",
