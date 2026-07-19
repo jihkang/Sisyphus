@@ -163,6 +163,23 @@ class ArchitectureDependencyTests(unittest.TestCase):
             "provider wrapper regained a CLI dependency: " + ", ".join(sorted(forbidden)),
         )
 
+    def test_provider_wrapper_does_not_reabsorb_boundary_mechanics(self) -> None:
+        module = self.modules["sisyphus.provider_wrapper"]
+        tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+        forbidden_modules = {"argparse", "json", "shutil", "subprocess", "tempfile"}
+        actual: set[str] = set()
+        for node in tree.body:
+            if isinstance(node, ast.Import):
+                actual.update(alias.name.split(".", 1)[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                actual.add(node.module.split(".", 1)[0])
+
+        self.assertFalse(
+            actual.intersection(forbidden_modules),
+            "provider wrapper reabsorbed parser/process/receipt mechanics: "
+            + ", ".join(sorted(actual.intersection(forbidden_modules))),
+        )
+
     def test_domain_models_do_not_own_boundary_mapping_methods(self) -> None:
         violations: set[tuple[str, str]] = set()
         for module in self.modules.values():

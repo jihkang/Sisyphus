@@ -55,6 +55,8 @@
 - 2026-07-19: Passed 27 focused Workspace/architecture regressions and the expanded full suite with 583 tests after activating descriptor-relative I/O and extracting Workspace policy.
 - 2026-07-19: Extracted Git and configured-test subprocesses behind infra-local Workspace effect contracts without leaking Git concepts into the application port.
 - 2026-07-19: Added real-adapter, injected-failure, timeout, and invalid-patch classification tests; passed 31 focused regressions and the expanded full suite with 587 tests.
+- 2026-07-19: Split provider wrapper argument parsing into `interfaces/provider_wrapper` and moved launch construction plus receipt finalization/persistence into focused infra adapters while retaining legacy patch points as delegates.
+- 2026-07-19: Added typed parser, launch identity, receipt cleanup/callback, and facade ownership guards; passed 37 focused regressions and the expanded full suite with 592 tests.
 
 ## Notes
 
