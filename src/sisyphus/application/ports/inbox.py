@@ -4,6 +4,8 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, TypeAlias
 
+from ..commands.inbox import QueueConversationCommand, QueuePullRequestMergedCommand
+
 if TYPE_CHECKING:
     from ..results.inbox import DaemonStats
 
@@ -36,12 +38,35 @@ class InboxEventLogPort(Protocol):
     def append(self, entry: Mapping[str, object]) -> None: ...
 
 
+class InboxQueuePort(Protocol):
+    def queue_conversation(
+        self,
+        command: QueueConversationCommand,
+    ) -> tuple[InboxRecord, Path]: ...
+
+    def queue_pull_request_merged(
+        self,
+        command: QueuePullRequestMergedCommand,
+    ) -> tuple[InboxRecord, Path]: ...
+
+
+class InboxProcessingPort(Protocol):
+    def process(
+        self,
+        event_path: Path,
+        *,
+        stats: "DaemonStats | None" = None,
+    ) -> InboxRecord: ...
+
+
 __all__ = [
     "InboxEventHandler",
     "InboxEventLogPort",
     "InboxEventParser",
     "InboxEventProcessor",
     "InboxRecord",
+    "InboxProcessingPort",
+    "InboxQueuePort",
     "InboxRepositoryPort",
     "Sleeper",
     "WorkflowCycle",

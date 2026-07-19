@@ -222,6 +222,29 @@ class ArchitectureDependencyTests(unittest.TestCase):
             + ", ".join(sorted(forbidden)),
         )
 
+    def test_repository_request_surfaces_do_not_reabsorb_root_orchestration(self) -> None:
+        forbidden_by_module = {
+            "sisyphus.api": {
+                "sisyphus.daemon",
+                "sisyphus.state",
+                "sisyphus.workflow",
+            },
+            "sisyphus.interfaces.cli.handlers.ingest": {"sisyphus.api"},
+            "sisyphus.interfaces.mcp.task_tools": {"sisyphus.api"},
+        }
+        forbidden = {
+            (name, dependency)
+            for name, disallowed in forbidden_by_module.items()
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in disallowed
+        }
+
+        self.assertFalse(
+            forbidden,
+            "repository request surfaces regained root orchestration dependencies:\n"
+            + _format_pairs(forbidden),
+        )
+
     def test_infrastructure_does_not_import_config_or_event_facades(self) -> None:
         forbidden: set[tuple[str, str]] = set()
         facade_modules = {"sisyphus.bus", "sisyphus.bus_jsonl", "sisyphus.config"}

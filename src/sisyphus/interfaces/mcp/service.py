@@ -4,7 +4,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from ...artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
-from ...api import execute_promotion, get_task, list_tasks, record_merged_pull_request, request_task
+from ...api import execute_promotion, record_merged_pull_request
 from ...audit import run_verify
 from ...bus_jsonl import read_jsonl_events, resolve_event_bus_path
 from ...closeout import run_close
@@ -38,6 +38,7 @@ from ...retrieval import retrieve_documents
 from ...search_index import read_search_index, rebuild_search_index, search_index_status
 from ...spec_validation import validate_task_spec
 from ...state import load_task_record
+from ...composition.repository_requests import get_task, list_tasks, request_task
 import sisyphus.interfaces.mcp.evolution as evolution_handlers
 import sisyphus.interfaces.mcp.promotion_tools as promotion_tools
 import sisyphus.interfaces.mcp.repo_resources as repo_resources

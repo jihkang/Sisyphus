@@ -12,6 +12,12 @@ from .obligations import (
 )
 from .planning import PlanReviewOutcome, SpecFreezeOutcome, SubtaskGenerationOutcome
 from .promotion import MergeReceiptResult, PromotionExecutionResult
+from .repository_requests import (
+    MergeRecordResult,
+    QueuedConversation,
+    QueuedPullRequestMerge,
+    TaskRequestResult,
+)
 from .task_creation import CreateOutcome
 from .verification import VerificationOutcome
 
@@ -28,9 +34,13 @@ __all__ = [
     "ObligationQueueMaterialization",
     "PlanReviewOutcome",
     "MergeReceiptResult",
+    "MergeRecordResult",
     "PromotionExecutionResult",
     "PromotionMergeReceipt",
+    "QueuedConversation",
+    "QueuedPullRequestMerge",
     "SpecFreezeOutcome",
     "SubtaskGenerationOutcome",
+    "TaskRequestResult",
     "VerificationOutcome",
 ]

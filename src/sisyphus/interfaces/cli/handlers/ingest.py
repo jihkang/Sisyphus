@@ -4,8 +4,11 @@ import json
 from pathlib import Path
 import sys
 
-from ....api import queue_conversation, request_task
-from ....api import queue_pull_request_merged as queue_pull_request_merged_api
+from ....composition.repository_requests import (
+    queue_conversation,
+    queue_pull_request_merged as queue_pull_request_merged_api,
+    request_task,
+)
 from ..parsing import parse_changed_file_json
 
 

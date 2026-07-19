@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from pathlib import Path
 
-from ...api import get_task, list_tasks, request_task
+from ...composition.repository_requests import get_task, list_tasks, request_task
 from ...config import SisyphusConfig
 from ...shared.coerce import optional_str, optional_str_list
 

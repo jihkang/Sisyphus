@@ -11,7 +11,7 @@ from .agent_execution import (
 from .artifacts import ArtifactStorePort
 from .clock import ClockPort
 from .closeout import CloseoutEvidencePort, WorktreeStatusPort
-from .inbox import InboxEventLogPort, InboxRepositoryPort
+from .inbox import InboxEventLogPort, InboxProcessingPort, InboxQueuePort, InboxRepositoryPort
 from .inbox_handlers import (
     ChangeAdoptionPort,
     ConversationAgentPort,
@@ -72,6 +72,8 @@ __all__ = [
     "EvidenceGraphPort",
     "FeatureObligationPort",
     "InboxEventLogPort",
+    "InboxProcessingPort",
+    "InboxQueuePort",
     "InboxRepositoryPort",
     "ManualInterventionPort",
     "ObligationRuntimePort",
