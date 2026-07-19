@@ -17,5 +17,9 @@ class AgentRepository(Protocol):
 
     def save(self, agent: Agent) -> Agent: ...
 
+    def exists(self, task_id: str, agent_id: str) -> bool: ...
+
+    def list(self, *, task_id: str | None = None) -> tuple[Agent, ...]: ...
+
 
 __all__ = ["AgentRepository", "TaskRepository"]

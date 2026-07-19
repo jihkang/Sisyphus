@@ -4,11 +4,13 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess  # Compatibility patch point for existing callers and tests.
 
-from .agents import AgentTrackingError, register_agent, update_agent
+from .agents import AgentTrackingError
 from .application.commands.agent import RunTrackedAgentCommand
 from .application.use_cases.agent_execution import AgentExecutionError
+from .application.use_cases.agents import AgentManagementError
 from .composition.agent_execution import build_agent_execution_service
 from .config import SisyphusConfig
+from .domain.agent import AgentPolicyError
 from .infra.execution import OutputTracker
 
 
@@ -41,9 +43,6 @@ def run_tracked_agent(
         result = build_agent_execution_service(
             repo_root,
             config,
-            register_agent=register_agent,
-            update_agent=update_agent,
-            heartbeat_errors=(AgentTrackingError, FileNotFoundError),
         ).run(
             RunTrackedAgentCommand(
                 task_id=task_id,
@@ -60,7 +59,7 @@ def run_tracked_agent(
                 env=tuple((env or {}).items()),
             )
         )
-    except AgentExecutionError as error:
+    except (AgentExecutionError, AgentManagementError, AgentPolicyError) as error:
         raise AgentTrackingError(str(error)) from error
     return AgentRunOutcome(
         task_id=result.task_id,

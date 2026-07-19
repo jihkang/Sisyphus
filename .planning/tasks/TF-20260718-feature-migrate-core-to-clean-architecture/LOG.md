@@ -35,6 +35,9 @@
 - 2026-07-19: Split tracked Agent execution into an application-owned registration/start/heartbeat/finalization use case and an infra-owned UTF-8 subprocess adapter.
 - 2026-07-19: Preserved command launch, environment merge, output summary, heartbeat failure, interrupt cancellation, process-start failure, and public AgentTrackingError behavior.
 - 2026-07-19: Added failure-injection AgentExecutionService tests and passed the expanded full suite with 561 tests after the Agent process slice.
+- 2026-07-19: Moved Agent ID/status/staleness/timestamp rules into the domain and Agent registration/update/query orchestration into AgentManagementService.
+- 2026-07-19: Reused AgentManagementService directly for tracked execution, deleting the transitional callback adapter instead of retaining redundant abstraction.
+- 2026-07-19: Added unknown agent-field persistence coverage and passed the expanded full suite with 566 tests after the Agent management slice.
 
 ## Notes
 

@@ -2,6 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ...domain.agent import Agent
+
+
+@dataclass(frozen=True, slots=True)
+class AgentView:
+    agent: Agent
+    raw_status: str
+    effective_status: str
+
 
 @dataclass(frozen=True, slots=True)
 class AgentExecutionResult:
@@ -11,4 +20,4 @@ class AgentExecutionResult:
     status: str
 
 
-__all__ = ["AgentExecutionResult"]
+__all__ = ["AgentExecutionResult", "AgentView"]

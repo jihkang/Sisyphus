@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..commands.agent import RunTrackedAgentCommand
+from ...domain.agent import AgentPolicyError
+from ..commands.agent import RegisterAgentCommand, RunTrackedAgentCommand, UpdateAgentCommand
 from ..ports.agent_execution import (
     AgentProcessPort,
-    AgentRegistration,
     AgentTrackingPort,
-    AgentTrackingUpdate,
     ProcessExecutionRequest,
     ProcessStartError,
 )
 from ..results.agent import AgentExecutionResult
+from .agents import AgentManagementError
 
 
 class AgentExecutionError(RuntimeError):
@@ -29,7 +29,7 @@ class AgentExecutionService:
         step = command.current_step or f"running {' '.join(command.command)}"
         initial_summary = command.last_message_summary or f"{command.provider} wrapper started"
         self.tracking.register(
-            AgentRegistration(
+            RegisterAgentCommand(
                 task_id=command.task_id,
                 agent_id=command.agent_id,
                 role=command.role,
@@ -109,9 +109,13 @@ class _TrackingObserver:
         self.tracking.update(self.update(pid=pid, last_message_summary=self.initial_summary))
 
     def heartbeat(self, output_summary: str | None) -> bool:
-        return self.tracking.heartbeat(
-            self.update(last_message_summary=output_summary or self.initial_summary)
-        )
+        try:
+            self.tracking.update(
+                self.update(last_message_summary=output_summary or self.initial_summary)
+            )
+        except (AgentManagementError, AgentPolicyError, FileNotFoundError):
+            return False
+        return True
 
     def update(
         self,
@@ -120,8 +124,8 @@ class _TrackingObserver:
         error: str | None = None,
         last_message_summary: str | None = None,
         pid: int | None = None,
-    ) -> AgentTrackingUpdate:
-        return AgentTrackingUpdate(
+    ) -> UpdateAgentCommand:
+        return UpdateAgentCommand(
             task_id=self.command.task_id,
             agent_id=self.command.agent_id,
             status=status,

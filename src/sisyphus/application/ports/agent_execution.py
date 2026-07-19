@@ -3,34 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from ..commands.agent import RegisterAgentCommand, UpdateAgentCommand
+from ..results.agent import AgentView
+
 
 class ProcessStartError(RuntimeError):
     pass
-
-
-@dataclass(frozen=True, slots=True)
-class AgentRegistration:
-    task_id: str
-    agent_id: str
-    role: str
-    provider: str
-    current_step: str
-    last_message_summary: str
-    owned_paths: tuple[str, ...]
-    command: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class AgentTrackingUpdate:
-    task_id: str
-    agent_id: str
-    status: str | None = None
-    provider: str | None = None
-    command: tuple[str, ...] = ()
-    current_step: str | None = None
-    last_message_summary: str | None = None
-    pid: int | None = None
-    error: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,11 +33,9 @@ class ProcessObserver(Protocol):
 
 
 class AgentTrackingPort(Protocol):
-    def register(self, registration: AgentRegistration) -> None: ...
+    def register(self, command: RegisterAgentCommand) -> AgentView: ...
 
-    def update(self, update: AgentTrackingUpdate) -> None: ...
-
-    def heartbeat(self, update: AgentTrackingUpdate) -> bool: ...
+    def update(self, command: UpdateAgentCommand) -> AgentView: ...
 
 
 class AgentProcessPort(Protocol):
@@ -72,9 +48,7 @@ class AgentProcessPort(Protocol):
 
 __all__ = [
     "AgentProcessPort",
-    "AgentRegistration",
     "AgentTrackingPort",
-    "AgentTrackingUpdate",
     "ProcessExecution",
     "ProcessExecutionRequest",
     "ProcessObserver",

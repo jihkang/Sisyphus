@@ -102,6 +102,34 @@ class ApplicationCompositionTests(unittest.TestCase):
 
             self.assertEqual(restored, agent)
 
+    def test_agent_adapter_preserves_unknown_fields_when_saving_model(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            agent_file = (
+                repo_root / ".planning" / "tasks" / "TF-test" / "agents" / "worker-1.json"
+            )
+            agent_file.parent.mkdir(parents=True)
+            agent_file.write_text(
+                json.dumps(
+                    {
+                        "agent_id": "worker-1",
+                        "parent_task_id": "TF-test",
+                        "role": "worker",
+                        "status": "running",
+                        "future_schema": {"owner": "external"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            repository = JsonAgentRepository(repo_root, ".planning/tasks")
+
+            agent = repository.get("TF-test", "worker-1")
+            repository.save(replace(agent, status="completed"))
+            persisted = json.loads(agent_file.read_text(encoding="utf-8"))
+
+            self.assertEqual(persisted["status"], "completed")
+            self.assertEqual(persisted["future_schema"], {"owner": "external"})
+
     def test_repository_paths_reject_task_and_agent_escape(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)

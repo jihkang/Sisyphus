@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from .agent_execution import (
     AgentProcessPort,
-    AgentRegistration,
     AgentTrackingPort,
-    AgentTrackingUpdate,
     ProcessExecution,
     ProcessExecutionRequest,
     ProcessObserver,
@@ -40,10 +38,8 @@ from .workflow import (
 
 __all__ = [
     "AgentProcessPort",
-    "AgentRegistration",
     "AgentRepository",
     "AgentTrackingPort",
-    "AgentTrackingUpdate",
     "ArtifactStorePort",
     "ClockPort",
     "CloseoutPort",

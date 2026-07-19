@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ...domain.agent.models import Agent
 from ...domain.task.models import Task
-from ...shared.paths import contained_path
+from ...shared.paths import agent_dir, contained_path
 from .agent_mapper import AGENT_RECORD_MAPPER
 from .json_store import locked_json_update, read_json_file
 from .record_mapper import RecordEnvelope
@@ -79,6 +79,30 @@ class JsonAgentRepository:
 
         locked_json_update(agent_file, update, default_factory=dict)
         return agent
+
+    def exists(self, task_id: str, agent_id: str) -> bool:
+        return self._agent_file(task_id, agent_id).is_file()
+
+    def list(self, *, task_id: str | None = None) -> tuple[Agent, ...]:
+        if task_id is not None:
+            paths = sorted(agent_dir(self._repo_root, self._task_dir_name, task_id).glob("*.json"))
+        else:
+            tasks_root = contained_path(
+                self._repo_root,
+                self._task_dir_name,
+                require_relative=True,
+            )
+            paths = sorted(tasks_root.glob("*/agents/*.json")) if tasks_root.exists() else []
+        agents: list[Agent] = []
+        for path in paths:
+            try:
+                raw = read_json_file(path)
+                if not isinstance(raw, Mapping):
+                    continue
+                agents.append(AGENT_RECORD_MAPPER.decode(raw).model)
+            except (OSError, ValueError):
+                continue
+        return tuple(agents)
 
     def _agent_file(self, task_id: str, agent_id: str) -> Path:
         tasks_root = contained_path(

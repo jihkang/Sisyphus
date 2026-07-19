@@ -23,22 +23,15 @@ from sisyphus.application.use_cases.agent_execution import (  # noqa: E402
 
 
 class TrackingFake:
-    def __init__(self, *, heartbeat_ok: bool = True) -> None:
-        self.heartbeat_ok = heartbeat_ok
+    def __init__(self) -> None:
         self.registrations = []
         self.updates = []
-        self.heartbeats = []
 
     def register(self, registration) -> None:
         self.registrations.append(registration)
 
     def update(self, update) -> None:
         self.updates.append(update)
-
-    def heartbeat(self, update) -> bool:
-        self.heartbeats.append(update)
-        return self.heartbeat_ok
-
 
 class ProcessFake:
     def __init__(
@@ -72,7 +65,7 @@ class AgentExecutionApplicationTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(tracking.registrations[0].current_step, "running python -m worker")
         self.assertEqual(tracking.updates[0].pid, 4242)
-        self.assertEqual(tracking.heartbeats[0].last_message_summary, "working")
+        self.assertEqual(tracking.updates[1].last_message_summary, "working")
         self.assertEqual(tracking.updates[-1].status, "completed")
         self.assertEqual(tracking.updates[-1].last_message_summary, "done")
         self.assertEqual(process.requests[0].env, (("TOKEN", "value"),))
