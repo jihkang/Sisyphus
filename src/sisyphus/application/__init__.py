@@ -3,6 +3,7 @@ from __future__ import annotations
 from .services import AgentQueryService, LifecycleApplicationService, TaskQueryService
 from .use_cases import (
     AgentExecutionService,
+    AgentLaunchService,
     AgentManagementService,
     PlanningService,
     PromotionService,
@@ -12,6 +13,7 @@ from .use_cases import (
 
 __all__ = [
     "AgentExecutionService",
+    "AgentLaunchService",
     "AgentManagementService",
     "AgentQueryService",
     "LifecycleApplicationService",

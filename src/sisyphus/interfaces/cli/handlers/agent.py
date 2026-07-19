@@ -4,10 +4,19 @@ from pathlib import Path
 import json
 import sys
 
-from ....agent_runtime import run_tracked_agent
-from ....agents import AgentTrackingError, list_agents, register_agent, update_agent
+from ....application.commands.agent import (
+    RegisterAgentCommand,
+    RunTrackedAgentCommand,
+    UpdateAgentCommand,
+)
+from ....application.use_cases.agent_launch import AgentLaunchError
+from ....application.use_cases.agents import AgentManagementError
+from ....composition.agents import build_agent_management_service
+from ....composition.agent_launch import build_agent_launch_service
 from ....config import SisyphusConfig
-from ....planning import enforce_plan_approved, enforce_spec_frozen
+from ....domain.agent import AgentPolicyError
+from ...agent_presenter import present_agent
+from ...agent_queries import list_agents
 
 
 def handle_agents(
@@ -70,21 +79,22 @@ def handle_agent_start(
     owned_paths: list[str] | None,
 ) -> int:
     try:
-        agent = register_agent(
-            repo_root=repo_root,
-            config=config,
-            task_id=task_id,
-            agent_id=agent_id,
-            role=role,
-            provider=provider,
-            current_step=step,
-            last_message_summary=summary,
-            owned_paths=owned_paths,
-            status=status,
+        view = build_agent_management_service(repo_root, config).register(
+            RegisterAgentCommand(
+                task_id=task_id,
+                agent_id=agent_id,
+                role=role,
+                provider=provider,
+                current_step=step,
+                last_message_summary=summary,
+                owned_paths=tuple(owned_paths or ()),
+                status=status,
+            )
         )
-    except (AgentTrackingError, FileNotFoundError) as exc:
+    except (AgentManagementError, AgentPolicyError, FileNotFoundError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    agent = present_agent(view)
 
     print(f"agent {agent['agent_id']}")
     print(f"task: {agent['parent_task_id']}")
@@ -108,23 +118,24 @@ def handle_agent_update(
     error: str | None,
 ) -> int:
     try:
-        agent = update_agent(
-            repo_root=repo_root,
-            config=config,
-            task_id=task_id,
-            agent_id=agent_id,
-            status=status,
-            provider=provider,
-            current_step=step,
-            last_message_summary=summary,
-            owned_paths=owned_paths,
-            command=command,
-            pid=pid,
-            error=error,
+        view = build_agent_management_service(repo_root, config).update(
+            UpdateAgentCommand(
+                task_id=task_id,
+                agent_id=agent_id,
+                status=status,
+                provider=provider,
+                current_step=step,
+                last_message_summary=summary,
+                owned_paths=tuple(owned_paths) if owned_paths is not None else None,
+                command=tuple(command) if command is not None else None,
+                pid=pid,
+                error=error,
+            )
         )
-    except (AgentTrackingError, FileNotFoundError) as exc:
+    except (AgentManagementError, AgentPolicyError, FileNotFoundError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    agent = present_agent(view)
 
     print(f"agent {agent['agent_id']}")
     print(f"task: {agent['parent_task_id']}")
@@ -176,47 +187,24 @@ def handle_agent_run(
 ) -> int:
     if command and command[0] == "--":
         command = command[1:]
-    if role == "worker":
-        approved, task = enforce_plan_approved(
-            repo_root=repo_root,
-            config=config,
-            task_id=task_id,
-            action="execution",
-        )
-        if not approved:
-            plan_gates = [gate for gate in task.get("gates", []) if gate.get("source") == "plan"]
-            message = plan_gates[0]["message"] if plan_gates else "task plan approval required before execution"
-            print(f"error: {message}", file=sys.stderr)
-            return 1
-        frozen, task = enforce_spec_frozen(
-            repo_root=repo_root,
-            config=config,
-            task_id=task_id,
-            action="execution",
-        )
-        if not frozen:
-            spec_gates = [gate for gate in task.get("gates", []) if gate.get("source") == "spec"]
-            message = spec_gates[0]["message"] if spec_gates else "task spec must be frozen before execution"
-            print(f"error: {message}", file=sys.stderr)
-            return 1
     try:
-        outcome = run_tracked_agent(
-            repo_root=repo_root,
-            config=config,
-            task_id=task_id,
-            agent_id=agent_id,
-            role=role,
-            provider=provider,
-            command=command,
-            current_step=step,
-            last_message_summary=summary,
-            owned_paths=owned_paths,
-            heartbeat_seconds=heartbeat_seconds,
-            run_cwd=repo_root,
-            stdin_text=stdin_text,
-            env=env,
+        outcome = build_agent_launch_service(repo_root, config).run(
+            RunTrackedAgentCommand(
+                task_id=task_id,
+                agent_id=agent_id,
+                role=role,
+                provider=provider,
+                command=tuple(command),
+                current_step=step,
+                last_message_summary=summary,
+                owned_paths=tuple(owned_paths or ()),
+                heartbeat_seconds=heartbeat_seconds,
+                run_cwd=str(repo_root),
+                stdin_text=stdin_text,
+                env=tuple((env or {}).items()),
+            )
         )
-    except (AgentTrackingError, FileNotFoundError) as exc:
+    except (AgentLaunchError, FileNotFoundError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

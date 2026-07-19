@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import urlparse
 
-from ...agents import list_agents
 from ...artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
 from ...api import execute_promotion, get_task, list_tasks, record_merged_pull_request, request_task
 from ...audit import run_verify
@@ -46,6 +45,7 @@ import sisyphus.interfaces.mcp.search_tools as search_tools
 import sisyphus.interfaces.mcp.task_resources as task_resources
 import sisyphus.interfaces.mcp.task_tools as task_tools
 import sisyphus.interfaces.mcp.workflow_tools as workflow_tools
+from ..agent_queries import list_agents
 from .registry import tool_group_for
 from .resources import mcp_resource_definitions
 from .schemas import _mcp_schema_markdown

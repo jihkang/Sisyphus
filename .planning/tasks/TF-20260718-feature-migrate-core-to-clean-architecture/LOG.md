@@ -38,6 +38,9 @@
 - 2026-07-19: Moved Agent ID/status/staleness/timestamp rules into the domain and Agent registration/update/query orchestration into AgentManagementService.
 - 2026-07-19: Reused AgentManagementService directly for tracked execution, deleting the transitional callback adapter instead of retaining redundant abstraction.
 - 2026-07-19: Added unknown agent-field persistence coverage and passed the expanded full suite with 566 tests after the Agent management slice.
+- 2026-07-19: Moved worker plan/spec authorization into AgentLaunchService and reduced the CLI Agent handler to command adaptation and presentation.
+- 2026-07-19: Rewired CLI and MCP Agent reads/writes through AgentManagementService while preserving the existing MCP function-injection signatures.
+- 2026-07-19: Added Agent launch gate-order tests and passed the expanded full suite with 570 tests after the Agent interface slice.
 
 ## Notes
 

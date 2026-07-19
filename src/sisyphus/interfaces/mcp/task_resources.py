@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 import json
 
-from ...agents import list_agents
 from ...artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
 from ...config import SisyphusConfig
 from ...conformance import ensure_task_conformance_defaults, summarize_subtask_conformance, summarize_task_conformance
@@ -12,6 +11,7 @@ from ...observation import build_task_observation
 from ...promotion_state import promotion_summary
 from ...state import load_task_record
 from ...spec_validation import spec_validation_resource_payload
+from ..agent_queries import list_agents
 
 
 def read_task_resource(

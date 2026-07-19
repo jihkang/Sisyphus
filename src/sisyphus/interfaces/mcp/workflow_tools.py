@@ -3,7 +3,6 @@ from __future__ import annotations
 from types import MappingProxyType
 from pathlib import Path
 
-from ...agents import list_agents
 from ...audit import run_verify
 from ...closeout import run_close
 from ...config import SisyphusConfig
@@ -17,6 +16,7 @@ from ...planning import (
 )
 from ...shared.coerce import optional_str
 from ...spec_validation import validate_task_spec
+from ..agent_queries import list_agents
 
 
 def _plan_approve(

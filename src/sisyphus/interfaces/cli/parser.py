@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 
-from ...agents import AGENT_STATUSES, DEFAULT_STALE_AFTER_SECONDS
+from ...domain.agent import AGENT_STATUSES, DEFAULT_STALE_AFTER_SECONDS
 from ...dataset_export import DATASET_FORMATS
 from ...providers.local_openai import LOCAL_OPENAI_PROVIDERS
 
