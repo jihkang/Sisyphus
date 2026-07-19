@@ -183,6 +183,7 @@ without making domain entities a second schema authority.
 Concrete effects are isolated in infrastructure:
 
 - locked atomic JSON replacement with file and directory fsync
+- bounded, descriptor-relative support-file mirroring into task worktrees
 - descriptor-relative no-follow workspace reads and writes
 - path containment and symlink rejection
 - bounded subprocess output, process-group timeout, and strict command parsing
@@ -228,6 +229,8 @@ authority are recorded in
 
 The remaining implementation and release work is tracked in
 [clean-architecture-implementation-debt.md](./clean-architecture-implementation-debt.md).
+The migration review is recorded in
+[clean-architecture-final-review-2026-07-20.md](./reviews/clean-architecture-final-review-2026-07-20.md).
 
 ## Scope Boundary
 

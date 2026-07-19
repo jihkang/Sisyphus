@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import subprocess
 import sys
 import tempfile
@@ -13,9 +13,10 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from sisyphus.infra.workspace.effects import PatchExecution
-from sisyphus.infra.workspace.errors import WorkspaceGitError
+from sisyphus.infra.workspace.errors import WorkspaceFileSafetyError, WorkspaceGitError
 from sisyphus.infra.workspace.executor import WorkspaceExecutor
 from sisyphus.infra.workspace.git import SubprocessWorkspaceGit
+from sisyphus.infra.workspace.secure_files import SecureWorkspaceFiles
 from sisyphus.infra.workspace.test_runner import SubprocessWorkspaceTests
 
 
@@ -61,6 +62,25 @@ class WorkspaceEffectTests(unittest.TestCase):
         self.assertEqual(set(adapter.repository_files()), {"app.py", "new.txt"})
         self.assertIn("app.py", adapter.status())
         self.assertIn("app.py", adapter.diff_stat())
+
+    def test_secure_file_primitive_rejects_unvalidated_escape_paths(self) -> None:
+        outside = self.root.parent / f"{self.root.name}-outside.txt"
+        outside.write_text("outside\n", encoding="utf-8")
+        self.addCleanup(outside.unlink)
+        files = SecureWorkspaceFiles(self.root)
+
+        for relative in (
+            PurePosixPath("../") / outside.name,
+            PurePosixPath(outside.as_posix()),
+        ):
+            with self.subTest(relative=relative), self.assertRaises(WorkspaceFileSafetyError):
+                files.read_text(relative, max_bytes=1024)
+            with self.subTest(relative=relative), self.assertRaises(WorkspaceFileSafetyError):
+                files.write_text_atomic(relative, "overwritten\n")
+            with self.subTest(relative=relative), self.assertRaises(WorkspaceFileSafetyError):
+                files.reject_existing_symlinks(relative)
+
+        self.assertEqual(outside.read_text(encoding="utf-8"), "outside\n")
 
     def test_invalid_patch_remains_an_execution_failure(self) -> None:
         executor = WorkspaceExecutor(

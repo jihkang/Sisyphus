@@ -419,6 +419,8 @@ close, or promote canonical state.
 
 - repository-relative paths are normalized and checked for containment
 - descriptor-relative workspace files reject symlink traversal and leaf swaps
+- task support-file mirrors reject unsafe document paths and use bounded,
+  descriptor-relative no-follow reads plus atomic target replacement
 - Git patch application compares tree hashes before and after execution
 - artifact and evolution stores reject unsafe IDs and symlinked targets
 - inbound parsers enforce exact scalar/container types, limits, and JSON budgets

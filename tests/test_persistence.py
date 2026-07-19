@@ -91,6 +91,75 @@ class PersistenceSafetyTests(unittest.TestCase):
             save_task_record(task_file, task)
             self.assertTrue(mirrored_task.exists())
 
+    def test_task_support_sync_rejects_document_path_traversal(self) -> None:
+        from sisyphus.infra.persistence.task_repository import sync_task_support_files
+        from sisyphus.shared.paths import PathBoundaryError
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            repo_root = root / "repo"
+            worktree_root = root / "worktree"
+            task_dir = repo_root / ".planning" / "tasks" / "TF-1"
+            task_dir.mkdir(parents=True)
+            worktree_root.mkdir()
+            (task_dir / "task.json").write_text("{}\n", encoding="utf-8")
+            task = _task_record(repo_root, "TF-1")
+            task["worktree_path"] = str(worktree_root)
+            task["docs"] = {"plan": "../../../../outside.txt"}
+
+            with self.assertRaises(PathBoundaryError):
+                sync_task_support_files(task)
+
+            self.assertFalse((root / "outside.txt").exists())
+
+    def test_task_support_sync_rejects_target_directory_symlink(self) -> None:
+        from sisyphus.infra.persistence.task_repository import sync_task_support_files
+        from sisyphus.infra.workspace.errors import WorkspaceFileSafetyError
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            repo_root = root / "repo"
+            worktree_root = root / "worktree"
+            outside = root / "outside"
+            task_dir = repo_root / ".planning" / "tasks" / "TF-1"
+            task_dir.mkdir(parents=True)
+            worktree_root.mkdir()
+            outside.mkdir()
+            (task_dir / "task.json").write_text("{}\n", encoding="utf-8")
+            (worktree_root / ".planning").symlink_to(outside, target_is_directory=True)
+            task = _task_record(repo_root, "TF-1")
+            task["worktree_path"] = str(worktree_root)
+
+            with self.assertRaises(WorkspaceFileSafetyError):
+                sync_task_support_files(task)
+
+            self.assertFalse((outside / "tasks" / "TF-1" / "task.json").exists())
+
+    def test_task_support_sync_rejects_source_file_symlink(self) -> None:
+        from sisyphus.infra.persistence.task_repository import sync_task_support_files
+        from sisyphus.infra.workspace.errors import WorkspaceFileSafetyError
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            repo_root = root / "repo"
+            worktree_root = root / "worktree"
+            task_dir = repo_root / ".planning" / "tasks" / "TF-1"
+            task_dir.mkdir(parents=True)
+            worktree_root.mkdir()
+            (task_dir / "task.json").write_text("{}\n", encoding="utf-8")
+            secret = root / "secret.txt"
+            secret.write_text("do not mirror\n", encoding="utf-8")
+            (task_dir / "PLAN.md").symlink_to(secret)
+            task = _task_record(repo_root, "TF-1")
+            task["worktree_path"] = str(worktree_root)
+            task["docs"] = {"plan": "PLAN.md"}
+
+            with self.assertRaises(WorkspaceFileSafetyError):
+                sync_task_support_files(task)
+
+            mirrored_plan = worktree_root / ".planning" / "tasks" / "TF-1" / "PLAN.md"
+            self.assertFalse(mirrored_plan.exists())
+
     def test_agent_save_rejects_stale_loaded_record(self) -> None:
         from sisyphus.infra.persistence.agent_repository import (
             ConcurrentAgentUpdateError,

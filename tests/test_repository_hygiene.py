@@ -16,6 +16,7 @@ DOCUMENTS = (
     PROJECT_ROOT / "docs" / "runtime-relationship-diagrams.md",
     PROJECT_ROOT / "docs" / "clean-architecture-implementation-debt.md",
     PROJECT_ROOT / "docs" / "adr" / "0001-clean-architecture-boundaries.md",
+    PROJECT_ROOT / "docs" / "reviews" / "clean-architecture-final-review-2026-07-20.md",
 )
 MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 

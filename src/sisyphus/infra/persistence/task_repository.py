@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from ...domain.promotion.state import ensure_task_promotion_defaults
 from ...domain.task.conformance import default_task_conformance, ensure_task_conformance_defaults
@@ -10,7 +10,8 @@ from ...domain.lifecycle import normalize_terminal_lifecycle_state
 from ...domain.task.models import default_task_docs
 from ...domain.task.strategy import sync_test_strategy_from_content
 from ...shared.clock import utc_now
-from ...shared.paths import task_dir
+from ...shared.paths import PathBoundaryError, task_dir
+from ..workspace.secure_files import SecureWorkspaceFiles
 from .json_store import locked_json_update, read_json_file
 from .task_mapper import TASK_RECORD_MAPPER
 
@@ -20,6 +21,7 @@ class ConcurrentTaskUpdateError(RuntimeError):
 
 
 _LOADED_TASK_MTIMES: dict[int, tuple[Path, int]] = {}
+_MAX_TASK_SUPPORT_FILE_BYTES = 16 * 1024 * 1024
 
 
 def load_task_record(repo_root: Path, task_dir_name: str, task_id: str) -> tuple[dict, Path]:
@@ -189,24 +191,38 @@ def normalize_task_projection(
 def sync_task_support_files(task: dict) -> None:
     repo_root = Path(str(task.get("repo_root", "")))
     worktree_path = Path(str(task.get("worktree_path", "")))
-    task_dir_value = task.get("task_dir")
+    task_dir_value = str(task.get("task_dir") or "").strip()
     if not task_dir_value or not repo_root.is_dir() or not worktree_path.is_dir():
         return
 
-    source_task_dir = repo_root / str(task_dir_value)
-    target_task_dir = worktree_path / str(task_dir_value)
-    if not source_task_dir.exists():
+    task_dir_relative = _support_relative_path(task_dir_value)
+    source_task_dir = repo_root.joinpath(*task_dir_relative.parts)
+    if not source_task_dir.is_dir():
         return
 
-    target_task_dir.mkdir(parents=True, exist_ok=True)
+    source_files = SecureWorkspaceFiles(repo_root)
+    target_files = SecureWorkspaceFiles(worktree_path)
     relative_paths = ["task.json", *[str(path) for path in task.get("docs", {}).values() if path]]
     for relative_path in relative_paths:
-        source_path = source_task_dir / relative_path
-        if not source_path.exists():
+        support_path = task_dir_relative / _support_relative_path(relative_path)
+        try:
+            content = source_files.read_text(
+                support_path,
+                max_bytes=_MAX_TASK_SUPPORT_FILE_BYTES,
+            )
+        except FileNotFoundError:
             continue
-        target_path = target_task_dir / relative_path
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+        target_files.write_text_atomic(support_path, content)
+
+
+def _support_relative_path(value: str) -> PurePosixPath:
+    normalized = str(value).strip()
+    if not normalized or normalized.startswith("/") or "\\" in normalized or "\x00" in normalized:
+        raise PathBoundaryError(f"task support path must use relative POSIX syntax: {value}")
+    parts = normalized.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise PathBoundaryError(f"task support path contains unsafe traversal: {value}")
+    return PurePosixPath(*parts)
 
 
 def _remember_loaded_mtime(task: dict, task_file: Path) -> None:

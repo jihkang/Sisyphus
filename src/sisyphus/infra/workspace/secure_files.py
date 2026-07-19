@@ -46,6 +46,7 @@ class SecureWorkspaceFiles:
         ) and bool(getattr(os, "O_NOFOLLOW", 0))
 
     def read_text(self, relative: PurePosixPath, *, max_bytes: int) -> str:
+        relative = _validated_relative_path(relative)
         if self._dir_fd_supported:
             data = self._read_bytes_at(relative, max_bytes=max_bytes)
         else:
@@ -53,12 +54,14 @@ class SecureWorkspaceFiles:
         return data.decode("utf-8")
 
     def write_text_atomic(self, relative: PurePosixPath, content: str) -> bool:
+        relative = _validated_relative_path(relative)
         payload = content.encode("utf-8")
         if self._dir_fd_supported:
             return self._write_bytes_at(relative, payload)
         return self._write_bytes_fallback(relative, payload)
 
     def reject_existing_symlinks(self, relative: PurePosixPath) -> None:
+        relative = _validated_relative_path(relative)
         current = self.root
         for part in relative.parts:
             if part == ".":
@@ -494,6 +497,20 @@ def _read_bounded(file_fd: int, *, max_bytes: int, relative: PurePosixPath) -> b
             f"file exceeds workspace read limit of {max_bytes} bytes: {relative.as_posix()}"
         )
     return data
+
+
+def _validated_relative_path(relative: PurePosixPath) -> PurePosixPath:
+    if not isinstance(relative, PurePosixPath):
+        raise TypeError("workspace path must be a PurePosixPath")
+    if relative.is_absolute() or not relative.parts:
+        raise WorkspaceFileSafetyError(
+            f"workspace path must identify a relative file: {relative.as_posix()}"
+        )
+    if any(part == ".." or "\\" in part or "\x00" in part for part in relative.parts):
+        raise WorkspaceFileSafetyError(
+            f"workspace path contains unsafe traversal: {relative.as_posix()}"
+        )
+    return relative
 
 
 def _write_all(file_fd: int, payload: bytes) -> None:
