@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import inspect
 import json
 import os
 from pathlib import Path
@@ -11,7 +12,10 @@ import sys
 import tempfile
 
 from .agents import AgentTrackingError, update_agent
+from .application.commands.agent import RunTrackedAgentCommand
+from .application.use_cases.agent_launch import AgentLaunchError
 from .codex_prompt import build_codex_prompt, build_local_worker_prompt
+from .composition.agent_launch import build_agent_launch_service
 from .config import load_config
 from .discovery import detect_repo_root
 from .infra.providers.conversation import run_legacy_conversation
@@ -39,8 +43,6 @@ class ProviderLaunch:
 
 
 def run_provider_wrapper(provider: str, argv: list[str], *, repo_root: Path | None = None) -> int:
-    from .cli import handle_agent_run
-
     repo_root = repo_root or detect_repo_root(Path.cwd())
     config = load_config(repo_root)
     normalized_argv = _normalize_wrapper_argv(argv)
@@ -103,7 +105,7 @@ def run_provider_wrapper(provider: str, argv: list[str], *, repo_root: Path | No
         command = launch.command
 
     effective_provider = launch.effective_provider if launch else provider
-    exit_code = handle_agent_run(
+    exit_code = _agent_runner_override()(
         task_id=args.task_id,
         agent_id=args.agent_id,
         role=args.role,
@@ -128,6 +130,66 @@ def run_provider_wrapper(provider: str, argv: list[str], *, repo_root: Path | No
         receipt_path=launch.receipt_path if launch else None,
         workdir=launch.workdir if launch else repo_root,
     )
+
+
+def _agent_runner_override():
+    """Honor an explicit public CLI override without depending on CLI in normal execution."""
+    for module_name in ("sisyphus.cli", "sisyphus.interfaces.cli.app"):
+        module = sys.modules.get(module_name)
+        candidate = getattr(module, "handle_agent_run", None) if module is not None else None
+        if candidate is None:
+            continue
+        if not (
+            inspect.isfunction(candidate)
+            and candidate.__module__ == "sisyphus.interfaces.cli.app"
+            and candidate.__name__ == "handle_agent_run"
+        ):
+            return candidate
+    return _run_agent_application
+
+
+def _run_agent_application(
+    *,
+    task_id: str,
+    agent_id: str,
+    role: str,
+    provider: str,
+    step: str | None,
+    summary: str | None,
+    owned_paths: list[str] | None,
+    heartbeat_seconds: int,
+    command: list[str],
+    stdin_text: str | None = None,
+    env: dict[str, str] | None = None,
+    repo_root: str | Path | None = None,
+) -> int:
+    resolved_root = detect_repo_root(Path(repo_root).resolve()) if repo_root else detect_repo_root(Path.cwd())
+    config = load_config(resolved_root)
+    try:
+        outcome = build_agent_launch_service(resolved_root, config).run(
+            RunTrackedAgentCommand(
+                task_id=task_id,
+                agent_id=agent_id,
+                role=role,
+                provider=provider,
+                command=tuple(command),
+                current_step=step,
+                last_message_summary=summary,
+                owned_paths=tuple(owned_paths or ()),
+                heartbeat_seconds=heartbeat_seconds,
+                run_cwd=str(resolved_root),
+                stdin_text=stdin_text,
+                env=tuple((env or {}).items()),
+            )
+        )
+    except (AgentLaunchError, FileNotFoundError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    print(f"agent {outcome.agent_id}")
+    print(f"task: {outcome.task_id}")
+    print(f"status: {outcome.status}")
+    print(f"exit_code: {outcome.exit_code}")
+    return outcome.exit_code
 
 
 def _run_conversation_mode(

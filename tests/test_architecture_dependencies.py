@@ -105,6 +105,20 @@ class ArchitectureDependencyTests(unittest.TestCase):
             "planning and lifecycle modules formed their previous import cycle",
         )
 
+    def test_provider_wrapper_does_not_depend_on_cli(self) -> None:
+        module = self.modules["sisyphus.provider_wrapper"]
+        forbidden = {
+            dependency
+            for dependency in _declared_imports(module)
+            if dependency in {"sisyphus.cli", "sisyphus.interfaces.cli"}
+            or dependency.startswith("sisyphus.interfaces.cli.")
+        }
+
+        self.assertFalse(
+            forbidden,
+            "provider wrapper regained a CLI dependency: " + ", ".join(sorted(forbidden)),
+        )
+
     def test_domain_models_do_not_own_boundary_mapping_methods(self) -> None:
         violations: set[tuple[str, str]] = set()
         for module in self.modules.values():

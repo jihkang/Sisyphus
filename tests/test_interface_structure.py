@@ -86,6 +86,15 @@ class InterfaceStructureTests(unittest.TestCase):
             public_promotion._run_gh = original_public_run_gh
             service._run_gh = original_service_run_gh
 
+    def test_provider_wrapper_uses_application_path_and_honors_explicit_cli_override(self) -> None:
+        import sisyphus.cli as cli
+        import sisyphus.provider_wrapper as wrapper
+
+        self.assertIs(wrapper._agent_runner_override(), wrapper._run_agent_application)
+        replacement = mock.Mock(return_value=0)
+        with mock.patch.object(cli, "handle_agent_run", replacement):
+            self.assertIs(wrapper._agent_runner_override(), replacement)
+
     def test_cli_public_parser_comes_from_parser_module(self) -> None:
         import sisyphus.cli as cli
         from sisyphus.interfaces.cli import parser

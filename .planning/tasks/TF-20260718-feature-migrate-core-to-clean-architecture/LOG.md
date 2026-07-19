@@ -41,6 +41,9 @@
 - 2026-07-19: Moved worker plan/spec authorization into AgentLaunchService and reduced the CLI Agent handler to command adaptation and presentation.
 - 2026-07-19: Rewired CLI and MCP Agent reads/writes through AgentManagementService while preserving the existing MCP function-injection signatures.
 - 2026-07-19: Added Agent launch gate-order tests and passed the expanded full suite with 570 tests after the Agent interface slice.
+- 2026-07-19: Removed the Provider wrapper's normal CLI reverse dependency; provider launches now invoke AgentLaunchService directly.
+- 2026-07-19: Retained explicit public CLI runner overrides as a compatibility hook and added an architecture regression test prohibiting Provider-to-CLI imports.
+- 2026-07-19: Passed the expanded full suite with 572 tests after the Provider launch rewiring slice.
 
 ## Notes
 
