@@ -18,6 +18,9 @@
 - 2026-07-19: Replaced Inbox model serialization methods with a strict interface parser and centralized record mapper.
 - 2026-07-19: Removed all domain outward dependencies and all static internal import cycles; architecture tests now enforce both without allowlists.
 - 2026-07-19: Passed the expanded full suite with 535 tests after the second migration slice.
+- 2026-07-19: Replaced workflow's direct side-effect imports with an application use case and explicit task, planning, obligation, conformance, provider, verification, closeout, event, and intervention ports.
+- 2026-07-19: Preserved the public workflow facade and provider-runner patch point through bootstrap composition.
+- 2026-07-19: Passed the expanded full suite with 542 tests after the workflow application slice.
 
 ## Notes
 
