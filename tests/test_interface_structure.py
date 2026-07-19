@@ -35,6 +35,12 @@ class InterfaceStructureTests(unittest.TestCase):
         self.assertIs(public_state.save_task_record, repository.save_task_record)
         self.assertIs(public_state.sync_task_support_files, repository.sync_task_support_files)
 
+    def test_common_task_record_adapter_preserves_canonical_identity(self) -> None:
+        from sisyphus.infra.orchestration import common_adapters
+        from sisyphus.infra.persistence.task_records import FileTaskRecordAdapter
+
+        self.assertIs(common_adapters.FileTaskRecordAdapter, FileTaskRecordAdapter)
+
     def test_legacy_domain_task_repository_is_an_identity_preserving_shim(self) -> None:
         from sisyphus.domain.task import repository as legacy
         from sisyphus.infra.persistence import task_repository as canonical

@@ -37,6 +37,7 @@ separation, and real 30.5B model evidence, is not part of this repository migrat
 | Provider wrapper responsibilities | Completed | Typed parsing lives in `interfaces/provider_wrapper`; launch construction and receipt finalization/persistence are separate infra modules; the public wrapper retains only dispatch, application launch, and compatibility delegates |
 | Event publishing | Completed | Canonical noop/JSONL publishers live in `infra/events`; JSONL append uses descriptor locking, identity-preserving public facades, file and creation-directory fsync, atomic create detection, and no-follow leaf opens |
 | Verification/artifact document writes | Completed | Verification documents delegate to the canonical atomic `RepositoryArtifactStore`; infra imports the canonical config loader instead of the public config facade |
+| Task-record creation boundary | Completed | `CreateTaskRecordCommand`, `TaskRecordCreationService`, and the composition root own construction and persistence ordering; `state.py` delegates creation and preserves identity-compatible repository exports |
 
 ## Accepted Domain Dependency Exceptions
 
@@ -60,7 +61,6 @@ change.
 
 | ID | Priority | Boundary and current evidence | Required end state | Verification gate |
 | --- | --- | --- | --- | --- |
-| CA-01 | High | `state.py` still combines task construction, directory creation, concrete persistence selection, and public compatibility | Move create/load/list/update coordination behind application commands and queries; leave `state.py` as a delegating facade | Task creation and legacy record fixtures remain byte/shape compatible; facade contains no branching business logic |
 | CA-02 | High | Narrow residual: file reads/writes, domain completion policy, and Git/test subprocess effects are separated, but patch materialization still delegates to `git apply`, which cannot use the descriptor-relative file adapter | Give patch application an explicit containment and postcondition contract, then retain `providers/workspace.py` only for its documented compatibility window | Patch application proves only declared contained regular files changed; traversal, symlink, resolve/open race, patch-mode, mutation-order, timeout, output-bound, and effect failure-injection tests pass |
 | CA-04 | High | `daemon.py` is 902 lines and `creation.py`/`closeout.py` still coordinate queue, task state, worktrees, providers, verification, events, and promotion through root modules | Introduce application use cases for creation, daemon event handling, and closeout with narrow repository/effect ports; keep side-effect order explicit | Event replay, retry, gate, partial-failure, close, and end-to-end workflow characterization tests pass |
 | CA-05 | High | CLI and MCP handlers still import root implementations such as `state`, `planning`, `audit`, `closeout`, `creation`, and `daemon` | Route handlers through application command/query services assembled by composition roots; interfaces retain only adaptation, dispatch, trace, and rendering | CLI help/exit/output and MCP tools/resources/schema/trace fixtures remain identical; interfaces have no implementation imports |
@@ -74,7 +74,7 @@ change.
 ## Execution Order
 
 1. Complete the residual Workspace patch contract and Verifier, prompt, receipt, evidence, and conformance adapter dependencies.
-2. Move creation, daemon processing, and closeout orchestration into application use cases.
+2. Move full worktree creation, daemon processing, and closeout orchestration into application use cases.
 3. Rewire CLI and MCP to application commands and queries.
 4. Restrict Evolve to read/evaluation/append-only ports and add authority tests.
 5. Consolidate serialization only where golden wire contracts prove equivalence.

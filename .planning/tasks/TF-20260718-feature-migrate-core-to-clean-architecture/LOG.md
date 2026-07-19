@@ -60,6 +60,8 @@
 - 2026-07-19: Moved noop/JSONL event publishing into `infra/events`, removed infra dependencies on public config/event facades, and routed verification document writes through the atomic artifact store.
 - 2026-07-19: Replaced sidecar event read locks after the full suite exposed read-only Evolution mutations; descriptor locking, `O_EXCL`, `O_NOFOLLOW`, file/directory fsync, and read-only regressions now pass.
 - 2026-07-19: Passed 59 focused event/artifact/persistence/interface/architecture regressions and the expanded full suite with 597 tests.
+- 2026-07-19: Moved task-record construction and save ordering behind `CreateTaskRecordCommand`, `TaskRecordCreationService`, and a dedicated composition root while preserving the public `state.py` surface.
+- 2026-07-19: Relocated the file task-record adapter to canonical persistence ownership, added application/facade/identity contracts, and passed the expanded full suite with 600 tests.
 
 ## Notes
 
@@ -70,6 +72,6 @@
 
 ## Follow-ups
 
-- Execute the ordered debt ledger in `docs/clean-architecture-implementation-debt.md`, beginning with the remaining Workspace Git/test effects and other effect adapters.
+- Execute the ordered debt ledger in `docs/clean-architecture-implementation-debt.md`, beginning with the residual Workspace patch contract and remaining verifier/prompt/receipt/evidence adapters.
 - Isolate Evolve candidate generation from Control-owned approval, signing, active-policy, and queue authority.
 - Rewire remaining CLI/MCP consumers, validate architecture documentation, then run final package and merged-main verification.

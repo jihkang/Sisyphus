@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ...application.commands.task import CreateTaskRecordCommand
 from ...conformance import default_task_conformance
 from ...design import default_task_design
 from ...gitops import branch_name, worktree_path
@@ -101,7 +102,23 @@ def build_task_record(
     }
 
 
+class RepositoryTaskFactoryAdapter:
+    def __init__(self, repo_root: Path, config: SisyphusConfig) -> None:
+        self._repo_root = repo_root
+        self._config = config
+
+    def build(self, command: CreateTaskRecordCommand) -> dict[str, object]:
+        return build_task_record(
+            repo_root=self._repo_root,
+            config=self._config,
+            task_type=command.task_type,
+            slug=command.slug,
+            spec_validation_required=command.spec_validation_required,
+        )
+
+
 __all__ = [
+    "RepositoryTaskFactoryAdapter",
     "build_task_record",
     "task_id_for",
 ]
