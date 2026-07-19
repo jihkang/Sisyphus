@@ -13,6 +13,7 @@ if str(SRC_ROOT) not in sys.path:
 
 
 from sisyphus.application.use_cases.planning import PlanningService  # noqa: E402
+from sisyphus.application.results.planning import SpecValidationOutcome  # noqa: E402
 from sisyphus.infra.orchestration.planning_adapters import DesignConformanceAdapter  # noqa: E402
 
 
@@ -53,6 +54,18 @@ class ValidationFake:
     def __init__(self, gates_by_action: dict[str, tuple[dict, ...]] | None = None) -> None:
         self.gates_by_action = gates_by_action or {}
         self.calls: list[tuple[str, bool, bool]] = []
+        self.validate_calls: list[tuple[str, bool]] = []
+
+    def validate(self, task_id: str, *, persist: bool = True) -> SpecValidationOutcome:
+        self.validate_calls.append((task_id, persist))
+        return SpecValidationOutcome(
+            task_id=task_id,
+            status="passed",
+            stale=False,
+            report={"status": "passed"},
+            report_path=Path("/task/artifacts/spec-validation/latest.json"),
+            gates=[],
+        )
 
     def collect_gates(
         self,
@@ -91,6 +104,14 @@ class FixedClock:
 
 
 class PlanningApplicationTests(unittest.TestCase):
+    def test_validate_spec_delegates_persistence_choice_to_validation_port(self) -> None:
+        service, dependencies = _service(_task())
+
+        outcome = service.validate_spec("TF-1", persist=False)
+
+        self.assertEqual(outcome.status, "passed")
+        self.assertEqual(dependencies["validation"].validate_calls, [("TF-1", False)])
+
     def test_approve_plan_synchronizes_documents_and_requests_spec_freeze(self) -> None:
         service, dependencies = _service(_task())
 

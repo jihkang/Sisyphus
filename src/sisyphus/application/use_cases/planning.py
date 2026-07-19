@@ -16,7 +16,12 @@ from ..planning_records import (
 from ..ports.clock import ClockPort
 from ..ports.planning import DesignConformancePort, PlanningDocumentPort, SpecValidationPort
 from ..ports.workflow import ManualInterventionPort, TaskRecord, TaskRecordPort
-from ..results.planning import PlanReviewOutcome, SpecFreezeOutcome, SubtaskGenerationOutcome
+from ..results.planning import (
+    PlanReviewOutcome,
+    SpecFreezeOutcome,
+    SpecValidationOutcome,
+    SubtaskGenerationOutcome,
+)
 
 
 PLAN_PENDING_REVIEW = PlanStatus.PENDING_REVIEW.value
@@ -37,6 +42,14 @@ class PlanningService:
     design_conformance: DesignConformancePort
     interventions: ManualInterventionPort
     clock: ClockPort
+
+    def validate_spec(
+        self,
+        task_id: str,
+        *,
+        persist: bool = True,
+    ) -> SpecValidationOutcome:
+        return self.validation.validate(task_id, persist=persist)
 
     def approve_plan(
         self,

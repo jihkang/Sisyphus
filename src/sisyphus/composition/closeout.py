@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..application.results.closeout import CloseOutcome
 from ..application.use_cases.closeout import CloseoutService
 from ..infra.clock import SystemClock
 from ..infra.closeout import (
@@ -35,4 +36,16 @@ def build_closeout_service(
     )
 
 
-__all__ = ["build_closeout_service"]
+def close_task(
+    repo_root: Path,
+    config: SisyphusConfig,
+    task_id: str,
+    allow_dirty: bool,
+) -> CloseOutcome:
+    return build_closeout_service(repo_root, config).close(
+        task_id,
+        allow_dirty=allow_dirty,
+    )
+
+
+__all__ = ["build_closeout_service", "close_task"]

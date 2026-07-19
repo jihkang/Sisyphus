@@ -4,13 +4,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from ...artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
-from ...api import execute_promotion, record_merged_pull_request
-from ...audit import run_verify
 from ...bus_jsonl import read_jsonl_events, resolve_event_bus_path
-from ...closeout import run_close
+from ...composition.closeout import close_task as run_close
+from ...composition.runtime import run_daemon
 from ...config import load_config
 from ...context_pack import build_and_persist_context_pack, read_context_pack
-from ...daemon import run_daemon
 from ...episode_trace import append_episode_step, build_episode_step, default_episode_id, next_episode_step
 from ...evolution.operator import (
     evaluate_evolution_followup_decision,
@@ -25,20 +23,27 @@ from ...evolution.surface import (
     render_evolution_run_report,
     render_evolution_run_status,
 )
-from ...planning import (
+from ...composition.planning import (
     approve_task_plan,
     freeze_task_spec,
     generate_subtasks,
     request_plan_changes,
     revise_task_plan,
+    validate_task_spec,
 )
 from ...metrics import build_value_metrics_report
 from ...observation import build_task_observation
 from ...retrieval import retrieve_documents
 from ...search_index import read_search_index, rebuild_search_index, search_index_status
-from ...spec_validation import validate_task_spec
-from ...state import load_task_record
-from ...composition.repository_requests import get_task, list_tasks, request_task
+from ...composition.repository_requests import (
+    get_task,
+    list_tasks,
+    load_task_record_with_path as load_task_record,
+    request_task,
+)
+from ...composition.repository_requests import record_merged_pull_request
+from ...composition.repository_promotion import execute_promotion
+from ...composition.verification import verify_task as run_verify
 import sisyphus.interfaces.mcp.evolution as evolution_handlers
 import sisyphus.interfaces.mcp.promotion_tools as promotion_tools
 import sisyphus.interfaces.mcp.repo_resources as repo_resources
@@ -91,7 +96,7 @@ class SisyphusMcpCoreService:
         try:
             state_before, task_file = load_task_record(
                 repo_root=self.repo_root,
-                task_dir_name=task_dir_name,
+                config=config,
                 task_id=task_id,
             )
             task_dir = task_file.parent
@@ -116,7 +121,7 @@ class SisyphusMcpCoreService:
             try:
                 state_after, _ = load_task_record(
                     repo_root=self.repo_root,
-                    task_dir_name=task_dir_name,
+                    config=config,
                     task_id=task_id,
                 )
             except FileNotFoundError:

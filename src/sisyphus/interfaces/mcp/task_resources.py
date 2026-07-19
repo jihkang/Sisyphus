@@ -3,14 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 import json
 
+from ...application.conformance_records import (
+    summarize_subtask_conformance,
+    summarize_task_conformance,
+)
 from ...artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
 from ...config import SisyphusConfig
-from ...conformance import ensure_task_conformance_defaults, summarize_subtask_conformance, summarize_task_conformance
+from ...composition.repository_requests import load_task_record_with_path
+from ...composition.resource_queries import build_spec_validation_resource
+from ...domain.promotion.state import promotion_summary
+from ...domain.task.conformance import ensure_task_conformance_defaults
 from ...evidence_graph import evidence_resource_payload
 from ...observation import build_task_observation
-from ...promotion_state import promotion_summary
-from ...state import load_task_record
-from ...spec_validation import spec_validation_resource_payload
 from ..agent_queries import list_agents
 
 
@@ -19,7 +23,7 @@ def read_task_resource(
     repo_root: Path,
     config: SisyphusConfig,
     parsed,
-    load_record=load_task_record,
+    load_record=load_task_record_with_path,
     list_agents_fn=list_agents,
     is_artifact_resource=is_feature_task_artifact_resource,
     read_artifact_resource=read_feature_task_artifact_resource,
@@ -28,7 +32,7 @@ def read_task_resource(
 ) -> dict[str, object] | str:
     task_id = parsed.netloc
     resource_name = parsed.path.lstrip("/")
-    task, task_file = load_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+    task, task_file = load_record(repo_root=repo_root, config=config, task_id=task_id)
     task_dir = task_file.parent
 
     if resource_name == "record":
@@ -42,7 +46,7 @@ def read_task_resource(
     if resource_name == "timeline":
         return _task_timeline_resource(task)
     if resource_name == "spec-validation":
-        return spec_validation_resource_payload(task, task_dir)
+        return build_spec_validation_resource(task, task_dir)
     if resource_name == "promotion":
         doc_path = task_dir / str(task["docs"].get("promotion"))
         if not doc_path.exists():

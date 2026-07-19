@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 import hashlib
 import json
@@ -11,6 +10,7 @@ from ...application.contracts.spec_validation import (
     SPEC_VALIDATION_SOURCES,
 )
 from ...application.planning_records import dedupe_gate_records, make_gate_record
+from ...application.results.planning import SpecValidationOutcome
 from ...domain.task.design import ensure_task_design_defaults
 from ...shared.clock import utc_now
 from ..config.loader import SisyphusConfig
@@ -80,16 +80,6 @@ PLACEHOLDER_PREFIXES = {
     "inspect the current code path related to:",
     "implement the requested behavior for:",
 }
-
-
-@dataclass(slots=True)
-class SpecValidationOutcome:
-    task_id: str
-    status: str
-    stale: bool
-    report: dict[str, object]
-    report_path: Path
-    gates: list[dict]
 
 
 def validate_task_spec(

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
+import sisyphus.promotion as promotion_facade
+from .application.results.repository_promotion import RepositoryPromotionExecutionResult
 from .application.results.repository_requests import (
     MergeRecordResult,
     QueuedConversation,
@@ -18,26 +19,8 @@ from .composition.repository_requests import (
     record_merged_pull_request as record_repository_pull_request_merge,
     request_task as request_repository_task,
 )
-from .config import SisyphusConfig, load_config
-from .promotion import execute_promotion as run_promotion_execution
-
-
-@dataclass(slots=True)
-class RepositoryPromotionExecutionResult:
-    task_id: str | None
-    status: str | None
-    branch: str | None
-    base_branch: str | None
-    head_branch: str | None
-    commit_sha: str | None
-    pr_number: int | None
-    pr_url: str | None
-    receipt_path: Path | None
-    error: str | None
-
-    @property
-    def ok(self) -> bool:
-        return self.error is None and self.task_id is not None
+from .config import SisyphusConfig
+from .composition.repository_promotion import execute_promotion as execute_repository_promotion
 
 
 def queue_conversation(
@@ -214,46 +197,19 @@ def execute_promotion(
     head_branch: str | None = None,
     draft: bool = True,
 ) -> RepositoryPromotionExecutionResult:
-    effective_config = config or load_config(repo_root)
-    try:
-        outcome = run_promotion_execution(
-            repo_root=repo_root,
-            config=effective_config,
-            task_id=task_id,
-            remote_name=remote_name,
-            repo_full_name=repo_full_name,
-            title=title,
-            body=body,
-            commit_message=commit_message,
-            base_branch=base_branch,
-            head_branch=head_branch,
-            draft=draft,
-        )
-    except Exception as exc:
-        return RepositoryPromotionExecutionResult(
-            task_id=task_id,
-            status=None,
-            branch=None,
-            base_branch=None,
-            head_branch=None,
-            commit_sha=None,
-            pr_number=None,
-            pr_url=None,
-            receipt_path=None,
-            error=str(exc),
-        )
-
-    return RepositoryPromotionExecutionResult(
-        task_id=outcome.task_id,
-        status=outcome.status,
-        branch=outcome.branch,
-        base_branch=outcome.base_branch,
-        head_branch=outcome.head_branch,
-        commit_sha=outcome.commit_sha,
-        pr_number=outcome.pr_number,
-        pr_url=outcome.pr_url,
-        receipt_path=outcome.receipt_path,
-        error=None,
+    return execute_repository_promotion(
+        repo_root,
+        config=config,
+        task_id=task_id,
+        remote_name=remote_name,
+        repo_full_name=repo_full_name,
+        title=title,
+        body=body,
+        commit_message=commit_message,
+        base_branch=base_branch,
+        head_branch=head_branch,
+        draft=draft,
+        gh_runner=promotion_facade._run_gh,
     )
 
 

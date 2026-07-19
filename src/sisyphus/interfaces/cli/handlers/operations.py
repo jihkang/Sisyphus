@@ -7,6 +7,7 @@ import sys
 
 from ....benchmark import BenchmarkFixtureError, default_benchmark_fixture_dir, render_benchmark_markdown, run_benchmark_suite
 from ....config import SisyphusConfig
+from ....composition.repository_requests import load_task_record_with_path
 from ....dataset_export import export_dataset
 from ....episode_trace import check_episode_trace, read_episode_steps
 from ....eval.loop import run_task_eval_loop
@@ -23,7 +24,6 @@ from ....providers.local_openai import (
     is_local_openai_provider,
     parse_local_provider_args,
 )
-from ....state import load_task_record
 from ....test_first import evaluate_test_first_loop
 
 
@@ -65,7 +65,7 @@ def handle_episode_check(
     episode_id: str | None,
     as_json: bool,
 ) -> int:
-    _task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+    _task, task_file = load_task_record_with_path(repo_root, config, task_id)
     summary = check_episode_trace(task_file.parent, task_id=task_id, episode_id=episode_id)
     if as_json:
         print(json.dumps(summary, indent=2))
@@ -133,7 +133,7 @@ def handle_eval_test_first(
     episode_id: str | None,
     as_json: bool,
 ) -> int:
-    _task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+    _task, task_file = load_task_record_with_path(repo_root, config, task_id)
     steps = read_episode_steps(task_file.parent, episode_id=episode_id)
     evaluation = evaluate_test_first_loop(steps)
     payload = {

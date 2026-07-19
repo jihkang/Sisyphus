@@ -82,6 +82,25 @@ class GithubCliPullRequestAdapter:
         return pull_request_url
 
 
+def run_gh(
+    repo_root: Path,
+    args: list[str],
+    *,
+    error_prefix: str,
+) -> subprocess.CompletedProcess[str]:
+    completed = subprocess.run(
+        ["gh", *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode == 0:
+        return completed
+    message = (completed.stderr or completed.stdout or "").strip() or "gh command failed"
+    raise GitOperationError(f"{error_prefix}: {message}")
+
+
 def _extract_pull_request_url(output: str | None) -> str | None:
     if not output:
         return None
@@ -89,4 +108,9 @@ def _extract_pull_request_url(output: str | None) -> str | None:
     return match.group(0) if match else None
 
 
-__all__ = ["GhRunner", "GitVersionControlAdapter", "GithubCliPullRequestAdapter"]
+__all__ = [
+    "GhRunner",
+    "GitVersionControlAdapter",
+    "GithubCliPullRequestAdapter",
+    "run_gh",
+]

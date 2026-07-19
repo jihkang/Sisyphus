@@ -9,7 +9,11 @@ from ...application.ports.workflow import TaskRecord
 from ...shared.paths import task_dir as resolve_task_dir
 from ..config.loader import SisyphusConfig
 from ..documents.task_strategy import sync_test_strategy_from_docs
-from ..validation.spec_validation import collect_spec_validation_gates, spec_validation_required
+from ..validation.spec_validation import (
+    collect_spec_validation_gates,
+    spec_validation_required,
+    validate_task_spec,
+)
 
 
 class PlanningDocumentAdapter:
@@ -26,6 +30,14 @@ class SpecValidationAdapter:
     def __init__(self, repo_root: Path, config: SisyphusConfig) -> None:
         self._repo_root = repo_root
         self._config = config
+
+    def validate(self, task_id: str, *, persist: bool = True):
+        return validate_task_spec(
+            repo_root=self._repo_root,
+            config=self._config,
+            task_id=task_id,
+            persist=persist,
+        )
 
     def required(self, task_id: str, task: TaskRecord) -> bool:
         directory = resolve_task_dir(self._repo_root, self._config.task_dir, task_id)

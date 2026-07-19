@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-import time
 
+from .application.results.service_runtime import ServiceStepResult, TaskNotification
+from .composition.service_runtime import (
+    run_service as run_repository_service,
+    run_service_step as run_repository_service_step,
+)
 from .config import SisyphusConfig
-from .daemon import DaemonStats, run_daemon
+from .interfaces.conformance_presenter import (
+    extract_conformance_summary,
+    format_conformance_summary,
+    summarize_subtask_conformance,
+)
 from .promotion_state import promotion_status_summary
-from .state import list_task_records
 
 
 @dataclass(slots=True)
@@ -17,31 +24,6 @@ class TaskSnapshot:
     task_conformance: str | None = None
     subtask_conformance: str | None = None
     subtasks: tuple[tuple[str, object, str | None], ...] = ()
-
-
-@dataclass(slots=True)
-class TaskNotification:
-    task_id: str
-    summary: str
-    source_context: dict[str, object]
-
-
-@dataclass(slots=True)
-class ServiceStepResult:
-    stats: DaemonStats
-    notifications: list[TaskNotification] = field(default_factory=list)
-
-    @property
-    def progressed(self) -> bool:
-        return any(
-            (
-                self.stats.processed,
-                self.stats.failed,
-                self.stats.skipped,
-                self.stats.orchestrated,
-                self.notifications,
-            )
-        )
 
 
 class TaskNotificationTracker:
@@ -84,21 +66,12 @@ def run_service_step(
     tracker: TaskNotificationTracker | None = None,
     max_events: int | None = None,
 ) -> ServiceStepResult:
-    stats = run_daemon(
-        repo_root=repo_root,
-        config=config,
-        once=True,
-        poll_interval_seconds=1,
+    return run_repository_service_step(
+        repo_root,
+        config,
+        tracker=tracker,
         max_events=max_events,
     )
-    notifications: list[TaskNotification] = []
-    if tracker is not None:
-        tasks = sorted(
-            list_task_records(repo_root=repo_root, task_dir_name=config.task_dir),
-            key=lambda task: task.get("updated_at", ""),
-        )
-        notifications = tracker.collect(tasks)
-    return ServiceStepResult(stats=stats, notifications=notifications)
 
 
 def run_service(
@@ -109,13 +82,13 @@ def run_service(
     tracker: TaskNotificationTracker | None = None,
     notifier: Callable[[TaskNotification], None] | None = None,
 ) -> None:
-    while True:
-        result = run_service_step(repo_root=repo_root, config=config, tracker=tracker)
-        if notifier is not None:
-            for notification in result.notifications:
-                notifier(notification)
-        if not result.progressed:
-            time.sleep(max(poll_interval_seconds, 1))
+    run_repository_service(
+        repo_root,
+        config,
+        poll_interval_seconds=poll_interval_seconds,
+        tracker=tracker,
+        notifier=notifier,
+    )
 
 
 def build_task_update_summary(task: dict, previous_snapshot: TaskSnapshot | None = None) -> str:
@@ -186,81 +159,6 @@ def _task_snapshot(task: dict) -> TaskSnapshot:
         subtask_conformance=summarize_subtask_conformance(task),
         subtasks=subtasks,
     )
-
-
-def extract_conformance_summary(entity: dict) -> dict[str, object] | None:
-    conformance = entity.get("conformance")
-    if not isinstance(conformance, dict):
-        meta = entity.get("meta")
-        if isinstance(meta, dict):
-            conformance = meta.get("conformance")
-    if not isinstance(conformance, dict):
-        return None
-
-    summary: dict[str, object] = {}
-    aliases: dict[str, tuple[str, ...]] = {
-        "status": ("status", "color"),
-        "last_spec_anchor_at": ("last_spec_anchor_at", "spec_anchor_at", "anchored_at"),
-        "last_checkpoint_type": ("last_checkpoint_type", "checkpoint_type", "checkpoint"),
-        "drift_count": ("drift_count", "drifts", "drift"),
-        "summary": ("summary", "last_summary", "message"),
-    }
-    for target_key, candidate_keys in aliases.items():
-        for candidate_key in candidate_keys:
-            value = conformance.get(candidate_key)
-            if value not in (None, ""):
-                summary[target_key] = value
-                break
-    if not summary:
-        return None
-    return summary
-
-
-def format_conformance_summary(summary: dict[str, object] | None) -> str | None:
-    if not summary:
-        return None
-    parts: list[str] = []
-    status = summary.get("status")
-    if status not in (None, ""):
-        parts.append(str(status))
-    anchor = summary.get("last_spec_anchor_at")
-    if anchor not in (None, ""):
-        parts.append(f"anchor={anchor}")
-    checkpoint = summary.get("last_checkpoint_type")
-    if checkpoint not in (None, ""):
-        parts.append(f"checkpoint={checkpoint}")
-    drift_count = summary.get("drift_count")
-    if drift_count not in (None, ""):
-        parts.append(f"drift={drift_count}")
-    note = summary.get("summary")
-    if note not in (None, ""):
-        parts.append(f"note={note}")
-    return " ".join(parts)
-
-
-def summarize_subtask_conformance(task: dict) -> str | None:
-    subtasks = task.get("subtasks")
-    if not isinstance(subtasks, list):
-        return None
-    counts: dict[str, int] = {}
-    for subtask in subtasks:
-        if not isinstance(subtask, dict):
-            continue
-        summary = extract_conformance_summary(subtask)
-        if summary is None:
-            continue
-        status = str(summary.get("status") or "unknown").lower()
-        counts[status] = counts.get(status, 0) + 1
-    if not counts:
-        return None
-    order = ("green", "yellow", "red", "unknown")
-    parts = [f"{status}:{counts[status]}" for status in order if counts.get(status)]
-    parts.extend(
-        f"{status}:{count}"
-        for status, count in sorted(counts.items())
-        if status not in order
-    )
-    return " ".join(parts)
 
 
 def _format_transition(previous: str | None, current: str | None, label: str) -> str | None:

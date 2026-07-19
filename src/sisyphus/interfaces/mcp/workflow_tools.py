@@ -3,19 +3,19 @@ from __future__ import annotations
 from types import MappingProxyType
 from pathlib import Path
 
-from ...audit import run_verify
-from ...closeout import run_close
+from ...composition.closeout import close_task as run_close
+from ...composition.runtime import run_daemon
+from ...composition.verification import verify_task as run_verify
 from ...config import SisyphusConfig
-from ...daemon import run_daemon
-from ...planning import (
+from ...composition.planning import (
     approve_task_plan,
     freeze_task_spec,
     generate_subtasks,
     request_plan_changes,
     revise_task_plan,
+    validate_task_spec,
 )
 from ...shared.coerce import optional_str
-from ...spec_validation import validate_task_spec
 from ..agent_queries import list_agents
 
 

@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
+from ....application.use_cases.task_creation import TaskCreationError
+from ....composition.runtime import create_task_workspace, run_daemon
+from ....composition.service_runtime import run_service
 from ....config import SisyphusConfig
-from ....creation import TaskCreationError, create_task_workspace
-from ....daemon import run_daemon
-from ....service import run_service
 
 
 def handle_new(*, repo_root: Path, config: SisyphusConfig, task_type: str, slug: str) -> int:

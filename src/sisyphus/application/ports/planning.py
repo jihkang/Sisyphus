@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from ..results.planning import SpecValidationOutcome
 from .workflow import TaskRecord
 
 
@@ -10,6 +11,8 @@ class PlanningDocumentPort(Protocol):
 
 
 class SpecValidationPort(Protocol):
+    def validate(self, task_id: str, *, persist: bool = True) -> SpecValidationOutcome: ...
+
     def required(self, task_id: str, task: TaskRecord) -> bool: ...
 
     def collect_gates(

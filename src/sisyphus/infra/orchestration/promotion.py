@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import subprocess
 
 from ...application.commands.promotion import ExecutePromotionCommand, RecordMergedPullRequestCommand
 from ...application.use_cases.promotion import (
@@ -14,6 +13,7 @@ from ...domain.promotion import PromotionBaseResolution
 from ...gitops import GitOperationError
 from ...shared.paths import contained_path, task_dir as resolve_task_dir
 from ..config.loader import SisyphusConfig
+from ..promotion import run_gh
 
 
 @dataclass(slots=True)
@@ -176,23 +176,7 @@ def record_merged_pull_request(
     )
 
 
-def _run_gh(
-    repo_root: Path,
-    args: list[str],
-    *,
-    error_prefix: str,
-) -> subprocess.CompletedProcess[str]:
-    completed = subprocess.run(
-        ["gh", *args],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode == 0:
-        return completed
-    message = (completed.stderr or completed.stdout or "").strip() or "gh command failed"
-    raise GitOperationError(f"{error_prefix}: {message}")
+_run_gh = run_gh
 
 
 def _artifact_path(

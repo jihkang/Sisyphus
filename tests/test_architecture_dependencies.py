@@ -245,6 +245,67 @@ class ArchitectureDependencyTests(unittest.TestCase):
             + _format_pairs(forbidden),
         )
 
+    def test_migrated_command_interfaces_do_not_reabsorb_root_facades(self) -> None:
+        forbidden_by_module = {
+            "sisyphus.interfaces.cli.handlers.planning": {
+                "sisyphus.planning",
+                "sisyphus.spec_validation",
+            },
+            "sisyphus.interfaces.cli.handlers.runtime": {
+                "sisyphus.creation",
+                "sisyphus.daemon",
+                "sisyphus.service",
+            },
+            "sisyphus.interfaces.cli.handlers.status": {
+                "sisyphus.agents",
+                "sisyphus.service",
+                "sisyphus.state",
+            },
+            "sisyphus.interfaces.cli.handlers.verification": {
+                "sisyphus.audit",
+                "sisyphus.closeout",
+            },
+            "sisyphus.interfaces.cli.renderers": {"sisyphus.service"},
+            "sisyphus.interfaces.mcp.promotion_tools": {"sisyphus.api"},
+            "sisyphus.interfaces.mcp.workflow_tools": {
+                "sisyphus.audit",
+                "sisyphus.closeout",
+                "sisyphus.daemon",
+                "sisyphus.planning",
+                "sisyphus.spec_validation",
+            },
+            "sisyphus.interfaces.mcp.service": {
+                "sisyphus.api",
+                "sisyphus.audit",
+                "sisyphus.closeout",
+                "sisyphus.daemon",
+                "sisyphus.planning",
+                "sisyphus.spec_validation",
+            },
+        }
+        forbidden = {
+            (name, dependency)
+            for name, disallowed in forbidden_by_module.items()
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in disallowed
+        }
+
+        self.assertFalse(
+            forbidden,
+            "migrated command interfaces regained root facade dependencies:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_service_facade_does_not_reabsorb_daemon_or_task_persistence(self) -> None:
+        dependencies = _declared_imports(self.modules["sisyphus.service"])
+        forbidden = dependencies.intersection({"sisyphus.daemon", "sisyphus.state"})
+
+        self.assertFalse(
+            forbidden,
+            "service facade regained daemon/task persistence orchestration: "
+            + ", ".join(sorted(forbidden)),
+        )
+
     def test_infrastructure_does_not_import_config_or_event_facades(self) -> None:
         forbidden: set[tuple[str, str]] = set()
         facade_modules = {"sisyphus.bus", "sisyphus.bus_jsonl", "sisyphus.config"}

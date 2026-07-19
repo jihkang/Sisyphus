@@ -13,6 +13,7 @@ from .obligations import ObligationConvergenceService
 from .planning import PlanningService
 from .promotion import PromotionService
 from .repository_requests import RepositoryRequestService, TaskRecordQueryService
+from .service_runtime import ServiceRuntime
 from .task_creation import TaskCreationError, TaskRecordCreationService, TaskWorkspaceCreationService
 from .verification import VerificationService
 from .workflow import WorkflowService
@@ -31,6 +32,7 @@ __all__ = [
     "PlanningService",
     "PromotionService",
     "RepositoryRequestService",
+    "ServiceRuntime",
     "PullRequestMergedEventService",
     "TaskRecordCreationService",
     "TaskRecordQueryService",

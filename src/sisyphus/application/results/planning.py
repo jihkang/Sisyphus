@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(slots=True)
@@ -26,4 +27,19 @@ class SubtaskGenerationOutcome:
     subtasks: list[dict]
 
 
-__all__ = ["PlanReviewOutcome", "SpecFreezeOutcome", "SubtaskGenerationOutcome"]
+@dataclass(slots=True)
+class SpecValidationOutcome:
+    task_id: str
+    status: str
+    stale: bool
+    report: dict[str, object]
+    report_path: Path
+    gates: list[dict]
+
+
+__all__ = [
+    "PlanReviewOutcome",
+    "SpecFreezeOutcome",
+    "SpecValidationOutcome",
+    "SubtaskGenerationOutcome",
+]

@@ -18,6 +18,7 @@ from ..infra.daemon import new_event_id
 from ..infra.orchestration.workflow import run_workflow_cycle
 from ..infra.persistence.task_records import FileTaskRecordAdapter
 from ..shared.paths import inbox_failed_dir, inbox_processed_dir
+from ..shared.paths import task_dir as resolve_task_dir
 from .daemon import build_repository_inbox_processing_service
 from .inbox import build_inbox_queue_service
 
@@ -217,6 +218,15 @@ def list_tasks(
     return build_task_record_query_service(repo_root, config).list()
 
 
+def load_task_record_with_path(
+    repo_root: Path,
+    config: SisyphusConfig,
+    task_id: str,
+) -> tuple[dict[str, object], Path]:
+    task = build_task_record_query_service(repo_root, config).get(task_id)
+    return task, resolve_task_dir(repo_root, config.task_dir, task_id) / "task.json"
+
+
 def _processed_event_path(repo_root: Path, event_id: str, status: str) -> Path:
     filename = f"{event_id}.json"
     return (
@@ -241,6 +251,7 @@ __all__ = [
     "build_task_record_query_service",
     "get_task",
     "list_tasks",
+    "load_task_record_with_path",
     "queue_conversation",
     "queue_pull_request_merged",
     "record_merged_pull_request",

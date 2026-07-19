@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ....agents import list_agents
+from ....composition.repository_requests import list_tasks
 from ....config import SisyphusConfig
-from ....service import (
+from ...agent_queries import list_agents
+from ...conformance_presenter import (
     extract_conformance_summary,
     format_conformance_summary,
     summarize_subtask_conformance,
 )
-from ....state import list_task_records
 from ..renderers import project_task_for_status_output
 
 
@@ -24,7 +24,7 @@ def handle_status(
     show_agents: bool,
     stale_after_seconds: int,
 ) -> int:
-    tasks = list_task_records(repo_root=repo_root, task_dir_name=config.task_dir)
+    tasks = list_tasks(repo_root, config=config)
 
     if only_open:
         tasks = [task for task in tasks if task.get("status") in {"open", "in_progress"}]
