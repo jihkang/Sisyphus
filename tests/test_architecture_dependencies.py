@@ -218,6 +218,31 @@ class ArchitectureDependencyTests(unittest.TestCase):
             "verification/lifecycle adapters import public facades:\n" + _format_pairs(forbidden),
         )
 
+    def test_provider_launch_and_receipt_adapters_do_not_import_public_facades(self) -> None:
+        source_modules = {
+            "sisyphus.infra.providers.launch",
+            "sisyphus.infra.providers.local_config",
+            "sisyphus.infra.providers.receipt_schema",
+            "sisyphus.infra.providers.receipts",
+        }
+        forbidden_prefixes = (
+            "sisyphus.codex_prompt",
+            "sisyphus.providers",
+            "sisyphus.state",
+        )
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency.startswith(forbidden_prefixes)
+        }
+
+        self.assertFalse(
+            forbidden,
+            "provider launch/receipt adapters import public facades:\n"
+            + _format_pairs(forbidden),
+        )
+
     def test_domain_models_do_not_own_boundary_mapping_methods(self) -> None:
         violations: set[tuple[str, str]] = set()
         for module in self.modules.values():

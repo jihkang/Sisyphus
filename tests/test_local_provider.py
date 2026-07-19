@@ -653,7 +653,9 @@ class LocalCodingAgentTests(unittest.TestCase):
         self.assertEqual(result.action_count, 5)
         self.assertTrue(result.completion_facts["completion_ready"])
         self.assertEqual(result.completion_facts["changed_files"], ["app.py"])
-        self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8"))["status"], "completed")
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        self.assertEqual(receipt["status"], "completed")
+        self.assertRegex(receipt["receipt_digest"], r"^sha256:[0-9a-f]{64}$")
 
     def test_compaction_is_automatic_and_retains_structured_state(self) -> None:
         client = ScriptedClient(

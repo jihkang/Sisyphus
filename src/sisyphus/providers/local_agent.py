@@ -5,11 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import re
-import tempfile
 from typing import Protocol
 
 from ..application.ports.workspace import SUPPORTED_WORKSPACE_ACTIONS, WorkspacePort
 from ..events import utc_now
+from ..infra.providers.receipt_schema import sign_local_agent_receipt
+from ..infra.persistence.json_store import write_json_file
 
 
 LOCAL_AGENT_SCHEMA_VERSION = "sisyphus.local_agent_run.v1"
@@ -44,6 +45,7 @@ class LocalAgentRunResult:
     summary: str
     error: str | None
     observation_hash: str | None
+    request_digest: str | None
     started_at: str
     finished_at: str
     action_count: int
@@ -61,6 +63,7 @@ class LocalAgentRunResult:
             "summary": self.summary,
             "error": self.error,
             "observation_hash": self.observation_hash,
+            "request_digest": self.request_digest,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "action_count": self.action_count,
@@ -84,12 +87,14 @@ class LocalCodingAgent:
         executor: WorkspacePort,
         receipt_path: Path | None = None,
         observation_hash: str | None = None,
+        request_digest: str | None = None,
     ) -> None:
         self.config = config
         self.client = client
         self.executor = executor
         self.receipt_path = receipt_path
         self.observation_hash = observation_hash
+        self.request_digest = request_digest
         self._events: list[dict[str, object]] = []
         self._compaction_count = 0
         self._last_compacted_event_count = 0
@@ -229,6 +234,7 @@ class LocalCodingAgent:
             summary=summary,
             error=error,
             observation_hash=self.observation_hash,
+            request_digest=self.request_digest,
             started_at=started_at,
             finished_at=utc_now(),
             action_count=action_count,
@@ -361,18 +367,7 @@ def _bounded(value: str, limit: int) -> str:
 
 
 def _write_receipt(path: Path, result: LocalAgentRunResult) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        delete=False,
-    ) as handle:
-        json.dump(result.to_dict(), handle, indent=2, sort_keys=True)
-        handle.write("\n")
-        temp_path = Path(handle.name)
-    temp_path.replace(path)
+    write_json_file(path, sign_local_agent_receipt(result.to_dict()))
 
 
 __all__ = [

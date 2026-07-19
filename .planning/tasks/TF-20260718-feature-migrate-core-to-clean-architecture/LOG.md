@@ -67,6 +67,9 @@
 - 2026-07-19: Replaced unbounded verification subprocess calls with a strict single-line command parser, process-group timeout, bounded output tail, and typed duration/timeout receipts while retaining shell command compatibility.
 - 2026-07-19: Moved conformance entry mutation into the task domain and evidence graph construction behind `VerificationEvidencePort`; verification/lifecycle adapters no longer import public conformance, evidence, gate, promotion-state, or state facades.
 - 2026-07-19: Added timeout, output-bound, early-EOF, evidence parity, clock injection, and architecture regressions and passed the expanded full suite with 611 tests.
+- 2026-07-19: Extracted canonical local-provider config, validation, availability, and worker-command construction; provider launch now receives prompt builders and no longer imports public prompt/provider facades.
+- 2026-07-19: Bound new local-agent receipts to stable request and receipt digests, added a bounded no-follow strict parser plus atomic persistence, and retained digest-less v1 fixture compatibility through explicit parsing rules.
+- 2026-07-19: Injected episode recording at composition, added identity/tamper/symlink/request-binding regressions, and passed the expanded full suite with 617 tests.
 
 ## Notes
 
@@ -77,6 +80,6 @@
 
 ## Follow-ups
 
-- Execute the ordered debt ledger in `docs/clean-architecture-implementation-debt.md`, beginning with the remaining prompt/receipt/workflow/spec-validation adapters.
+- Execute the ordered debt ledger in `docs/clean-architecture-implementation-debt.md`, beginning with the remaining workflow/planning/spec-validation adapters and full creation/daemon/closeout use cases.
 - Isolate Evolve candidate generation from Control-owned approval, signing, active-policy, and queue authority.
 - Rewire remaining CLI/MCP consumers, validate architecture documentation, then run final package and merged-main verification.

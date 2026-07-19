@@ -8,7 +8,9 @@ from .agents import AgentTrackingError, update_agent
 from .application.commands.agent import RunTrackedAgentCommand
 from .application.use_cases.agent_launch import AgentLaunchError
 from .composition.agent_launch import build_agent_launch_service
+from .composition.provider_receipts import persist_local_provider_receipt
 from .config import load_config
+from .codex_prompt import build_codex_prompt, build_local_worker_prompt
 from .discovery import detect_repo_root
 from .infra.providers.conversation import run_legacy_conversation
 from .infra.providers.launch import (
@@ -21,7 +23,7 @@ from .interfaces.provider_wrapper import (
     ConversationLaunchRequest,
     parse_provider_wrapper_request,
 )
-from .providers.local_openai import local_provider_available
+from .infra.providers.local_config import local_provider_available
 
 
 def run_provider_wrapper(provider: str, argv: list[str], *, repo_root: Path | None = None) -> int:
@@ -83,6 +85,7 @@ def run_provider_wrapper(provider: str, argv: list[str], *, repo_root: Path | No
         output_last_message_path=launch.output_last_message_path if launch else None,
         receipt_path=launch.receipt_path if launch else None,
         workdir=launch.workdir if launch else repo_root,
+        expected_request_digest=launch.request_digest if launch else None,
     )
 
 
@@ -195,6 +198,8 @@ def _build_default_launch(
         extra_instruction=extra_instruction,
         provider_args=provider_args,
         owned_paths=owned_paths,
+        codex_prompt_builder=build_codex_prompt,
+        local_prompt_builder=build_local_worker_prompt,
         resolve_codex_executable=_resolve_codex_executable,
         provider_available=local_provider_available,
     )
@@ -215,6 +220,7 @@ def _finalize_default_launch(
     output_last_message_path: Path | None,
     receipt_path: Path | None = None,
     workdir: Path | None = None,
+    expected_request_digest: str | None = None,
 ) -> int:
     return finalize_default_launch(
         repo_root=repo_root,
@@ -226,7 +232,9 @@ def _finalize_default_launch(
         output_last_message_path=output_last_message_path,
         receipt_path=receipt_path,
         workdir=workdir,
+        expected_request_digest=expected_request_digest,
         mark_agent_failed=_mark_agent_failed,
+        persist_receipt=persist_local_provider_receipt,
     )
 
 

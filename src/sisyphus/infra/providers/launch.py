@@ -6,9 +6,10 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
+from typing import Protocol
 
-from ...codex_prompt import build_codex_prompt, build_local_worker_prompt
-from ...providers.local_openai import (
+from ...shared.digests import stable_json_hash
+from .local_config import (
     LocalProviderConfig,
     LocalProviderConfigError,
     build_worker_command as build_local_worker_command,
@@ -16,6 +17,16 @@ from ...providers.local_openai import (
     local_provider_available,
     parse_local_provider_args,
 )
+
+
+class ProviderPrompt(Protocol):
+    workdir: Path
+    prompt: str
+    owned_paths: tuple[str, ...]
+    observation_hash: str | None
+
+
+PromptBuilder = Callable[..., ProviderPrompt]
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +40,7 @@ class ProviderLaunch:
     effective_provider: str
     workdir: Path
     receipt_path: Path | None = None
+    request_digest: str | None = None
 
 
 def build_default_launch(
@@ -40,6 +52,8 @@ def build_default_launch(
     extra_instruction: str | None,
     provider_args: list[str],
     owned_paths: list[str] | None,
+    codex_prompt_builder: PromptBuilder,
+    local_prompt_builder: PromptBuilder,
     resolve_codex_executable: Callable[[], str] | None = None,
     provider_available: Callable[[LocalProviderConfig], bool] | None = None,
 ) -> ProviderLaunch:
@@ -52,6 +66,7 @@ def build_default_launch(
             task_id=task_id,
             extra_instruction=extra_instruction,
             provider_args=provider_args,
+            prompt_builder=codex_prompt_builder,
             resolve_codex_executable=executable_resolver,
         )
     if is_local_openai_provider(provider):
@@ -63,6 +78,8 @@ def build_default_launch(
             extra_instruction=extra_instruction,
             provider_args=provider_args,
             owned_paths=owned_paths,
+            codex_prompt_builder=codex_prompt_builder,
+            local_prompt_builder=local_prompt_builder,
             resolve_codex_executable=executable_resolver,
             provider_available=availability_check,
         )
@@ -76,10 +93,11 @@ def build_codex_launch(
     task_id: str,
     extra_instruction: str | None,
     provider_args: list[str],
+    prompt_builder: PromptBuilder,
     resolve_codex_executable: Callable[[], str] | None = None,
 ) -> ProviderLaunch:
     resolver = resolve_codex_executable or find_codex_executable
-    prompt = build_codex_prompt(
+    prompt = prompt_builder(
         repo_root=repo_root,
         config=config,
         task_id=task_id,
@@ -125,6 +143,8 @@ def build_local_launch(
     extra_instruction: str | None,
     provider_args: list[str],
     owned_paths: list[str] | None,
+    codex_prompt_builder: PromptBuilder,
+    local_prompt_builder: PromptBuilder,
     resolve_codex_executable: Callable[[], str] | None = None,
     provider_available: Callable[[LocalProviderConfig], bool] | None = None,
 ) -> ProviderLaunch:
@@ -150,12 +170,14 @@ def build_local_launch(
             extra_instruction=combined_instruction,
             provider_args=[],
             owned_paths=owned_paths,
+            codex_prompt_builder=codex_prompt_builder,
+            local_prompt_builder=local_prompt_builder,
             resolve_codex_executable=resolve_codex_executable,
             provider_available=availability_check,
         )
 
     label = "Gemma" if local_config.provider == "gemma" else local_config.provider
-    prompt = build_local_worker_prompt(
+    prompt = local_prompt_builder(
         repo_root=repo_root,
         config=config,
         task_id=task_id,
@@ -163,6 +185,29 @@ def build_local_launch(
         worker_name=label,
     )
     effective_owned_paths = tuple(owned_paths or prompt.owned_paths)
+    request_digest = stable_json_hash(
+        {
+            "task_id": task_id,
+            "provider": local_config.provider,
+            "base_url": local_config.base_url,
+            "model": local_config.model,
+            "timeout_seconds": local_config.timeout_seconds,
+            "temperature": local_config.temperature,
+            "max_tokens": local_config.max_tokens,
+            "max_steps": local_config.max_steps,
+            "max_protocol_errors": local_config.max_protocol_errors,
+            "context_window_tokens": local_config.context_window_tokens,
+            "context_reserve_tokens": local_config.context_reserve_tokens,
+            "compact_ratio": local_config.compact_ratio,
+            "max_tool_output_chars": local_config.max_tool_output_chars,
+            "command_timeout_seconds": local_config.command_timeout_seconds,
+            "test_commands": local_config.test_commands,
+            "workdir": str(prompt.workdir.resolve()),
+            "owned_paths": effective_owned_paths,
+            "observation_hash": prompt.observation_hash,
+            "prompt_digest": stable_json_hash({"prompt": prompt.prompt}),
+        }
+    )
     output_path = allocate_temp_path(task_id, ".last.txt")
     receipt_path = allocate_temp_path(task_id, ".local-agent.json")
     command = build_local_worker_command(
@@ -172,6 +217,7 @@ def build_local_launch(
         receipt_path=receipt_path,
         owned_paths=effective_owned_paths,
         observation_hash=prompt.observation_hash,
+        request_digest=request_digest,
     )
     return ProviderLaunch(
         command=command,
@@ -183,6 +229,7 @@ def build_local_launch(
         effective_provider=local_config.provider,
         workdir=prompt.workdir,
         receipt_path=receipt_path,
+        request_digest=request_digest,
     )
 
 
