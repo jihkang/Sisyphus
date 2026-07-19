@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
-from ..config import SisyphusConfig, load_config
-from ..state import load_task_record
-from ..utils import optional_str, required_str
+from ..shared.coerce import optional_str, required_str
 from .artifacts import EVOLUTION_ARTIFACT_STATUS_RECORDED, EvolutionFollowupRequestArtifact
-from .bridge import bridge_evolution_followup_request
+from .bridge import EvolutionBridgedFollowupTask
 from .followup import EVOLUTION_FOLLOWUP_SOURCE_CONTEXT_KIND, extract_followup_source_context
 from .handoff import (
     EVOLUTION_DEFAULT_REVIEW_GATES,
@@ -23,11 +21,10 @@ from .promotion import (
     EvolutionDecisionEnvelope,
     EvolutionPromotionGateResult,
     evaluate_evolution_promotion_gate,
-    record_evolution_decision_envelope,
 )
-from .receipts import EvolutionFollowupExecutionProjection, project_followup_execution
-from .surface import EvolutionRunArtifacts, load_evolution_run_artifacts
-from .verification import EvolutionFollowupVerificationProjection, project_followup_verification
+from .receipts import EvolutionFollowupExecutionProjection
+from .presentation import EvolutionRunArtifacts
+from .verification import EvolutionFollowupVerificationProjection
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +51,7 @@ class EvolutionDecisionSurfaceResult:
     envelope: EvolutionDecisionEnvelope
 
 
-def request_evolution_followup(
+def request_evolution_followup_with_services(
     repo_root: Path,
     *,
     run_id: str,
@@ -68,11 +65,11 @@ def request_evolution_followup(
     review_gates: Sequence[str] | None = None,
     verification_obligations: Sequence[EvolutionVerificationObligation] | None = None,
     evidence_summary: Sequence[EvolutionEvidenceSummary] | None = None,
-    config: SisyphusConfig | None = None,
+    load_artifacts: Callable[[str], EvolutionRunArtifacts],
+    bridge_followup: Callable[[EvolutionFollowupRequest, str | None], EvolutionBridgedFollowupTask],
 ) -> EvolutionFollowupSurfaceResult:
     resolved_repo_root = repo_root.resolve()
-    resolved_config = config or load_config(resolved_repo_root)
-    artifacts = load_evolution_run_artifacts(resolved_repo_root, run_id)
+    artifacts = load_artifacts(run_id)
     normalized_targets = _normalize_strings(target_ids) or artifacts.target_ids
     if not normalized_targets:
         raise ValueError("evolution follow-up request requires at least one target id")
@@ -99,12 +96,7 @@ def request_evolution_followup(
         promotion_intent=EVOLUTION_PROMOTION_INTENT_REQUEST_FOLLOWUP,
         required_review_gates=_normalize_review_gates(review_gates),
     )
-    bridged = bridge_evolution_followup_request(
-        resolved_repo_root,
-        request,
-        config=resolved_config,
-        slug=slug,
-    )
+    bridged = bridge_followup(request, slug)
     return EvolutionFollowupSurfaceResult(
         task_id=bridged.task_id,
         task_uri=_task_record_uri(bridged.task_id),
@@ -116,34 +108,28 @@ def request_evolution_followup(
     )
 
 
-def evaluate_evolution_followup_decision(
-    repo_root: Path,
+def evaluate_evolution_followup_decision_with_services(
+    task: Mapping[str, object],
     *,
     task_id: str,
     claim: str | None = None,
-    config: SisyphusConfig | None = None,
+    load_artifacts: Callable[[str], EvolutionRunArtifacts],
+    project_execution: Callable[[str], EvolutionFollowupExecutionProjection],
+    project_verification: Callable[[str], EvolutionFollowupVerificationProjection],
+    record_decision: Callable[[EvolutionPromotionGateResult, str], EvolutionDecisionEnvelope],
 ) -> EvolutionDecisionSurfaceResult:
-    resolved_repo_root = repo_root.resolve()
-    resolved_config = config or load_config(resolved_repo_root)
-    task, _ = load_task_record(
-        repo_root=resolved_repo_root,
-        task_dir_name=resolved_config.task_dir,
-        task_id=task_id,
-    )
     followup_request = project_followup_request_artifact(task)
-    run_artifacts = load_evolution_run_artifacts(resolved_repo_root, followup_request.run_id)
+    run_artifacts = load_artifacts(followup_request.run_id)
     constraints = _project_constraint_result(run_artifacts)
     fitness = _project_fitness_result(run_artifacts)
     execution_projection = _maybe_project_execution(
-        resolved_repo_root,
-        resolved_config,
         task,
+        project_execution=project_execution,
     )
     verification_projection = _maybe_project_verification(
-        resolved_repo_root,
-        resolved_config,
         task,
         execution_projection=execution_projection,
+        project_verification=project_verification,
     )
     gate_result = evaluate_evolution_promotion_gate(
         followup_request,
@@ -156,12 +142,7 @@ def evaluate_evolution_followup_decision(
         f"follow-up task {task_id} satisfies review-gated promotion policy for "
         f"{followup_request.candidate_id}"
     )
-    envelope = record_evolution_decision_envelope(
-        gate_result,
-        claim=decision_claim,
-        repo_root=resolved_repo_root,
-        config=resolved_config,
-    )
+    envelope = record_decision(gate_result, decision_claim)
     return EvolutionDecisionSurfaceResult(
         task_id=task_id,
         task_uri=_task_record_uri(task_id),
@@ -268,7 +249,7 @@ def _normalize_evidence_summary(
         report_locator = None
         artifact_dir = Path(artifacts.artifact_dir)
         report_path = artifact_dir / "report.md"
-        if report_path.exists():
+        if "report.md" in artifacts.available_artifacts:
             report_locator = report_path.relative_to(repo_root).as_posix()
         return (
             EvolutionEvidenceSummary(
@@ -332,27 +313,26 @@ def _project_fitness_result(
 
 
 def _maybe_project_execution(
-    repo_root: Path,
-    config: SisyphusConfig,
     task: Mapping[str, object],
+    *,
+    project_execution: Callable[[str], EvolutionFollowupExecutionProjection],
 ) -> EvolutionFollowupExecutionProjection | None:
     if not _should_project_execution(task):
         return None
     task_id = required_str(task.get("id"), "task.id")
-    return project_followup_execution(repo_root, config, task_id)
+    return project_execution(task_id)
 
 
 def _maybe_project_verification(
-    repo_root: Path,
-    config: SisyphusConfig,
     task: Mapping[str, object],
     *,
     execution_projection: EvolutionFollowupExecutionProjection | None,
+    project_verification: Callable[[str], EvolutionFollowupVerificationProjection],
 ) -> EvolutionFollowupVerificationProjection | None:
     if execution_projection is None or not _should_project_execution(task):
         return None
     task_id = required_str(task.get("id"), "task.id")
-    return project_followup_verification(repo_root, config, task_id)
+    return project_verification(task_id)
 
 
 def _should_project_execution(task: Mapping[str, object]) -> bool:

@@ -13,6 +13,12 @@ from .artifact_queries import FeatureArtifactQueryPort, FeatureArtifactReadModel
 from .clock import ClockPort
 from .closeout import CloseoutEvidencePort, WorktreeStatusPort
 from .episode_trace import EpisodeTracePort
+from .evolution import (
+    EvolutionEventPort,
+    EvolutionFollowupRequestPort,
+    EvolutionRunArtifactPort,
+    EvolutionTaskQueryPort,
+)
 from .inbox import InboxEventLogPort, InboxProcessingPort, InboxQueuePort, InboxRepositoryPort
 from .inbox_handlers import (
     ChangeAdoptionPort,
@@ -76,6 +82,10 @@ __all__ = [
     "DesignConformancePort",
     "EventPublisherPort",
     "EpisodeTracePort",
+    "EvolutionEventPort",
+    "EvolutionFollowupRequestPort",
+    "EvolutionRunArtifactPort",
+    "EvolutionTaskQueryPort",
     "EvidenceGraphPort",
     "FeatureObligationPort",
     "InboxEventLogPort",

@@ -2,18 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
-from ..bus_jsonl import read_jsonl_events, resolve_event_bus_path
-from ..config import load_config
-from ..conformance import summarize_task_conformance
-from ..state import list_task_records
-from ..utils import optional_str
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+from ..application.conformance_records import summarize_task_conformance
+from ..application.ports.clock import ClockPort
+from ..application.ports.evolution import EvolutionEventPort, EvolutionTaskQueryPort
+from ..shared.coerce import optional_str
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,40 +70,45 @@ class EvolutionDataset:
         return len(self.event_traces)
 
 
-def build_evolution_dataset(
-    repo_root: Path,
+def project_evolution_dataset(
+    tasks: EvolutionTaskQueryPort,
+    events: EvolutionEventPort,
+    clock: ClockPort,
     *,
     task_ids: Sequence[str] | None = None,
     max_events: int = 50,
 ) -> EvolutionDataset:
-    resolved_repo_root = repo_root.resolve()
-    if not resolved_repo_root.exists():
-        raise FileNotFoundError(f"repository root does not exist: {resolved_repo_root}")
-
-    config = load_config(resolved_repo_root)
-    tasks = sorted(
-        list_task_records(repo_root=resolved_repo_root, task_dir_name=config.task_dir),
-        key=lambda task: (str(task.get("updated_at") or ""), str(task.get("id") or "")),
+    selected_tasks = _select_tasks(
+        sorted(
+            tasks.list(),
+            key=lambda task: (str(task.get("updated_at") or ""), str(task.get("id") or "")),
+        ),
+        task_ids,
     )
-    selected_tasks = _select_tasks(tasks, task_ids)
     selected_task_ids = tuple(str(task.get("id")) for task in selected_tasks)
-
-    event_log_path = resolve_event_bus_path(resolved_repo_root, config)
-    raw_events = read_jsonl_events(event_log_path, limit=max_events)
+    selected_task_id_set = set(selected_task_ids)
     event_traces = tuple(
         _to_event_trace(event)
-        for event in raw_events
-        if task_ids is None or _event_task_id(event) in set(selected_task_ids)
+        for event in events.read(limit=max_events)
+        if task_ids is None or _event_task_id(event) in selected_task_id_set
     )
-
     return EvolutionDataset(
-        repo_root=str(resolved_repo_root),
-        generated_at=utc_now(),
-        event_log_path=str(event_log_path),
+        repo_root=str(tasks.repo_root),
+        generated_at=clock.now(),
+        event_log_path=str(events.locator),
         selected_task_ids=selected_task_ids,
         task_traces=tuple(_to_task_trace(task) for task in selected_tasks),
         event_traces=event_traces,
     )
+
+
+__all__ = [
+    "EvolutionDataset",
+    "EvolutionEventTrace",
+    "EvolutionTaskTrace",
+    "EvolutionVerifyTrace",
+    "project_evolution_dataset",
+]
 
 
 def _select_tasks(tasks: list[dict], task_ids: Sequence[str] | None) -> list[dict]:

@@ -3,20 +3,19 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-import json
 
-from ..config import SisyphusConfig
+from ..application.ports.clock import ClockPort
+from ..application.ports.evolution import EvolutionEventPort, EvolutionRunArtifactPort
 from .constraints import EvolutionConstraintResult, evaluate_evolution_constraints
-from .dataset import EvolutionDataset, build_evolution_dataset
-from .event_bus import (
+from .dataset import EvolutionDataset
+from ..application.evolution_events import (
     EVOLUTION_EVENT_RUN_FAILED,
     EVOLUTION_EVENT_RUN_RECORDED,
-    publish_evolution_event,
 )
 from .fitness import EvolutionFitnessResult, evaluate_evolution_fitness
 from .harness import EvolutionHarnessPlan, plan_evolution_harness
 from .report import EvolutionReport, build_evolution_report
-from .runner import EvolutionRun, plan_evolution_run, utc_now
+from .runner import EvolutionRun, plan_evolution_run
 from .stages import EVOLUTION_STAGE_FAILED, EVOLUTION_STAGE_REPORT_BUILT
 
 
@@ -50,23 +49,28 @@ def execute_evolution_run(
     max_events: int = 50,
     run_id: str | None = None,
     created_at: str | None = None,
-    config: SisyphusConfig | None = None,
-    dataset_builder: Callable[..., EvolutionDataset] = build_evolution_dataset,
+    run_store: EvolutionRunArtifactPort,
+    events: EvolutionEventPort,
+    clock: ClockPort,
+    dataset_builder: Callable[..., EvolutionDataset] | None = None,
     harness_planner: Callable[..., EvolutionHarnessPlan] = plan_evolution_harness,
     constraints_evaluator: Callable[..., EvolutionConstraintResult] = evaluate_evolution_constraints,
     fitness_evaluator: Callable[..., EvolutionFitnessResult] = evaluate_evolution_fitness,
     report_builder: Callable[..., EvolutionReport] = build_evolution_report,
 ) -> EvolutionExecutedRun:
+    if dataset_builder is None:
+        raise ValueError("evolution execution requires an injected dataset builder")
     run = plan_evolution_run(
         repo_root,
         target_ids=target_ids,
         run_id=run_id,
-        created_at=created_at,
+        created_at=created_at or clock.now(),
     )
-    run_dir = _create_run_dir(Path(run.repo_root), run.run_id)
+    run_dir = run_store.create_run(run.run_id)
     persisted_artifacts: list[str] = []
-    _write_json(
-        run_dir / "run.json",
+    run_store.append_json(
+        run.run_id,
+        "run.json",
         {
             "run": asdict(run),
             "artifact_dir": str(run_dir),
@@ -84,8 +88,9 @@ def execute_evolution_run(
 
     try:
         dataset = dataset_builder(Path(run.repo_root), task_ids=task_ids, max_events=max_events)
-        _write_json(
-            run_dir / "dataset.json",
+        run_store.append_json(
+            run.run_id,
+            "dataset.json",
             {
                 **asdict(dataset),
                 "task_count": dataset.task_count,
@@ -95,15 +100,15 @@ def execute_evolution_run(
         persisted_artifacts.append("dataset.json")
 
         harness = harness_planner(run, dataset)
-        _write_json(run_dir / "harness_plan.json", asdict(harness))
+        run_store.append_json(run.run_id, "harness_plan.json", asdict(harness))
         persisted_artifacts.append("harness_plan.json")
 
         constraint_result = constraints_evaluator(harness)
-        _write_json(run_dir / "constraints.json", asdict(constraint_result))
+        run_store.append_json(run.run_id, "constraints.json", asdict(constraint_result))
         persisted_artifacts.append("constraints.json")
 
         fitness_result = fitness_evaluator(harness, constraints=constraint_result)
-        _write_json(run_dir / "fitness.json", asdict(fitness_result))
+        run_store.append_json(run.run_id, "fitness.json", asdict(fitness_result))
         persisted_artifacts.append("fitness.json")
 
         report = report_builder(
@@ -113,7 +118,7 @@ def execute_evolution_run(
             constraint_result=constraint_result,
             fitness_result=fitness_result,
         )
-        (run_dir / "report.md").write_text(_render_report_markdown(report), encoding="utf-8")
+        run_store.append_text(run.run_id, "report.md", _render_report_markdown(report))
         persisted_artifacts.append("report.md")
 
         result = EvolutionExecutedRun(
@@ -126,9 +131,7 @@ def execute_evolution_run(
             fitness_result=fitness_result,
             report=report,
         )
-        publish_evolution_event(
-            Path(run.repo_root),
-            config=config,
+        events.publish(
             event_type=EVOLUTION_EVENT_RUN_RECORDED,
             source_module="evolution.orchestrator",
             data={
@@ -147,13 +150,11 @@ def execute_evolution_run(
             stage=failure_stage,
             error_type=type(exc).__name__,
             message=str(exc),
-            failed_at=utc_now(),
+            failed_at=clock.now(),
             partial_artifacts=tuple(persisted_artifacts),
         )
-        _write_json(run_dir / "failure.json", asdict(failure))
-        publish_evolution_event(
-            Path(run.repo_root),
-            config=config,
+        run_store.append_json(run.run_id, "failure.json", asdict(failure))
+        events.publish(
             event_type=EVOLUTION_EVENT_RUN_FAILED,
             source_module="evolution.orchestrator",
             data={
@@ -205,17 +206,6 @@ class EvolutionRunExecutionError(RuntimeError):
             report=report,
             failure=failure,
         )
-
-
-def _create_run_dir(repo_root: Path, run_id: str) -> Path:
-    run_dir = repo_root / ".planning" / "evolution" / "runs" / run_id
-    run_dir.mkdir(parents=True, exist_ok=False)
-    return run_dir
-
-
-def _write_json(path: Path, payload: dict[str, object]) -> None:
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
 
 def _render_report_markdown(report: EvolutionReport) -> str:
     lines = [

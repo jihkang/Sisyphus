@@ -5,14 +5,16 @@ from pathlib import Path
 
 from ...config import SisyphusConfig
 from ...evolution.handoff import EvolutionEvidenceSummary, EvolutionVerificationObligation
-from ...evolution.operator import (
+from ...composition.evolution_operator import (
     evaluate_evolution_followup_decision,
     request_evolution_followup,
 )
-from ...evolution.surface import (
-    compare_evolution_runs,
+from ...composition.evolution_surface import (
     execute_evolution_surface,
     load_evolution_run_artifacts,
+)
+from ...evolution.presentation import (
+    compare_evolution_runs,
     render_evolution_run_compare,
     render_evolution_run_overview,
     render_evolution_run_report,

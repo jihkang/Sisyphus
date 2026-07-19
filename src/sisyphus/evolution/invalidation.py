@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..utils import required_str
+from ..shared.coerce import required_str
 from .artifacts import (
     EvolutionArtifactRef,
     EvolutionFollowupRequestArtifact,

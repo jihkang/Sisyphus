@@ -4,7 +4,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from ..conformance import CONFORMANCE_GREEN, CONFORMANCE_RED, CONFORMANCE_YELLOW, normalize_conformance_status
+from ..domain.task.conformance import (
+    CONFORMANCE_GREEN,
+    CONFORMANCE_RED,
+    CONFORMANCE_YELLOW,
+    normalize_conformance_status,
+)
 from .constraints import EVOLUTION_CONSTRAINT_STATUS_REJECTED, EvolutionConstraintResult
 from .harness import EvolutionHarnessPlan, EvolutionPlannedMetrics
 

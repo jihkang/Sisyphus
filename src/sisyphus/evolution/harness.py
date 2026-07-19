@@ -8,8 +8,13 @@ import json
 import subprocess
 from time import perf_counter
 
-from ..conformance import CONFORMANCE_GREEN, CONFORMANCE_RED, CONFORMANCE_YELLOW, normalize_conformance_status
-from ..utils import optional_str
+from ..domain.task.conformance import (
+    CONFORMANCE_GREEN,
+    CONFORMANCE_RED,
+    CONFORMANCE_YELLOW,
+    normalize_conformance_status,
+)
+from ..shared.coerce import optional_str
 
 from .dataset import EvolutionDataset
 from .materialization import (

@@ -4,14 +4,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..config import SisyphusConfig
-from ..state import load_task_record
-from ..utils import optional_str, required_str
+from ..application.ports.evolution import EvolutionEventPort, EvolutionTaskQueryPort
+from ..shared.coerce import optional_str, required_str
 from .artifacts import (
     EVOLUTION_ARTIFACT_STATUS_RECORDED,
     VerificationArtifact,
 )
-from .event_bus import EVOLUTION_EVENT_VERIFICATION_PROJECTED, publish_evolution_event
+from ..application.evolution_events import EVOLUTION_EVENT_VERIFICATION_PROJECTED
 from .followup import extract_followup_source_context
 from .receipts import EvolutionFollowupExecutionProjection, project_followup_execution_record
 
@@ -25,20 +24,14 @@ class EvolutionFollowupVerificationProjection:
     execution_projection: EvolutionFollowupExecutionProjection
 
 
-def project_followup_verification(
-    repo_root: Path,
-    config: SisyphusConfig,
+def project_followup_verification_from_ports(
+    tasks: EvolutionTaskQueryPort,
+    events: EvolutionEventPort,
     task_id: str,
 ) -> EvolutionFollowupVerificationProjection:
-    task, task_file = load_task_record(
-        repo_root=repo_root,
-        task_dir_name=config.task_dir,
-        task_id=task_id,
-    )
+    task, task_file = tasks.load_with_path(task_id)
     projection = project_followup_verification_record(task=task, task_dir=task_file.parent)
-    publish_evolution_event(
-        repo_root,
-        config=config,
+    events.publish(
         event_type=EVOLUTION_EVENT_VERIFICATION_PROJECTED,
         source_module="evolution.verification",
         data={

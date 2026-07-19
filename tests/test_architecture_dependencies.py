@@ -551,6 +551,108 @@ class ArchitectureDependencyTests(unittest.TestCase):
                 f"artifact resource facade contains {type(node).__name__}; it must remain import-only"
             )
 
+    def test_migrated_evolution_core_has_no_canonical_authority_imports(self) -> None:
+        source_modules = {
+            "sisyphus.evolution.bridge",
+            "sisyphus.evolution.dataset",
+            "sisyphus.evolution.operator",
+            "sisyphus.evolution.orchestrator",
+            "sisyphus.evolution.presentation",
+            "sisyphus.evolution.promotion",
+            "sisyphus.evolution.receipts",
+            "sisyphus.evolution.verification",
+        }
+        forbidden_prefixes = (
+            "sisyphus.api",
+            "sisyphus.bus",
+            "sisyphus.closeout",
+            "sisyphus.composition",
+            "sisyphus.config",
+            "sisyphus.planning",
+            "sisyphus.promotion",
+            "sisyphus.provider_wrapper",
+            "sisyphus.state",
+            "sisyphus.verification",
+        )
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency.startswith(forbidden_prefixes)
+        }
+
+        self.assertFalse(
+            forbidden,
+            "Evolution core regained canonical lifecycle authority imports:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_evolution_ports_expose_no_lifecycle_authority_verbs(self) -> None:
+        module = self.modules["sisyphus.application.ports.evolution"]
+        tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+        method_names = {
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        forbidden = {
+            "approve",
+            "approve_plan",
+            "freeze",
+            "freeze_spec",
+            "verify",
+            "activate",
+            "promote",
+            "execute_promotion",
+            "close",
+            "record_merge",
+        }
+
+        self.assertFalse(
+            method_names.intersection(forbidden),
+            "Evolution ports expose canonical lifecycle authority: "
+            + ", ".join(sorted(method_names.intersection(forbidden))),
+        )
+
+    def test_evolution_surface_and_event_facades_remain_import_only(self) -> None:
+        for name in ("sisyphus.evolution.event_bus", "sisyphus.evolution.surface"):
+            module = self.modules[name]
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom):
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    self.assertIsInstance(node.value.value, str, f"{name} has executable code")
+                    continue
+                if isinstance(node, ast.Assign):
+                    self.assertEqual(
+                        [target.id for target in node.targets if isinstance(target, ast.Name)],
+                        ["__all__"],
+                        f"{name} may assign only __all__",
+                    )
+                    continue
+                self.fail(f"{name} contains {type(node).__name__}; facade must remain import-only")
+
+    def test_evolution_interfaces_use_composition_and_presentation(self) -> None:
+        source_modules = {
+            "sisyphus.interfaces.cli.app",
+            "sisyphus.interfaces.cli.handlers.evolution",
+            "sisyphus.interfaces.mcp.evolution",
+            "sisyphus.interfaces.mcp.service",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in {"sisyphus.evolution.operator", "sisyphus.evolution.surface"}
+        }
+
+        self.assertFalse(
+            forbidden,
+            "Evolution interfaces regained effectful bounded-context facades:\n"
+            + _format_pairs(forbidden),
+        )
+
     def test_verification_and_lifecycle_adapters_do_not_import_public_facades(self) -> None:
         source_modules = {
             "sisyphus.infra.persistence.lifecycle_mapper",

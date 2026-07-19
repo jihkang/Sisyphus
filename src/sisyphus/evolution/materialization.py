@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 import json
 
-from ..utils import optional_str
+from ..shared.coerce import optional_str
 from .targets import get_evolution_target
 
 
