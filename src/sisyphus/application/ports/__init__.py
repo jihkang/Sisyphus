@@ -10,6 +10,7 @@ from .agent_execution import (
 )
 from .artifacts import ArtifactStorePort
 from .clock import ClockPort
+from .closeout import CloseoutEvidencePort, WorktreeStatusPort
 from .planning import DesignConformancePort, PlanningDocumentPort, SpecValidationPort
 from .promotion import (
     PromotionTaskPort,
@@ -45,6 +46,7 @@ __all__ = [
     "AgentTrackingPort",
     "ArtifactStorePort",
     "ClockPort",
+    "CloseoutEvidencePort",
     "CloseoutPort",
     "ConformancePort",
     "DesignConformancePort",
@@ -72,6 +74,7 @@ __all__ = [
     "VerificationDocumentPort",
     "VerificationEvidencePort",
     "WorkflowPlanningPort",
+    "WorktreeStatusPort",
     "WorkspacePort",
     "VersionControlPort",
 ]

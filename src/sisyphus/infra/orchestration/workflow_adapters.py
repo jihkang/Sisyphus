@@ -11,7 +11,6 @@ from ...application.conformance_records import (
 )
 from ...application.ports.clock import ClockPort
 from ...application.ports.workflow import (
-    CloseoutResult,
     ConformanceCheck,
     ProviderRequest,
     TaskRecord,
@@ -19,7 +18,6 @@ from ...application.ports.workflow import (
 )
 from ...application.use_cases.planning import PlanningService
 from ...application.use_cases.verification import VerificationService
-from ...closeout import run_close
 from ...obligation_runtime import converge_feature_change_obligations
 from ...shared.paths import task_dir as resolve_task_dir
 from ..config.loader import SisyphusConfig
@@ -149,27 +147,7 @@ class VerificationAdapter:
         return VerificationResult(gates=tuple(outcome.gates))
 
 
-class CloseoutAdapter:
-    def __init__(self, repo_root: Path, config: SisyphusConfig) -> None:
-        self._repo_root = repo_root
-        self._config = config
-
-    def close(self, task_id: str, *, allow_dirty: bool) -> CloseoutResult:
-        outcome = run_close(
-            repo_root=self._repo_root,
-            config=self._config,
-            task_id=task_id,
-            allow_dirty=allow_dirty,
-        )
-        return CloseoutResult(
-            closed=outcome.closed,
-            status=outcome.status,
-            gates=tuple(outcome.gates),
-        )
-
-
 __all__ = [
-    "CloseoutAdapter",
     "ConformanceAdapter",
     "FeatureObligationAdapter",
     "PlanningWorkflowAdapter",

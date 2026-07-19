@@ -3,6 +3,7 @@ from __future__ import annotations
 from .agent_execution import AgentExecutionService
 from .agent_launch import AgentLaunchService
 from .agents import AgentManagementService
+from .closeout import CloseoutService
 from .planning import PlanningService
 from .promotion import PromotionService
 from .task_creation import TaskRecordCreationService
@@ -13,6 +14,7 @@ __all__ = [
     "AgentExecutionService",
     "AgentLaunchService",
     "AgentManagementService",
+    "CloseoutService",
     "PlanningService",
     "PromotionService",
     "TaskRecordCreationService",

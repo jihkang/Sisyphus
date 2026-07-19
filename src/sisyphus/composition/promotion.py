@@ -11,9 +11,9 @@ from ..infra.orchestration.common_adapters import (
     ManualInterventionAdapter,
     ReopenedTaskAdapter,
 )
-from ..infra.orchestration.workflow_adapters import CloseoutAdapter
 from ..infra.promotion import GhRunner, GitVersionControlAdapter, GithubCliPullRequestAdapter
 from ..infra.verification import ConformanceVerificationAdapter
+from .closeout import build_closeout_service
 
 
 def build_promotion_service(
@@ -29,7 +29,7 @@ def build_promotion_service(
         pull_requests=GithubCliPullRequestAdapter(gh_runner),
         artifacts=RepositoryArtifactStore(repo_root, config),
         conformance=ConformanceVerificationAdapter(clock),
-        closeout=CloseoutAdapter(repo_root, config),
+        closeout=build_closeout_service(repo_root, config),
         interventions=ManualInterventionAdapter(repo_root, config),
         reopened_tasks=ReopenedTaskAdapter(repo_root, config),
         clock=clock,

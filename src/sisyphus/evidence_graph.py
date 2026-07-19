@@ -4,20 +4,21 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 import json
 
+from .application.closeout_records import (
+    collect_evidence_close_gate_records,
+    evidence_required_for_close as _evidence_required_for_close,
+)
 from .application.verification_evidence import (
     DEFAULT_EVIDENCE_GRAPH_PATH as DEFAULT_EVIDENCE_GRAPH_RELATIVE_PATH,
     EVIDENCE_GRAPH_SCHEMA_VERSION,
     EVIDENCE_IMPORTANCE_HIGH,
     EVIDENCE_IMPORTANCE_LOW,
     EVIDENCE_IMPORTANCE_MEDIUM,
-    EVIDENCE_VERDICT_MISSING,
     EVIDENCE_VERDICT_PARTIAL,
     EVIDENCE_VERDICT_SUPPORTS,
-    EVIDENCE_VERDICT_UNSUPPORTED,
     build_verification_evidence_graph,
 )
 from .conformance import summarize_task_conformance
-from .gates import make_gate
 from .state import utc_now
 
 
@@ -114,60 +115,24 @@ def summarize_evidence_graph(task: Mapping[str, object], task_dir: Path) -> dict
 
 
 def collect_evidence_close_gates(task: Mapping[str, object], task_dir: Path) -> list[dict]:
-    if not evidence_required_for_close(task):
+    if not _evidence_required_for_close(task):
         return []
+    graph: dict[str, object] | None = None
+    read_error: str | None = None
     try:
         graph = read_evidence_graph(task_dir)
     except (json.JSONDecodeError, ValueError) as exc:
-        return [
-            make_gate(
-                "EVIDENCE_GRAPH_INVALID",
-                f"evidence graph is invalid: {exc}",
-                source="evidence",
-            )
-        ]
-    if graph is None:
-        return [
-            make_gate(
-                "EVIDENCE_GRAPH_MISSING",
-                "verified task is missing structured evidence graph",
-                source="evidence",
-            )
-        ]
-
-    gates: list[dict] = []
-    evidence = _list_field(graph, "curated_evidence")
-    unsupported_high = [
-        item
-        for item in evidence
-        if isinstance(item, Mapping) and _is_blocking_unsupported_evidence(item)
-    ]
-    if unsupported_high:
-        gates.append(
-            make_gate(
-                "EVIDENCE_UNSUPPORTED_HIGH_IMPORTANCE",
-                "high-importance evidence contains unsupported or missing verdicts",
-                source="evidence",
-            )
-        )
-
-    blocking_gaps = _list_field(graph, "blocking_gaps")
-    if blocking_gaps:
-        gates.append(
-            make_gate(
-                "EVIDENCE_BLOCKING_GAP",
-                "evidence graph contains blocking gaps",
-                source="evidence",
-            )
-        )
-    return gates
+        read_error = str(exc)
+    return collect_evidence_close_gate_records(
+        task,
+        graph,
+        read_error=read_error,
+        created_at=utc_now(),
+    )
 
 
 def evidence_required_for_close(task: Mapping[str, object]) -> bool:
-    meta = task.get("meta", {})
-    if not isinstance(meta, Mapping):
-        return False
-    return task.get("verify_status") == "passed" and bool(meta.get("evidence_graph_required"))
+    return _evidence_required_for_close(task)
 
 
 def evidence_resource_payload(task: Mapping[str, object], task_dir: Path) -> dict[str, object]:
@@ -183,14 +148,6 @@ def evidence_resource_payload(task: Mapping[str, object], task_dir: Path) -> dic
         "unsupported_claims": [],
         "blocking_gaps": [],
     }
-
-
-def _is_blocking_unsupported_evidence(item: Mapping[str, object]) -> bool:
-    return (
-        item.get("importance") == EVIDENCE_IMPORTANCE_HIGH
-        and item.get("verdict") in {EVIDENCE_VERDICT_UNSUPPORTED, EVIDENCE_VERDICT_MISSING}
-        and bool(item.get("blocking", True))
-    )
 
 
 def _list_field(graph: Mapping[str, object], key: str) -> list[object]:

@@ -7,6 +7,7 @@ from .application import AgentQueryService, LifecycleApplicationService, TaskQue
 from .composition.agent_execution import build_agent_execution_service
 from .composition.agent_launch import build_agent_launch_service
 from .composition.agents import build_agent_management_service
+from .composition.closeout import build_closeout_service
 from .composition.planning import build_planning_service
 from .composition.promotion import build_promotion_service
 from .composition.verification import build_verification_service
@@ -37,6 +38,7 @@ __all__ = [
     "build_agent_execution_service",
     "build_agent_launch_service",
     "build_agent_management_service",
+    "build_closeout_service",
     "build_planning_service",
     "build_promotion_service",
     "build_verification_service",

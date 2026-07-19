@@ -77,6 +77,17 @@ class EvidenceGraphTests(unittest.TestCase):
             legacy_task["meta"] = {}
             self.assertEqual(collect_evidence_close_gates(legacy_task, task_dir), [])
 
+    def test_legacy_task_does_not_read_malformed_optional_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            task_dir = Path(tmp)
+            evidence_path = task_dir / "artifacts" / "evidence" / "evidence-graph.json"
+            evidence_path.parent.mkdir(parents=True)
+            evidence_path.write_text("{invalid", encoding="utf-8")
+            task = _verified_task()
+            task["meta"] = {}
+
+            self.assertEqual(collect_evidence_close_gates(task, task_dir), [])
+
     def test_unsupported_high_importance_evidence_blocks_close(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             task_dir = Path(tmp)

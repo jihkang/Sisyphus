@@ -11,7 +11,6 @@ from ..infra.orchestration.common_adapters import (
     ManualInterventionAdapter,
 )
 from ..infra.orchestration.workflow_adapters import (
-    CloseoutAdapter,
     ConformanceAdapter,
     FeatureObligationAdapter,
     PlanningWorkflowAdapter,
@@ -20,6 +19,7 @@ from ..infra.orchestration.workflow_adapters import (
     VerificationAdapter,
 )
 from .planning import build_planning_service
+from .closeout import build_closeout_service
 from .verification import build_verification_service
 
 
@@ -37,7 +37,7 @@ def build_workflow_service(
         conformance=ConformanceAdapter(repo_root, config, clock),
         provider=ProviderAdapter(repo_root, provider_runner),
         verification=VerificationAdapter(build_verification_service(repo_root, config)),
-        closeout=CloseoutAdapter(repo_root, config),
+        closeout=build_closeout_service(repo_root, config),
         events=EventPublisherAdapter(repo_root, config),
         interventions=ManualInterventionAdapter(repo_root, config),
     )
