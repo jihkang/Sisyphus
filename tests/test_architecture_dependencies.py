@@ -13,77 +13,6 @@ SRC_ROOT = PROJECT_ROOT / "src"
 PACKAGE_ROOT = SRC_ROOT / "sisyphus"
 
 
-# This is migration debt, not an accepted target architecture. Removing entries is
-# always allowed; adding an outward dependency from domain is not.
-LEGACY_DOMAIN_OUTWARD_DEPENDENCIES = frozenset(
-    {
-        (
-            "src/sisyphus/domain/agent/repository.py",
-            "sisyphus.infra.persistence.agent_repository",
-        ),
-        ("src/sisyphus/domain/planning/service.py", "sisyphus.config"),
-        ("src/sisyphus/domain/planning/service.py", "sisyphus.conformance"),
-        ("src/sisyphus/domain/planning/service.py", "sisyphus.design"),
-        ("src/sisyphus/domain/planning/service.py", "sisyphus.gates"),
-        ("src/sisyphus/domain/planning/service.py", "sisyphus.lifecycle_guard"),
-        ("src/sisyphus/domain/planning/service.py", "sisyphus.lifecycle_state"),
-        ("src/sisyphus/domain/planning/service.py", "sisyphus.metrics"),
-        ("src/sisyphus/domain/planning/service.py", "sisyphus.state"),
-        ("src/sisyphus/domain/planning/service.py", "sisyphus.strategy"),
-        ("src/sisyphus/domain/planning/spec_validation.py", "sisyphus.config"),
-        ("src/sisyphus/domain/planning/spec_validation.py", "sisyphus.design"),
-        ("src/sisyphus/domain/planning/spec_validation.py", "sisyphus.gates"),
-        ("src/sisyphus/domain/planning/spec_validation.py", "sisyphus.infra.persistence.json_store"),
-        ("src/sisyphus/domain/planning/spec_validation.py", "sisyphus.state"),
-        ("src/sisyphus/domain/planning/spec_validation.py", "sisyphus.strategy"),
-        ("src/sisyphus/domain/promotion/service.py", "sisyphus.closeout"),
-        ("src/sisyphus/domain/promotion/service.py", "sisyphus.config"),
-        ("src/sisyphus/domain/promotion/service.py", "sisyphus.gitops"),
-        ("src/sisyphus/domain/promotion/service.py", "sisyphus.lifecycle_guard"),
-        ("src/sisyphus/domain/promotion/service.py", "sisyphus.lifecycle_state"),
-        ("src/sisyphus/domain/promotion/service.py", "sisyphus.metrics"),
-        ("src/sisyphus/domain/promotion/service.py", "sisyphus.promotion_state"),
-        ("src/sisyphus/domain/promotion/service.py", "sisyphus.state"),
-        ("src/sisyphus/domain/task/factory.py", "sisyphus.config"),
-        ("src/sisyphus/domain/task/factory.py", "sisyphus.conformance"),
-        ("src/sisyphus/domain/task/factory.py", "sisyphus.design"),
-        ("src/sisyphus/domain/task/factory.py", "sisyphus.gitops"),
-        ("src/sisyphus/domain/task/factory.py", "sisyphus.promotion_state"),
-        (
-            "src/sisyphus/domain/task/repository.py",
-            "sisyphus.infra.persistence.task_repository",
-        ),
-        ("src/sisyphus/domain/workflow/candidates.py", "sisyphus.infra.persistence"),
-        ("src/sisyphus/domain/workflow/service.py", "sisyphus.audit"),
-        ("src/sisyphus/domain/workflow/service.py", "sisyphus.bus"),
-        ("src/sisyphus/domain/workflow/service.py", "sisyphus.closeout"),
-        ("src/sisyphus/domain/workflow/service.py", "sisyphus.config"),
-        ("src/sisyphus/domain/workflow/service.py", "sisyphus.conformance"),
-        ("src/sisyphus/domain/workflow/service.py", "sisyphus.events"),
-        ("src/sisyphus/domain/workflow/service.py", "sisyphus.metrics"),
-        ("src/sisyphus/domain/workflow/service.py", "sisyphus.obligation_runtime"),
-        ("src/sisyphus/domain/workflow/service.py", "sisyphus.planning"),
-        ("src/sisyphus/domain/workflow/service.py", "sisyphus.provider_wrapper"),
-        ("src/sisyphus/domain/workflow/service.py", "sisyphus.state"),
-    }
-)
-
-LEGACY_IMPORT_CYCLES = frozenset(
-    {
-        frozenset(
-            {
-                "sisyphus.daemon",
-                "sisyphus.domain.workflow",
-                "sisyphus.domain.workflow.service",
-                "sisyphus.provider_wrapper",
-                "sisyphus.workflow",
-            }
-        ),
-        frozenset({"sisyphus.interfaces.mcp", "sisyphus.interfaces.mcp.service"}),
-    }
-)
-
-
 @dataclass(frozen=True, slots=True)
 class ModuleSource:
     name: str
@@ -100,7 +29,7 @@ class ArchitectureDependencyTests(unittest.TestCase):
             for module in cls.modules.values()
         }
 
-    def test_domain_outward_dependency_debt_cannot_grow(self) -> None:
+    def test_domain_has_no_outward_dependencies(self) -> None:
         actual: set[tuple[str, str]] = set()
         for module in self.modules.values():
             if not module.name.startswith("sisyphus.domain"):
@@ -113,11 +42,9 @@ class ArchitectureDependencyTests(unittest.TestCase):
                 relative_path = module.path.relative_to(PROJECT_ROOT).as_posix()
                 actual.add((relative_path, dependency))
 
-        unexpected = actual - LEGACY_DOMAIN_OUTWARD_DEPENDENCIES
-
         self.assertFalse(
-            unexpected,
-            "domain gained outward dependencies:\n" + _format_pairs(unexpected),
+            actual,
+            "domain has outward dependencies:\n" + _format_pairs(actual),
         )
 
     def test_application_only_depends_on_inward_packages(self) -> None:
@@ -156,19 +83,18 @@ class ArchitectureDependencyTests(unittest.TestCase):
 
         self.assertFalse(forbidden, "compat modules gained business dependencies:\n" + _format_pairs(forbidden))
 
-    def test_import_cycles_cannot_grow(self) -> None:
+    def test_internal_import_graph_is_acyclic(self) -> None:
         actual = frozenset(_strongly_connected_components(self.dependencies))
-        unexpected = actual - LEGACY_IMPORT_CYCLES
 
         self.assertFalse(
-            unexpected,
-            "new import cycles detected:\n"
-            + "\n".join(" -> ".join(sorted(cycle)) for cycle in sorted(unexpected, key=sorted)),
+            actual,
+            "import cycles detected:\n"
+            + "\n".join(" -> ".join(sorted(cycle)) for cycle in sorted(actual, key=sorted)),
         )
 
     def test_removed_planning_lifecycle_cycle_stays_removed(self) -> None:
         cycle_members = {
-            "sisyphus.domain.planning.service",
+            "sisyphus.infra.orchestration.planning",
             "sisyphus.lifecycle_guard",
             "sisyphus.lifecycle_rules",
             "sisyphus.planning",
@@ -177,6 +103,27 @@ class ArchitectureDependencyTests(unittest.TestCase):
         self.assertFalse(
             any(cycle_members <= cycle for cycle in _strongly_connected_components(self.dependencies)),
             "planning and lifecycle modules formed their previous import cycle",
+        )
+
+    def test_domain_models_do_not_own_boundary_mapping_methods(self) -> None:
+        violations: set[tuple[str, str]] = set()
+        for module in self.modules.values():
+            if not module.name.startswith("sisyphus.domain"):
+                continue
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                for member in node.body:
+                    if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) and member.name in {
+                        "from_dict",
+                        "to_dict",
+                    }:
+                        violations.add((f"{module.name}.{node.name}", member.name))
+
+        self.assertFalse(
+            violations,
+            "domain models own persistence/transport mapping:\n" + _format_pairs(violations),
         )
 
 

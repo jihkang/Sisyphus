@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from .config import SisyphusConfig
-from .domain.task.factory import build_task_record, task_id_for
 from .domain.task.models import DEFAULT_CHANGESET_PATH, DEFAULT_PROMOTION_RECEIPT_PATH
-from .domain.task.repository import (
+from .infra.orchestration.task_factory import build_task_record, task_id_for
+from .infra.persistence.task_repository import (
     ConcurrentTaskUpdateError,
     ensure_task_record_defaults,
     list_task_records,

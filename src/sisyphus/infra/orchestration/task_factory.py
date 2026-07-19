@@ -10,7 +10,7 @@ from ...gitops import branch_name, worktree_path
 from ...promotion_state import default_task_promotion
 from ...shared.clock import utc_now
 from ...shared.paths import task_dir
-from .models import default_task_docs
+from ...domain.task.models import default_task_docs
 
 
 def task_id_for(task_type: str, slug: str, now: datetime | None = None) -> str:

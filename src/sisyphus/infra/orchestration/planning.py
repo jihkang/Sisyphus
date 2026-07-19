@@ -11,20 +11,29 @@ from ...gates import dedupe_gates as _dedupe_gates, make_gate as _gate
 from ...lifecycle_state import LifecycleAction
 from ...state import load_task_record, save_task_record, utc_now
 from ...strategy import sync_test_strategy_from_docs
-from .spec_validation import collect_spec_validation_gates
+from ...domain.planning.models import (
+    PlanReviewState,
+    PlanStatus,
+    SpecState,
+    SpecStatus,
+    normalize_plan_status,
+    normalize_spec_status,
+)
+from ...domain.planning.policy import collect_plan_gate_specs, collect_spec_gate_specs
+from ..validation.spec_validation import collect_spec_validation_gates
 
 
-PLAN_PENDING_REVIEW = "pending_review"
-PLAN_APPROVED = "approved"
-PLAN_CHANGES_REQUESTED = "changes_requested"
+PLAN_PENDING_REVIEW = PlanStatus.PENDING_REVIEW.value
+PLAN_APPROVED = PlanStatus.APPROVED.value
+PLAN_CHANGES_REQUESTED = PlanStatus.CHANGES_REQUESTED.value
 PLAN_REVIEW_LIMIT_REACHED = "PLAN_REVIEW_LIMIT_REACHED"
 PLAN_STATUSES = {
     PLAN_PENDING_REVIEW,
     PLAN_APPROVED,
     PLAN_CHANGES_REQUESTED,
 }
-SPEC_DRAFT = "draft"
-SPEC_FROZEN = "frozen"
+SPEC_DRAFT = SpecStatus.DRAFT.value
+SPEC_FROZEN = SpecStatus.FROZEN.value
 SPEC_STATUSES = {
     SPEC_DRAFT,
     SPEC_FROZEN,
@@ -55,34 +64,31 @@ class SubtaskGenerationOutcome:
 
 
 def current_plan_status(task: dict) -> str:
-    status = str(task.get("plan_status") or PLAN_APPROVED)
-    if status not in PLAN_STATUSES:
-        return PLAN_APPROVED
-    return status
+    return normalize_plan_status(task.get("plan_status")).value
 
 
 def current_spec_status(task: dict) -> str:
-    status = str(task.get("spec_status") or SPEC_FROZEN)
-    if status not in SPEC_STATUSES:
-        return SPEC_FROZEN
-    return status
+    return normalize_spec_status(task.get("spec_status")).value
 
 
 def collect_plan_gates(task: dict, *, action: str) -> list[dict]:
-    status = current_plan_status(task)
-    if int(task.get("plan_review_round", 0)) >= int(task.get("max_plan_review_rounds", 3)) and status != PLAN_APPROVED:
-        return [_gate(PLAN_REVIEW_LIMIT_REACHED, f"task plan review exceeded maximum rounds before {action}", source="plan")]
-    if status == PLAN_APPROVED:
-        return []
-    if status == PLAN_CHANGES_REQUESTED:
-        return [_gate("PLAN_CHANGES_REQUESTED", f"task plan has requested changes before {action}", source="plan")]
-    return [_gate("PLAN_APPROVAL_REQUIRED", f"task plan must be approved before {action}", source="plan")]
+    specs = collect_plan_gate_specs(
+        PlanReviewState(
+            status=normalize_plan_status(task.get("plan_status")),
+            review_round=int(task.get("plan_review_round", 0)),
+            max_review_rounds=int(task.get("max_plan_review_rounds", 3)),
+        ),
+        action=action,
+    )
+    return [_gate(spec.code, spec.message, source=spec.source) for spec in specs]
 
 
 def collect_spec_execution_gates(task: dict, *, action: str) -> list[dict]:
-    if current_spec_status(task) == SPEC_FROZEN:
-        return []
-    return [_gate("SPEC_FREEZE_REQUIRED", f"task spec must be frozen before {action}", source="spec")]
+    specs = collect_spec_gate_specs(
+        SpecState(status=normalize_spec_status(task.get("spec_status"))),
+        action=action,
+    )
+    return [_gate(spec.code, spec.message, source=spec.source) for spec in specs]
 
 
 def approve_task_plan(

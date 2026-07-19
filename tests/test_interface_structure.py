@@ -26,7 +26,7 @@ class InterfaceStructureTests(unittest.TestCase):
 
     def test_state_module_reexports_task_repository_surface(self) -> None:
         import sisyphus.state as public_state
-        from sisyphus.domain.task import repository
+        from sisyphus.infra.persistence import task_repository as repository
 
         self.assertIs(public_state.ensure_task_record_defaults, repository.ensure_task_record_defaults)
         self.assertIs(public_state.list_task_records, repository.list_task_records)
@@ -37,7 +37,7 @@ class InterfaceStructureTests(unittest.TestCase):
 
     def test_planning_module_reexports_domain_service_surface(self) -> None:
         import sisyphus.planning as public_planning
-        from sisyphus.domain.planning import service
+        from sisyphus.infra.orchestration import planning as service
 
         self.assertIs(public_planning.approve_task_plan, service.approve_task_plan)
         self.assertIs(public_planning.freeze_task_spec, service.freeze_task_spec)
@@ -45,7 +45,7 @@ class InterfaceStructureTests(unittest.TestCase):
 
     def test_workflow_module_delegates_to_domain_service_and_preserves_provider_patch(self) -> None:
         import sisyphus.workflow as public_workflow
-        from sisyphus.domain.workflow import service
+        from sisyphus.infra.orchestration import workflow as service
 
         repo_root = Path("/tmp/repo")
         config = object()
@@ -54,7 +54,10 @@ class InterfaceStructureTests(unittest.TestCase):
         patched_wrapper = object()
         try:
             public_workflow.run_provider_wrapper = patched_wrapper
-            with mock.patch("sisyphus.domain.workflow.service.run_workflow_cycle", return_value=2) as delegated:
+            with mock.patch(
+                "sisyphus.infra.orchestration.workflow.run_workflow_cycle",
+                return_value=2,
+            ) as delegated:
                 self.assertEqual(public_workflow.run_workflow_cycle(repo_root, config), 2)
             delegated.assert_called_once_with(repo_root=repo_root, config=config)
             self.assertIs(service.run_provider_wrapper, patched_wrapper)
@@ -64,7 +67,7 @@ class InterfaceStructureTests(unittest.TestCase):
 
     def test_promotion_module_delegates_to_domain_service_and_preserves_gh_patch(self) -> None:
         import sisyphus.promotion as public_promotion
-        from sisyphus.domain.promotion import service
+        from sisyphus.infra.orchestration import promotion as service
 
         original_public_run_gh = public_promotion._run_gh
         original_service_run_gh = service._run_gh
@@ -72,7 +75,10 @@ class InterfaceStructureTests(unittest.TestCase):
         config = object()
         try:
             public_promotion._run_gh = patched_run_gh
-            with mock.patch("sisyphus.domain.promotion.service.execute_promotion", return_value="ok") as delegated:
+            with mock.patch(
+                "sisyphus.infra.orchestration.promotion.execute_promotion",
+                return_value="ok",
+            ) as delegated:
                 self.assertEqual(public_promotion.execute_promotion("repo", config, task_id="TF-1"), "ok")
             delegated.assert_called_once_with("repo", config, task_id="TF-1")
             self.assertIs(service._run_gh, patched_run_gh)
@@ -750,7 +756,7 @@ class InterfaceStructureTests(unittest.TestCase):
             self.assertEqual(list(path.parent.glob("*.tmp")), [])
 
     def test_agent_repository_round_trips_agent_records(self) -> None:
-        from sisyphus.domain.agent import repository
+        from sisyphus.infra.persistence import agent_repository as repository
 
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

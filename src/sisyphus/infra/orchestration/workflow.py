@@ -24,9 +24,9 @@ from ...planning import (
     freeze_task_spec,
     generate_subtasks,
 )
-from ...provider_wrapper import run_provider_wrapper
 from ...state import load_task_record, save_task_record, update_task_record
-from .candidates import list_workflow_candidate_ids
+from ..persistence.workflow_candidates import list_workflow_candidate_ids
+from ..providers import run_legacy_provider_wrapper as run_provider_wrapper
 
 
 PLANNER_ROLE = "planner"

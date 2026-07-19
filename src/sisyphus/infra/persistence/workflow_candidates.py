@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
-from ...infra.persistence import read_json_file, write_json_file
+from ...domain.planning.models import PlanStatus, normalize_plan_status
 from ...shared.paths import workflow_candidate_index_file
-from ..planning.service import PLAN_APPROVED, current_plan_status
-from ..task.repository import normalize_task_projection
+from .json_store import read_json_file, write_json_file
+from .task_repository import normalize_task_projection
 
 
 WORKFLOW_CANDIDATE_INDEX_SCHEMA = "sisyphus.workflow_candidate_index.v1"
@@ -68,7 +68,7 @@ def is_workflow_candidate(task: dict[str, object]) -> bool:
         return False
     if str(task.get("workflow_phase") or "") in _BLOCKED_PHASES:
         return False
-    return current_plan_status(task) == PLAN_APPROVED
+    return normalize_plan_status(task.get("plan_status")) == PlanStatus.APPROVED
 
 
 def _project_entry(

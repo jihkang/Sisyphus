@@ -5,10 +5,11 @@ from .models import (
     LifecycleAction,
     LifecycleSnapshot,
     PlanStatus,
-    SpecStatus,
     TransitionDecision,
     dedupe_gate_specs,
 )
+from ..planning.models import PlanReviewState, SpecState
+from ..planning.policy import collect_plan_gate_specs, collect_spec_gate_specs
 
 
 HUMAN_GATED_ACTIONS = frozenset(
@@ -50,7 +51,7 @@ def evaluate_lifecycle_policy(
         return _allowed(snapshot, action, "plan_in_review", "Plan revision resubmits the task for review.")
 
     if action == LifecycleAction.FREEZE_SPEC:
-        gates = _plan_gates(snapshot, action_label="spec freeze")
+        gates = list(_plan_gates(snapshot, action_label="spec freeze"))
         if gates:
             return _blocked(
                 snapshot,
@@ -87,7 +88,7 @@ def evaluate_lifecycle_policy(
         return _allowed(snapshot, action, "execution", "Execution is allowed.")
 
     if action == LifecycleAction.VERIFY:
-        gates = _plan_gates(snapshot, action_label="verify")
+        gates = list(_plan_gates(snapshot, action_label="verify"))
         gates.extend(_spec_gates(snapshot, action_label="verify"))
         gates.extend(_conformance_gates(snapshot, action_label="verify"))
         if gates:
@@ -123,54 +124,29 @@ def _execution_readiness_gates(
     action_label: str,
     include_conformance: bool = True,
 ) -> list[GateSpec]:
-    gates = _plan_gates(snapshot, action_label=action_label)
+    gates = list(_plan_gates(snapshot, action_label=action_label))
     gates.extend(_spec_gates(snapshot, action_label=action_label))
     if include_conformance:
         gates.extend(_conformance_gates(snapshot, action_label=action_label))
     return list(dedupe_gate_specs(gates))
 
 
-def _plan_gates(snapshot: LifecycleSnapshot, *, action_label: str) -> list[GateSpec]:
-    if (
-        snapshot.plan_review_round >= snapshot.max_plan_review_rounds
-        and snapshot.plan_status != PlanStatus.APPROVED
-    ):
-        return [
-            _gate(
-                "PLAN_REVIEW_LIMIT_REACHED",
-                f"task plan review exceeded maximum rounds before {action_label}",
-                "plan",
-            )
-        ]
-    if snapshot.plan_status == PlanStatus.APPROVED:
-        return []
-    if snapshot.plan_status == PlanStatus.CHANGES_REQUESTED:
-        return [
-            _gate(
-                "PLAN_CHANGES_REQUESTED",
-                f"task plan has requested changes before {action_label}",
-                "plan",
-            )
-        ]
-    return [
-        _gate(
-            "PLAN_APPROVAL_REQUIRED",
-            f"task plan must be approved before {action_label}",
-            "plan",
-        )
-    ]
+def _plan_gates(snapshot: LifecycleSnapshot, *, action_label: str) -> tuple[GateSpec, ...]:
+    return collect_plan_gate_specs(
+        PlanReviewState(
+            status=snapshot.plan_status,
+            review_round=snapshot.plan_review_round,
+            max_review_rounds=snapshot.max_plan_review_rounds,
+        ),
+        action=action_label,
+    )
 
 
-def _spec_gates(snapshot: LifecycleSnapshot, *, action_label: str) -> list[GateSpec]:
-    if snapshot.spec_status == SpecStatus.FROZEN:
-        return []
-    return [
-        _gate(
-            "SPEC_FREEZE_REQUIRED",
-            f"task spec must be frozen before {action_label}",
-            "spec",
-        )
-    ]
+def _spec_gates(snapshot: LifecycleSnapshot, *, action_label: str) -> tuple[GateSpec, ...]:
+    return collect_spec_gate_specs(
+        SpecState(status=snapshot.spec_status),
+        action=action_label,
+    )
 
 
 def _conformance_gates(snapshot: LifecycleSnapshot, *, action_label: str) -> list[GateSpec]:
@@ -223,7 +199,7 @@ def _conformance_gates(snapshot: LifecycleSnapshot, *, action_label: str) -> lis
 
 
 def _close_gates(snapshot: LifecycleSnapshot) -> list[GateSpec]:
-    gates = _plan_gates(snapshot, action_label="close")
+    gates = list(_plan_gates(snapshot, action_label="close"))
     gates.extend(_conformance_gates(snapshot, action_label="close"))
     if snapshot.verify_status != "passed":
         gates.append(_gate("VERIFY_REQUIRED", "task must pass verify before close", "close"))
@@ -239,7 +215,7 @@ def _close_gates(snapshot: LifecycleSnapshot) -> list[GateSpec]:
 
 
 def _promotion_gates(snapshot: LifecycleSnapshot) -> list[GateSpec]:
-    gates = _plan_gates(snapshot, action_label="promotion")
+    gates = list(_plan_gates(snapshot, action_label="promotion"))
     gates.extend(_spec_gates(snapshot, action_label="promotion"))
     gates.extend(_conformance_gates(snapshot, action_label="promotion"))
     if snapshot.verify_status != "passed":

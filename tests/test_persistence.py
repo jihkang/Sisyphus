@@ -15,7 +15,7 @@ if str(SRC_ROOT) not in sys.path:
 
 class PersistenceSafetyTests(unittest.TestCase):
     def test_task_save_rejects_stale_loaded_record(self) -> None:
-        from sisyphus.domain.task.repository import (
+        from sisyphus.infra.persistence.task_repository import (
             ConcurrentTaskUpdateError,
             load_task_record,
             save_task_record,
@@ -42,7 +42,11 @@ class PersistenceSafetyTests(unittest.TestCase):
             self.assertEqual(reloaded["status"], "blocked")
 
     def test_update_task_record_mutates_current_record_under_lock(self) -> None:
-        from sisyphus.domain.task.repository import load_task_record, save_task_record, update_task_record
+        from sisyphus.infra.persistence.task_repository import (
+            load_task_record,
+            save_task_record,
+            update_task_record,
+        )
 
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir) / "repo"
@@ -69,7 +73,7 @@ class PersistenceSafetyTests(unittest.TestCase):
                 save_task_record(task_file, stale, mirror_support=False)
 
     def test_task_support_sync_can_be_disabled_explicitly(self) -> None:
-        from sisyphus.domain.task.repository import save_task_record
+        from sisyphus.infra.persistence.task_repository import save_task_record
 
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir) / "repo"
@@ -88,7 +92,7 @@ class PersistenceSafetyTests(unittest.TestCase):
             self.assertTrue(mirrored_task.exists())
 
     def test_agent_save_rejects_stale_loaded_record(self) -> None:
-        from sisyphus.domain.agent.repository import (
+        from sisyphus.infra.persistence.agent_repository import (
             ConcurrentAgentUpdateError,
             read_agent_record,
             save_agent_record,

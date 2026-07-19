@@ -14,6 +14,7 @@ from .agents import AgentTrackingError, update_agent
 from .codex_prompt import build_codex_prompt, build_local_worker_prompt
 from .config import load_config
 from .discovery import detect_repo_root
+from .infra.providers.conversation import run_legacy_conversation
 from .providers.local_openai import (
     LocalProviderConfig,
     LocalProviderConfigError,
@@ -144,10 +145,10 @@ def _run_conversation_mode(
     owned_paths: list[str] | None,
     provider_args: list[str] | None,
 ) -> int:
-    from .daemon import process_inbox_event, queue_conversation_event
-
-    event, event_path = queue_conversation_event(
-        repo_root,
+    return run_legacy_conversation(
+        provider=provider,
+        repo_root=repo_root,
+        config=config,
         message=message,
         title=title,
         task_type=task_type,
@@ -155,23 +156,9 @@ def _run_conversation_mode(
         instruction=instruction,
         agent_id=agent_id,
         role=role,
-        provider=provider,
         owned_paths=owned_paths,
         provider_args=provider_args,
-        auto_run=True,
     )
-    processed = process_inbox_event(repo_root=repo_root, config=config, event_path=event_path)
-    if processed.get("status") != "processed":
-        print(f"error: {processed.get('error') or 'conversation task launch failed'}", file=sys.stderr)
-        return 1
-
-    result = processed.get("result", {})
-    print(f"created {result.get('task_id')}")
-    print(f"branch: {result.get('branch')}")
-    print(f"worktree_path: {result.get('worktree_path')}")
-    if result.get("agent_id"):
-        print(f"agent_id: {result.get('agent_id')}")
-    return 0
 
 
 def _build_default_launch(

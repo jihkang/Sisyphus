@@ -14,12 +14,12 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from sisyphus.config import load_config
-from sisyphus.domain.workflow.candidates import (
+from sisyphus.infra.persistence.workflow_candidates import (
     WORKFLOW_CANDIDATE_INDEX_SCHEMA,
     is_workflow_candidate,
     list_workflow_candidate_ids,
 )
-from sisyphus.domain.workflow.service import run_workflow_cycle
+from sisyphus.infra.orchestration.workflow import run_workflow_cycle
 from sisyphus.infra.persistence import read_json_file
 from sisyphus.shared.paths import workflow_candidate_index_file
 
@@ -71,7 +71,7 @@ class WorkflowCandidateIndexTests(unittest.TestCase):
                 _task_record(self.repo_root, task_id, status="closed", workflow_phase="closed"),
             )
         with mock.patch(
-            "sisyphus.domain.workflow.candidates.read_json_file",
+            "sisyphus.infra.persistence.workflow_candidates.read_json_file",
             wraps=read_json_file,
         ) as cold_read_json:
             self.assertEqual(run_workflow_cycle(self.repo_root, self.config), 0)
@@ -83,10 +83,10 @@ class WorkflowCandidateIndexTests(unittest.TestCase):
         self.assertEqual(len(cold_task_reads), 500)
 
         with mock.patch(
-            "sisyphus.domain.workflow.candidates.read_json_file",
+            "sisyphus.infra.persistence.workflow_candidates.read_json_file",
             wraps=read_json_file,
         ) as read_json:
-            with mock.patch("sisyphus.domain.workflow.service._advance_task") as advance_task:
+            with mock.patch("sisyphus.infra.orchestration.workflow._advance_task") as advance_task:
                 progressed = run_workflow_cycle(self.repo_root, self.config)
 
         task_reads = [
@@ -171,7 +171,7 @@ class WorkflowCandidateIndexTests(unittest.TestCase):
         _write_json(index_path, payload)
 
         with mock.patch(
-            "sisyphus.domain.workflow.candidates.read_json_file",
+            "sisyphus.infra.persistence.workflow_candidates.read_json_file",
             wraps=read_json_file,
         ) as read_json:
             candidates = list_workflow_candidate_ids(self.repo_root, self.task_dir_name)
@@ -184,7 +184,7 @@ class WorkflowCandidateIndexTests(unittest.TestCase):
         _write_task(self.repo_root, _task_record(self.repo_root, "TF-stable"))
         list_workflow_candidate_ids(self.repo_root, self.task_dir_name)
 
-        with mock.patch("sisyphus.domain.workflow.candidates.write_json_file") as write_index:
+        with mock.patch("sisyphus.infra.persistence.workflow_candidates.write_json_file") as write_index:
             candidates = list_workflow_candidate_ids(self.repo_root, self.task_dir_name)
 
         self.assertEqual(candidates, ["TF-stable"])
@@ -194,7 +194,7 @@ class WorkflowCandidateIndexTests(unittest.TestCase):
         _write_task(self.repo_root, _task_record(self.repo_root, "TF-no-cache"))
 
         with mock.patch(
-            "sisyphus.domain.workflow.candidates.write_json_file",
+            "sisyphus.infra.persistence.workflow_candidates.write_json_file",
             side_effect=PermissionError("read-only cache"),
         ):
             candidates = list_workflow_candidate_ids(self.repo_root, self.task_dir_name)
@@ -203,11 +203,11 @@ class WorkflowCandidateIndexTests(unittest.TestCase):
 
     def test_workflow_cycle_advances_only_indexed_candidates_in_order(self) -> None:
         with mock.patch(
-            "sisyphus.domain.workflow.service.list_workflow_candidate_ids",
+            "sisyphus.infra.orchestration.workflow.list_workflow_candidate_ids",
             return_value=["TF-first", "TF-second"],
         ) as list_candidates:
             with mock.patch(
-                "sisyphus.domain.workflow.service._advance_task",
+                "sisyphus.infra.orchestration.workflow._advance_task",
                 side_effect=[True, False],
             ) as advance_task:
                 progressed = run_workflow_cycle(self.repo_root, self.config)

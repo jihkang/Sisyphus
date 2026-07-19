@@ -39,9 +39,13 @@ from ...retrieval import retrieve_documents
 from ...search_index import read_search_index, rebuild_search_index, search_index_status
 from ...spec_validation import validate_task_spec
 from ...state import load_task_record
-from . import evolution as evolution_handlers
-from . import promotion_tools, search_tools, task_tools, workflow_tools
-from . import repo_resources, task_resources
+import sisyphus.interfaces.mcp.evolution as evolution_handlers
+import sisyphus.interfaces.mcp.promotion_tools as promotion_tools
+import sisyphus.interfaces.mcp.repo_resources as repo_resources
+import sisyphus.interfaces.mcp.search_tools as search_tools
+import sisyphus.interfaces.mcp.task_resources as task_resources
+import sisyphus.interfaces.mcp.task_tools as task_tools
+import sisyphus.interfaces.mcp.workflow_tools as workflow_tools
 from .registry import tool_group_for
 from .resources import mcp_resource_definitions
 from .schemas import _mcp_schema_markdown

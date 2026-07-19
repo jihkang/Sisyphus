@@ -10,7 +10,7 @@ import uuid
 from .bus import build_event_publisher
 from .config import SisyphusConfig, load_config
 from .creation import create_task_workspace
-from .domain.inbox import InboxEvent, InboxValidationError
+from .domain.inbox import InboxValidationError
 from .domain.task.documents import (
     render_brief as _render_brief,
     render_feature_plan as _render_feature_plan,
@@ -21,6 +21,7 @@ from .domain.task.documents import (
 from .gitops import copy_relative_path, current_branch_name, list_dirty_paths, remove_relative_path
 from .events import new_event_envelope
 from .infra.persistence import InboxRepository
+from .interfaces.inbox import inbox_event_to_record, parse_inbox_event
 from .metrics import publish_manual_intervention_required
 from .planning import enforce_plan_approved, enforce_spec_frozen
 from .promotion import record_merged_pull_request
@@ -278,7 +279,7 @@ def process_inbox_event(
     raw_event: object = None
     try:
         raw_event = inbox.read(claimed_path)
-        event = InboxEvent.from_dict(raw_event).to_dict()
+        event = inbox_event_to_record(parse_inbox_event(raw_event))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         return _quarantine_invalid_event(
             repo_root=repo_root,
@@ -375,7 +376,7 @@ def process_inbox_event(
 
 def _validated_queued_event(raw_event: dict[str, object]) -> dict[str, object]:
     try:
-        return InboxEvent.from_dict(raw_event).to_dict()
+        return inbox_event_to_record(parse_inbox_event(raw_event))
     except InboxValidationError as exc:
         raise DaemonError(str(exc)) from None
 

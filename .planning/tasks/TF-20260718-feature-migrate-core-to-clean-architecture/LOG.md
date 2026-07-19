@@ -13,13 +13,18 @@
 - 2026-07-19: Moved concrete Task/Agent repositories to infra/persistence and retained the legacy import paths as compatibility shims.
 - 2026-07-19: Added application repository ports, typed query services, concrete JSON adapters, and bootstrap.py.
 - 2026-07-19: Passed the expanded full suite with 527 tests after the first migration slice.
+- 2026-07-19: Extracted planning gate authority into pure domain models and policies and delegated lifecycle decisions to them.
+- 2026-07-19: Moved planning, workflow, task factory, promotion, and spec-validation implementations out of domain into infra adapters.
+- 2026-07-19: Replaced Inbox model serialization methods with a strict interface parser and centralized record mapper.
+- 2026-07-19: Removed all domain outward dependencies and all static internal import cycles; architecture tests now enforce both without allowlists.
+- 2026-07-19: Passed the expanded full suite with 535 tests after the second migration slice.
 
 ## Notes
 
 - Current canonical conformance is green with zero drift at the latest design anchor.
 - The plan intentionally separates the Sisyphus core refactor from the Sisyphus Harness Hermes/GEPA/model-execution roadmap.
 - Public lifecycle_state, lifecycle_rules, Task/Agent repository imports, dictionary results, and persisted record extensions remain compatible.
-- Domain outward-dependency debt has decreased; the remaining allowlist is migration debt scheduled for later phases.
+- Domain outward dependencies and static internal import cycles are both zero under the architecture fitness tests.
 
 ## Follow-ups
 

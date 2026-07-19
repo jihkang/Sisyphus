@@ -11,7 +11,7 @@ from .domain.agent.models import (
     DEFAULT_STALE_AFTER_SECONDS,
     FINAL_AGENT_STATUSES,
 )
-from .domain.agent import repository as agent_repository
+from .infra.persistence import agent_repository
 from .shared.clock import utc_now
 from .shared.mappings import find_unknown_fields
 from .state import load_task_record

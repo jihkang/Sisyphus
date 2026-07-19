@@ -8,11 +8,10 @@ from ...domain.lifecycle.models import (
     GateSpec,
     LifecycleAction,
     LifecycleSnapshot,
-    PlanStatus,
     PromotionState,
-    SpecStatus,
     SubtaskConformance,
 )
+from ...domain.planning.models import normalize_plan_status, normalize_spec_status
 from ...gates import make_gate
 from ...promotion_state import promotion_summary
 
@@ -45,10 +44,10 @@ class LifecycleRecordMapper:
         return LifecycleSnapshot(
             current_phase=_optional_phase(task.get("workflow_phase")),
             closed=closed,
-            plan_status=_plan_status(task.get("plan_status")),
+            plan_status=normalize_plan_status(task.get("plan_status")),
             plan_review_round=int(task.get("plan_review_round", 0)),
             max_plan_review_rounds=int(task.get("max_plan_review_rounds", 3)),
-            spec_status=_spec_status(task.get("spec_status")),
+            spec_status=normalize_spec_status(task.get("spec_status")),
             verify_status=str(task.get("verify_status") or ""),
             conformance=conformance,
             promotion=promotion,
@@ -95,20 +94,6 @@ def _map_promotion(summary: Mapping[str, object]) -> PromotionState:
         required=bool(summary.get("required")),
         status=_optional_text(summary.get("status")),
     )
-
-
-def _plan_status(value: object) -> PlanStatus:
-    try:
-        return PlanStatus(str(value or PlanStatus.APPROVED.value))
-    except ValueError:
-        return PlanStatus.APPROVED
-
-
-def _spec_status(value: object) -> SpecStatus:
-    try:
-        return SpecStatus(str(value or SpecStatus.FROZEN.value))
-    except ValueError:
-        return SpecStatus.FROZEN
 
 
 def _optional_text(value: object) -> str | None:
