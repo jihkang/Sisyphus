@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
-import os
 import re
 import shlex
-import subprocess
-import sys
 
 from ...application.ports.workspace import SUPPORTED_WORKSPACE_ACTIONS
 from ...domain.agent.workspace import WorkspaceCompletion, WorkspaceExecutionState
-from .errors import WorkspaceActionError, WorkspaceFileSafetyError
+from .effects import WorkspaceGitEffects, WorkspaceTestEffects
+from .errors import WorkspaceActionError, WorkspaceFileSafetyError, WorkspaceGitError
+from .git import SubprocessWorkspaceGit
 from .secure_files import SecureWorkspaceFiles
+from .test_runner import SubprocessWorkspaceTests
 
 
 PROTECTED_PATH_PARTS = {".git", ".planning"}
@@ -28,6 +28,8 @@ class WorkspaceExecutor:
         test_commands: tuple[str, ...] = (),
         command_timeout_seconds: float = 120.0,
         max_output_chars: int = 8000,
+        git_effects: WorkspaceGitEffects | None = None,
+        test_effects: WorkspaceTestEffects | None = None,
     ) -> None:
         self.workspace = workspace.resolve()
         if not self.workspace.is_dir():
@@ -38,6 +40,15 @@ class WorkspaceExecutor:
         self.max_output_chars = max(int(max_output_chars), 256)
         self._files = SecureWorkspaceFiles(self.workspace)
         self._state = WorkspaceExecutionState()
+        self._git = git_effects or SubprocessWorkspaceGit(
+            self.workspace,
+            timeout_seconds=self.command_timeout_seconds,
+        )
+        self._tests = test_effects or SubprocessWorkspaceTests(
+            self.workspace,
+            commands=self.test_commands,
+            timeout_seconds=self.command_timeout_seconds,
+        )
 
     @property
     def baseline_test_step(self) -> int | None:
@@ -94,7 +105,9 @@ class WorkspaceExecutor:
                 return result
         except (WorkspaceActionError, WorkspaceFileSafetyError) as exc:
             return self._blocked(str(exc))
-        except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        except WorkspaceGitError as exc:
+            return self._blocked(self._bounded(str(exc)))
+        except (OSError, UnicodeError) as exc:
             return {
                 "ok": False,
                 "blocked": False,
@@ -106,13 +119,10 @@ class WorkspaceExecutor:
         return _present_completion(self._state.evaluate_completion(self.changed_files()))
 
     def changed_files(self) -> list[str]:
-        tracked = self._run_git(["diff", "--name-only", "--diff-filter=ACMRTUXB", "HEAD"])
-        untracked = self._run_git(["ls-files", "--others", "--exclude-standard"])
         paths = {
-            line.strip()
-            for output in (tracked, untracked)
-            for line in output.splitlines()
-            if line.strip() and not _is_protected_relative_path(line.strip())
+            path
+            for path in self._git.changed_files()
+            if not _is_protected_relative_path(path)
         }
         return sorted(paths)
 
@@ -219,39 +229,18 @@ class WorkspaceExecutor:
         for relative in paths:
             self._resolve_path(relative, write=True)
         self._require_baseline_test()
-        checked = subprocess.run(
-            ["git", "apply", "--check", "-"],
-            cwd=self.workspace,
-            input=patch,
-            text=True,
-            capture_output=True,
-            timeout=self.command_timeout_seconds,
-        )
-        if checked.returncode != 0:
+        execution = self._git.apply_patch(patch)
+        if not execution.ok:
             return {
                 "ok": False,
                 "blocked": False,
-                "error": self._bounded(checked.stderr or checked.stdout or "git apply --check failed"),
-            }
-        applied = subprocess.run(
-            ["git", "apply", "--whitespace=nowarn", "-"],
-            cwd=self.workspace,
-            input=patch,
-            text=True,
-            capture_output=True,
-            timeout=self.command_timeout_seconds,
-        )
-        if applied.returncode != 0:
-            return {
-                "ok": False,
-                "blocked": False,
-                "error": self._bounded(applied.stderr or applied.stdout or "git apply failed"),
+                "error": self._bounded(execution.error or "git apply failed"),
             }
         return {"ok": True, "blocked": False, "mutated": True, "changed_paths": sorted(paths)}
 
     def _git_diff(self) -> dict[str, object]:
-        status = self._run_git(["status", "--short"])
-        diff = self._run_git(["diff", "--stat", "HEAD"])
+        status = self._git.status()
+        diff = self._git.diff_stat()
         return {
             "ok": True,
             "blocked": False,
@@ -263,39 +252,14 @@ class WorkspaceExecutor:
         command_id = action.get("command_id")
         if not isinstance(command_id, int):
             raise WorkspaceActionError("run_test requires an integer command_id")
-        if command_id < 0 or command_id >= len(self.test_commands):
-            raise WorkspaceActionError(f"test command_id out of range: {command_id}")
-        command = self.test_commands[command_id]
-        argv = shlex.split(command)
-        if not argv:
-            raise WorkspaceActionError("configured test command is empty")
-        if argv[0] in {"python", "python3"}:
-            argv[0] = sys.executable
-        try:
-            completed = subprocess.run(
-                argv,
-                cwd=self.workspace,
-                text=True,
-                capture_output=True,
-                timeout=self.command_timeout_seconds,
-                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
-            )
-        except subprocess.TimeoutExpired as exc:
-            return {
-                "ok": False,
-                "blocked": False,
-                "command_id": command_id,
-                "error": f"test command timed out after {self.command_timeout_seconds:g} seconds",
-                "output": self._bounded(_timeout_output(exc)),
-            }
-        output = (completed.stdout or "") + (completed.stderr or "")
+        execution = self._tests.run(command_id)
         return {
-            "ok": completed.returncode == 0,
+            "ok": execution.ok,
             "blocked": False,
-            "command_id": command_id,
-            "exit_code": completed.returncode,
-            "output": self._bounded(output),
-            "error": None if completed.returncode == 0 else f"test command exited with code {completed.returncode}",
+            "command_id": execution.command_id,
+            **({"exit_code": execution.exit_code} if execution.exit_code is not None else {}),
+            "output": self._bounded(execution.output),
+            "error": execution.error,
         }
 
     def _resolve_path(self, value: str, *, write: bool) -> Path:
@@ -327,31 +291,13 @@ class WorkspaceExecutor:
             )
 
     def _repository_files(self) -> list[str]:
-        output = self._run_git(["ls-files", "--cached", "--others", "--exclude-standard"])
         return sorted(
             {
-                line.strip()
-                for line in output.splitlines()
-                if line.strip() and not _is_protected_relative_path(line.strip())
+                path
+                for path in self._git.repository_files()
+                if not _is_protected_relative_path(path)
             }
         )
-
-    def _run_git(self, args: list[str]) -> str:
-        try:
-            completed = subprocess.run(
-                ["git", *args],
-                cwd=self.workspace,
-                text=True,
-                capture_output=True,
-                timeout=self.command_timeout_seconds,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise WorkspaceActionError(f"git command timed out: {' '.join(args)}") from exc
-        if completed.returncode != 0:
-            raise WorkspaceActionError(
-                self._bounded(completed.stderr or completed.stdout or f"git {' '.join(args)} failed")
-            )
-        return completed.stdout
 
     def _bounded(self, value: str) -> str:
         if len(value) <= self.max_output_chars:
@@ -417,12 +363,6 @@ def _strip_patch_prefix(value: str) -> str:
     if value.startswith(("a/", "b/")):
         return value[2:]
     return value
-
-
-def _timeout_output(exc: subprocess.TimeoutExpired) -> str:
-    stdout = exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else exc.stdout or ""
-    stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else exc.stderr or ""
-    return stdout + stderr
 
 
 def _present_completion(completion: WorkspaceCompletion) -> dict[str, object]:

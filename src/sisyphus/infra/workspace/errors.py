@@ -9,4 +9,8 @@ class WorkspaceFileSafetyError(ValueError):
     pass
 
 
-__all__ = ["WorkspaceActionError", "WorkspaceFileSafetyError"]
+class WorkspaceGitError(RuntimeError):
+    pass
+
+
+__all__ = ["WorkspaceActionError", "WorkspaceFileSafetyError", "WorkspaceGitError"]

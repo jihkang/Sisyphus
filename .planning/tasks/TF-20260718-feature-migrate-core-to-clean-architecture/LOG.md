@@ -53,6 +53,8 @@
 - 2026-07-19: Added protected alias and resolve/open race regressions and passed the expanded full suite with 580 tests after the Workspace adapter slice.
 - 2026-07-19: Moved Workspace mutation ordering and completion eligibility into the pure `domain/agent/workspace.py` state model while preserving the provider facade's result shape.
 - 2026-07-19: Passed 27 focused Workspace/architecture regressions and the expanded full suite with 583 tests after activating descriptor-relative I/O and extracting Workspace policy.
+- 2026-07-19: Extracted Git and configured-test subprocesses behind infra-local Workspace effect contracts without leaking Git concepts into the application port.
+- 2026-07-19: Added real-adapter, injected-failure, timeout, and invalid-patch classification tests; passed 31 focused regressions and the expanded full suite with 587 tests.
 
 ## Notes
 
