@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...application.use_cases.workflow import PLANNER_ROLE, REVIEWER_ROLE, WORKER_ROLE
-from ...bootstrap import build_workflow_service
+from ...composition.workflow import build_workflow_service
 from ...config import SisyphusConfig
 from ..persistence.workflow_candidates import list_workflow_candidate_ids
 from ..providers import run_legacy_provider_wrapper as run_provider_wrapper

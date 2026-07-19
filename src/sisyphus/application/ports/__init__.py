@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .clock import ClockPort
+from .planning import DesignConformancePort, PlanningDocumentPort, SpecValidationPort
 from .repositories import AgentRepository, TaskRepository
 from .workflow import (
     CloseoutPort,
@@ -15,14 +17,18 @@ from .workflow import (
 
 __all__ = [
     "AgentRepository",
+    "ClockPort",
     "CloseoutPort",
     "ConformancePort",
+    "DesignConformancePort",
     "EventPublisherPort",
     "FeatureObligationPort",
     "ManualInterventionPort",
+    "PlanningDocumentPort",
     "ProviderPort",
     "TaskRecordPort",
     "TaskRepository",
+    "SpecValidationPort",
     "VerificationPort",
     "WorkflowPlanningPort",
 ]

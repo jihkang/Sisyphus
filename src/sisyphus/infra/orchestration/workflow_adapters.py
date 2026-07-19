@@ -7,11 +7,11 @@ from ...application.ports.workflow import (
     CloseoutResult,
     ConformanceCheck,
     ProviderRequest,
-    TaskMutator,
     TaskRecord,
     VerificationResult,
     WorkflowEvent,
 )
+from ...application.use_cases.planning import PlanningService
 from ...audit import run_verify
 from ...bus import build_event_publisher
 from ...closeout import run_close
@@ -24,11 +24,8 @@ from ...conformance import (
     summarize_task_conformance,
 )
 from ...events import new_event_envelope
-from ...metrics import publish_manual_intervention_required
 from ...obligation_runtime import converge_feature_change_obligations
 from ...shared.paths import task_dir as resolve_task_dir
-from ..persistence.task_repository import load_task_record, save_task_record, update_task_record
-from .planning import freeze_task_spec, generate_subtasks
 
 
 class ProviderRunner(Protocol):
@@ -41,52 +38,19 @@ class ProviderRunner(Protocol):
     ) -> int: ...
 
 
-class FileTaskRecordAdapter:
-    def __init__(self, repo_root: Path, config: SisyphusConfig) -> None:
-        self._repo_root = repo_root
-        self._config = config
-
-    def load(self, task_id: str) -> TaskRecord:
-        task, _ = load_task_record(self._repo_root, self._config.task_dir, task_id)
-        return task
-
-    def save(self, task: TaskRecord) -> None:
-        task_id = str(task.get("id") or "")
-        if not task_id:
-            raise ValueError("task record requires an id")
-        task_file = resolve_task_dir(self._repo_root, self._config.task_dir, task_id) / "task.json"
-        save_task_record(task_file=task_file, task=task)
-
-    def update(self, task_id: str, mutator: TaskMutator) -> TaskRecord:
-        task, _ = update_task_record(
-            self._repo_root,
-            self._config.task_dir,
-            task_id,
-            mutator,
-        )
-        return task
-
-
 class PlanningWorkflowAdapter:
-    def __init__(self, repo_root: Path, config: SisyphusConfig) -> None:
-        self._repo_root = repo_root
-        self._config = config
+    def __init__(self, service: PlanningService) -> None:
+        self._service = service
 
     def freeze_spec(self, task_id: str) -> None:
-        freeze_task_spec(
-            repo_root=self._repo_root,
-            config=self._config,
-            task_id=task_id,
+        self._service.freeze_spec(
+            task_id,
             reviewer="workflow-daemon",
             notes="automatic spec freeze after plan approval",
         )
 
     def generate_subtasks(self, task_id: str) -> None:
-        generate_subtasks(
-            repo_root=self._repo_root,
-            config=self._config,
-            task_id=task_id,
-        )
+        self._service.generate_subtasks(task_id)
 
 
 class FeatureObligationAdapter:
@@ -212,38 +176,11 @@ class EventPublisherAdapter:
         )
 
 
-class ManualInterventionAdapter:
-    def __init__(self, repo_root: Path, config: SisyphusConfig) -> None:
-        self._repo_root = repo_root
-        self._config = config
-
-    def required(
-        self,
-        *,
-        task_id: str,
-        reason: str,
-        workflow_phase: str,
-        status: str,
-        detail: str,
-    ) -> None:
-        publish_manual_intervention_required(
-            self._repo_root,
-            self._config,
-            task_id=task_id,
-            reason=reason,
-            workflow_phase=workflow_phase,
-            status=status,
-            detail=detail,
-        )
-
-
 __all__ = [
     "CloseoutAdapter",
     "ConformanceAdapter",
     "EventPublisherAdapter",
     "FeatureObligationAdapter",
-    "FileTaskRecordAdapter",
-    "ManualInterventionAdapter",
     "PlanningWorkflowAdapter",
     "ProviderAdapter",
     "ProviderRunner",

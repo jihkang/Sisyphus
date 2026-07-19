@@ -21,6 +21,10 @@
 - 2026-07-19: Replaced workflow's direct side-effect imports with an application use case and explicit task, planning, obligation, conformance, provider, verification, closeout, event, and intervention ports.
 - 2026-07-19: Preserved the public workflow facade and provider-runner patch point through bootstrap composition.
 - 2026-07-19: Passed the expanded full suite with 542 tests after the workflow application slice.
+- 2026-07-19: Moved pure design normalization, assessment, and freeze rules into domain/task and retained Markdown loading in the public adapter.
+- 2026-07-19: Replaced planning's direct persistence and filesystem orchestration with an application use case using task, document, validation, design-conformance, intervention, and clock ports.
+- 2026-07-19: Split planning and workflow composition roots to prevent eager adapter imports from recreating an audit/planning cycle.
+- 2026-07-19: Passed the expanded full suite with 547 tests after the planning application slice.
 
 ## Notes
 
