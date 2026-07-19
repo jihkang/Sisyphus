@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..application.use_cases.workflow import WorkflowService
+from ..infra.clock import SystemClock
 from ..infra.config.loader import SisyphusConfig
 from ..infra.orchestration.common_adapters import (
     EventPublisherAdapter,
@@ -28,11 +29,12 @@ def build_workflow_service(
     *,
     provider_runner: ProviderRunner,
 ) -> WorkflowService:
+    clock = SystemClock()
     return WorkflowService(
         tasks=FileTaskRecordAdapter(repo_root, config),
         planning=PlanningWorkflowAdapter(build_planning_service(repo_root, config)),
         obligations=FeatureObligationAdapter(repo_root, config),
-        conformance=ConformanceAdapter(repo_root, config),
+        conformance=ConformanceAdapter(repo_root, config, clock),
         provider=ProviderAdapter(repo_root, provider_runner),
         verification=VerificationAdapter(build_verification_service(repo_root, config)),
         closeout=CloseoutAdapter(repo_root, config),

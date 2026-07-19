@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Protocol
+import uuid
 
+from ...application.conformance_records import (
+    ConformanceRecordService,
+    build_execution_contract,
+    summarize_task_conformance,
+)
+from ...application.ports.clock import ClockPort
 from ...application.ports.workflow import (
     CloseoutResult,
     ConformanceCheck,
@@ -13,16 +20,10 @@ from ...application.ports.workflow import (
 from ...application.use_cases.planning import PlanningService
 from ...application.use_cases.verification import VerificationService
 from ...closeout import run_close
-from ...conformance import (
-    append_conformance_log_markdown,
-    build_execution_contract,
-    run_post_execution_conformance_check,
-    run_pre_execution_conformance_check,
-    summarize_task_conformance,
-)
 from ...obligation_runtime import converge_feature_change_obligations
 from ...shared.paths import task_dir as resolve_task_dir
 from ..config.loader import SisyphusConfig
+from ..documents.conformance_log import append_conformance_log_markdown
 
 
 class ProviderRunner(Protocol):
@@ -64,9 +65,18 @@ class FeatureObligationAdapter:
 
 
 class ConformanceAdapter:
-    def __init__(self, repo_root: Path, config: SisyphusConfig) -> None:
+    def __init__(
+        self,
+        repo_root: Path,
+        config: SisyphusConfig,
+        clock: ClockPort,
+    ) -> None:
         self._repo_root = repo_root
         self._config = config
+        self._records = ConformanceRecordService(
+            clock=clock,
+            new_id=lambda: uuid.uuid4().hex,
+        )
 
     def pre_execution(
         self,
@@ -75,7 +85,7 @@ class ConformanceAdapter:
         subtask_id: str,
         source: str,
     ) -> ConformanceCheck:
-        status, summary = run_pre_execution_conformance_check(
+        status, summary = self._records.pre_execution(
             task,
             subtask_id=subtask_id,
             source=source,
@@ -90,7 +100,7 @@ class ConformanceAdapter:
         exit_code: int,
         source: str,
     ) -> ConformanceCheck:
-        status, summary = run_post_execution_conformance_check(
+        status, summary = self._records.post_execution(
             task,
             subtask_id=subtask_id,
             exit_code=exit_code,

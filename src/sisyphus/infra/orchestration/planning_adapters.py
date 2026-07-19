@@ -3,14 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import uuid
 
+from ...application.conformance_records import ConformanceRecordService
 from ...application.ports.clock import ClockPort
 from ...application.ports.workflow import TaskRecord
-from ...domain.task.conformance import (
-    CONFORMANCE_CHECKPOINT_DESIGN_ANCHOR,
-    CONFORMANCE_GREEN,
-    append_conformance_entry,
-)
-from ...domain.task.design import ensure_task_design_defaults, summarize_design_anchor
 from ...shared.paths import task_dir as resolve_task_dir
 from ..config.loader import SisyphusConfig
 from ..documents.task_strategy import sync_test_strategy_from_docs
@@ -59,22 +54,13 @@ class SpecValidationAdapter:
 
 class DesignConformanceAdapter:
     def __init__(self, clock: ClockPort) -> None:
-        self._clock = clock
+        self._records = ConformanceRecordService(
+            clock=clock,
+            new_id=lambda: uuid.uuid4().hex,
+        )
 
     def mark_design_anchor(self, task: TaskRecord, *, source: str) -> TaskRecord:
-        ensure_task_design_defaults(task)
-        design = task["design"]
-        return append_conformance_entry(
-            task,
-            checkpoint_type=CONFORMANCE_CHECKPOINT_DESIGN_ANCHOR,
-            status=CONFORMANCE_GREEN,
-            timestamp=self._clock.now(),
-            task_event_id=uuid.uuid4().hex,
-            summary=summarize_design_anchor(design.get("frozen", {}) or design),
-            source=source,
-            resolved=False,
-            drift=0,
-        )
+        return self._records.mark_design_anchor(task, source=source)
 
 
 __all__ = [

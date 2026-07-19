@@ -72,6 +72,8 @@
 - 2026-07-19: Injected episode recording at composition, added identity/tamper/symlink/request-binding regressions, and passed the expanded full suite with 617 tests.
 - 2026-07-19: Moved document-backed test-strategy synchronization to `infra/documents` and rewired spec validation to domain design rules, application gate records, and the canonical task repository.
 - 2026-07-19: Replaced Planning's public conformance-facade call with an injected-clock adapter over domain conformance mutation, added facade-dependency and design-anchor regressions, and passed the expanded full suite with 619 tests.
+- 2026-07-19: Moved conformance policy, projection, execution-contract rendering, and injected time/ID record mutation to `application/conformance_records.py`; moved Markdown log projection to `infra/documents` and reduced the public conformance module to compatibility wiring plus gate projection.
+- 2026-07-19: Re-anchored execution-contract and conformance-summary Evolution targets and bounded mutations to the canonical application source, added deterministic task/subtask record and idempotent log tests, and passed the expanded full suite with 623 tests.
 
 ## Notes
 

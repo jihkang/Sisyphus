@@ -176,6 +176,10 @@ class EvolutionCoreTests(unittest.TestCase):
         self.assertTrue(all(target.kind == EVOLUTION_TARGET_KIND_TEXT_POLICY for target in targets))
         self.assertTrue(all(target.live_state_safe for target in targets))
         self.assertEqual(get_evolution_target("mcp-tool-descriptions"), targets[1])
+        self.assertEqual(
+            targets[0].source_paths,
+            ("src/sisyphus/application/conformance_records.py",),
+        )
 
     def test_plan_run_uses_default_registry_without_mutating_repo_state(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -2407,7 +2411,9 @@ class EvolutionHarnessTests(unittest.TestCase):
         plan = plan_evolution_harness(run, dataset)
         evaluation_task = self._build_evaluation_task("TF-eval-baseline", self.repo_root)
 
-        conformance_before = (self.repo_root / "src/sisyphus/conformance.py").read_text(encoding="utf-8")
+        conformance_before = (
+            self.repo_root / "src/sisyphus/application/conformance_records.py"
+        ).read_text(encoding="utf-8")
         prompt_before = (self.repo_root / "src/sisyphus/codex_prompt.py").read_text(encoding="utf-8")
 
         materialization = materialize_evolution_evaluation(plan.baseline, task=evaluation_task)
@@ -2415,10 +2421,15 @@ class EvolutionHarnessTests(unittest.TestCase):
         self.assertEqual(materialization.status, EVOLUTION_MATERIALIZATION_STATUS_BASELINE_CAPTURED)
         self.assertEqual(
             materialization.file_paths,
-            ("src/sisyphus/conformance.py", "src/sisyphus/codex_prompt.py"),
+            (
+                "src/sisyphus/application/conformance_records.py",
+                "src/sisyphus/codex_prompt.py",
+            ),
         )
         self.assertEqual(
-            (self.repo_root / "src/sisyphus/conformance.py").read_text(encoding="utf-8"),
+            (
+                self.repo_root / "src/sisyphus/application/conformance_records.py"
+            ).read_text(encoding="utf-8"),
             conformance_before,
         )
         self.assertEqual(
@@ -2430,7 +2441,7 @@ class EvolutionHarnessTests(unittest.TestCase):
             (
                 self.repo_root
                 / materialization.snapshot_root
-                / "src/sisyphus/conformance.py"
+                / "src/sisyphus/application/conformance_records.py"
             ).is_file()
         )
 
@@ -2446,7 +2457,9 @@ class EvolutionHarnessTests(unittest.TestCase):
         evaluation_task = self._build_evaluation_task("TF-eval-candidate", self.repo_root)
 
         materialization = materialize_evolution_evaluation(plan.candidate, task=evaluation_task)
-        conformance_text = (self.repo_root / "src/sisyphus/conformance.py").read_text(encoding="utf-8")
+        conformance_text = (
+            self.repo_root / "src/sisyphus/application/conformance_records.py"
+        ).read_text(encoding="utf-8")
         verification_text = (
             self.repo_root / "src/sisyphus/application/use_cases/verification.py"
         ).read_text(encoding="utf-8")
@@ -2470,7 +2483,7 @@ class EvolutionHarnessTests(unittest.TestCase):
     def test_materialize_candidate_fails_loudly_when_anchor_is_missing(self) -> None:
         self._seed_phase_1_sources()
         self._new_task("materialize-failure")
-        conformance_path = self.repo_root / "src/sisyphus/conformance.py"
+        conformance_path = self.repo_root / "src/sisyphus/application/conformance_records.py"
         conformance_path.write_text(
             conformance_path.read_text(encoding="utf-8").replace(
                 "clarification or warning is pending",
@@ -2545,15 +2558,20 @@ class EvolutionHarnessTests(unittest.TestCase):
         self.assertEqual(outcome.evidence.mode, EVOLUTION_EVALUATION_EXECUTION_MODE_SISYPHUS_TASK)
         self.assertEqual(outcome.evidence.materialization_status, EVOLUTION_MATERIALIZATION_STATUS_CANDIDATE_APPLIED)
         self.assertEqual(outcome.evidence.materialized_target_ids, plan.candidate.target_ids)
-        self.assertEqual(outcome.evidence.materialized_file_paths, ("src/sisyphus/conformance.py",))
+        self.assertEqual(
+            outcome.evidence.materialized_file_paths,
+            ("src/sisyphus/application/conformance_records.py",),
+        )
         self.assertTrue((evaluation_worktree / outcome.evidence.materialization_manifest_path).is_file())
         self.assertIn("--owned-path", wrapper_calls["argv"])
-        self.assertIn("src/sisyphus/conformance.py", wrapper_calls["argv"])
+        self.assertIn("src/sisyphus/application/conformance_records.py", wrapper_calls["argv"])
         self.assertIn("docs/self-evolution-mcp-plan.md", wrapper_calls["argv"])
         self.assertIn(outcome.evidence.materialization_manifest_path, wrapper_calls["argv"])
         self.assertIn(
             "must be resolved before continuing",
-            (evaluation_worktree / "src/sisyphus/conformance.py").read_text(encoding="utf-8"),
+            (
+                evaluation_worktree / "src/sisyphus/application/conformance_records.py"
+            ).read_text(encoding="utf-8"),
         )
 
     def test_build_worktree_evaluation_command_plan_normalizes_and_dedupes_commands(self) -> None:
@@ -2587,7 +2605,7 @@ class EvolutionHarnessTests(unittest.TestCase):
         self._seed_phase_1_sources()
         task = self._new_task("worktree-executor")
         task["verify_commands"] = [
-            f"cd {self.repo_root / '_worktrees' / 'stale'} && {sys.executable} -c \"from pathlib import Path; assert Path('src/sisyphus/conformance.py').is_file(); print('ok')\""
+            f"cd {self.repo_root / '_worktrees' / 'stale'} && {sys.executable} -c \"from pathlib import Path; assert Path('src/sisyphus/application/conformance_records.py').is_file(); print('ok')\""
         ]
         save_task_record(self.repo_root / task["task_dir"] / "task.json", task)
         run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])

@@ -57,7 +57,7 @@ class EvolutionMaterializationError(RuntimeError):
 _TARGET_MUTATIONS: dict[str, tuple[EvolutionTextMutation, ...]] = {
     "execution-contract-wording": (
         EvolutionTextMutation(
-            source_path="src/sisyphus/conformance.py",
+            source_path="src/sisyphus/application/conformance_records.py",
             before='        "- `yellow` means a clarification or warning is pending.",\n',
             after=(
                 '        "- `yellow` means unresolved drift or clarification is pending and must be resolved before continuing.",\n'
@@ -65,7 +65,7 @@ _TARGET_MUTATIONS: dict[str, tuple[EvolutionTextMutation, ...]] = {
             description="tighten the yellow conformance wording",
         ),
         EvolutionTextMutation(
-            source_path="src/sisyphus/conformance.py",
+            source_path="src/sisyphus/application/conformance_records.py",
             before='            "- Re-anchor the implementation to the frozen spec before making changes.",\n',
             after=(
                 '            "- Re-anchor to the frozen spec before editing and restate any ambiguity before continuing.",\n'
@@ -109,13 +109,13 @@ _TARGET_MUTATIONS: dict[str, tuple[EvolutionTextMutation, ...]] = {
     ),
     "conformance-summary-wording": (
         EvolutionTextMutation(
-            source_path="src/sisyphus/conformance.py",
+            source_path="src/sisyphus/application/conformance_records.py",
             before='    parts: list[str] = [f"status={record.get(\'status\', CONFORMANCE_GREEN)}"]\n',
             after='    parts: list[str] = [f"conformance={record.get(\'status\', CONFORMANCE_GREEN)}"]\n',
             description="rename the summary status token to conformance",
         ),
         EvolutionTextMutation(
-            source_path="src/sisyphus/conformance.py",
+            source_path="src/sisyphus/application/conformance_records.py",
             before='    return " | ".join(field for field in fields if field)\n',
             after='    return " / ".join(field for field in fields if field)\n',
             description="normalize event-summary separators",

@@ -267,6 +267,11 @@ class ArchitectureDependencyTests(unittest.TestCase):
             + _format_pairs(forbidden),
         )
 
+    def test_workflow_conformance_adapter_does_not_import_public_facade(self) -> None:
+        module = self.modules["sisyphus.infra.orchestration.workflow_adapters"]
+
+        self.assertNotIn("sisyphus.conformance", _declared_imports(module))
+
     def test_domain_models_do_not_own_boundary_mapping_methods(self) -> None:
         violations: set[tuple[str, str]] = set()
         for module in self.modules.values():
