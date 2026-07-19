@@ -10,7 +10,7 @@ from typing import Any
 from urllib import error, request
 
 from .local_agent import LocalCodingAgent
-from .workspace import WorkspaceExecutor
+from ..infra.workspace import WorkspaceExecutor
 
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1"

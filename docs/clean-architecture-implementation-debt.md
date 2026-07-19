@@ -32,11 +32,15 @@ separation, and real 30.5B model evidence, is not part of this repository migrat
 | Agent facade concrete dependency | Removed | `agents.py` derives the compatibility record path through `shared.paths.agent_dir` instead of importing the concrete agent repository |
 | Legacy repository imports | Restored without restoring implementation ownership | The two modules listed below preserve object identity with the infrastructure implementations |
 | Persistence/interface/mapping parity | Passed | 47 tests across `test_persistence`, `test_interface_structure`, and `test_record_mappers` |
+| Workspace location, policy, and file safety | Completed | Canonical implementation moved to `infra/workspace`; application owns the action port; domain owns mutation/completion policy; descriptor-relative reads/writes reject symlink races and fsync atomic replacements |
 
-## Accepted Import Compatibility
+## Accepted Domain Dependency Exceptions
 
-These are the complete architecture allowlist. They are compatibility debt, not
-implementation debt.
+These are the complete allowlist for outward imports from `domain`. They are
+compatibility debt, not implementation debt. Outer public-path shims such as
+`providers/workspace.py` do not reverse an inward dependency and therefore are
+not entries in this allowlist; their retirement remains attached to the owning
+implementation-debt item.
 
 | Shim | Canonical implementation | Retirement condition |
 | --- | --- | --- |
@@ -53,7 +57,7 @@ change.
 | ID | Priority | Boundary and current evidence | Required end state | Verification gate |
 | --- | --- | --- | --- | --- |
 | CA-01 | High | `state.py` still combines task construction, directory creation, concrete persistence selection, and public compatibility | Move create/load/list/update coordination behind application commands and queries; leave `state.py` as a delegating facade | Task creation and legacy record fixtures remain byte/shape compatible; facade contains no branching business logic |
-| CA-02 | High | `providers/workspace.py` owns path policy, file IO, Git, subprocess execution, mutation tracking, and completion policy in one 473-line adapter | Put workspace effects in `infra/workspace`, keep policy/results inward, enforce containment, protected-path and symlink checks at use time, and retain the provider import path as a shim | Workspace contract, traversal, symlink, TOCTOU-oriented open, mutation-order, timeout, and output-bound tests pass |
+| CA-02 | High | Partial: `infra/workspace` owns secure file effects, `domain/agent/workspace.py` owns mutation/completion policy, and `WorkspacePort` is inward; `executor.py` still dispatches Git diff/apply and test subprocesses, and `git apply` cannot use the descriptor-relative file adapter | Isolate Git and test command execution as effect collaborators, give patch application an explicit containment contract, and retain `providers/workspace.py` only as an outer compatibility shim | Workspace contract, traversal, symlink, resolve/open race, patch-mode, mutation-order, timeout, output-bound, and effect failure-injection tests pass |
 | CA-03 | High | `provider_wrapper.py` remains a 658-line parser, process launcher, receipt writer, compatibility patch surface, and presenter | Separate request parsing/presentation from provider execution and receipt persistence behind existing ports; preserve CLI override compatibility only at the facade | Provider failure-injection, environment, argument, receipt, CLI override, and installed-wheel tests pass |
 | CA-04 | High | `daemon.py` is 902 lines and `creation.py`/`closeout.py` still coordinate queue, task state, worktrees, providers, verification, events, and promotion through root modules | Introduce application use cases for creation, daemon event handling, and closeout with narrow repository/effect ports; keep side-effect order explicit | Event replay, retry, gate, partial-failure, close, and end-to-end workflow characterization tests pass |
 | CA-05 | High | CLI and MCP handlers still import root implementations such as `state`, `planning`, `audit`, `closeout`, `creation`, and `daemon` | Route handlers through application command/query services assembled by composition roots; interfaces retain only adaptation, dispatch, trace, and rendering | CLI help/exit/output and MCP tools/resources/schema/trace fixtures remain identical; interfaces have no implementation imports |
@@ -66,7 +70,7 @@ change.
 
 ## Execution Order
 
-1. Complete Workspace, Provider, Verifier, Event, and Artifact adapter boundaries.
+1. Complete the remaining Workspace Git/test effects and the Provider, Verifier, Event, and Artifact adapter boundaries.
 2. Move creation, daemon processing, and closeout orchestration into application use cases.
 3. Rewire CLI and MCP to application commands and queries.
 4. Restrict Evolve to read/evaluation/append-only ports and add authority tests.

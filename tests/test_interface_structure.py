@@ -51,6 +51,14 @@ class InterfaceStructureTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIs(getattr(legacy, name), getattr(canonical, name))
 
+    def test_provider_workspace_is_an_identity_preserving_shim(self) -> None:
+        from sisyphus.infra import workspace as canonical
+        from sisyphus.providers import workspace as legacy
+
+        for name in legacy.__all__:
+            with self.subTest(name=name):
+                self.assertIs(getattr(legacy, name), getattr(canonical, name))
+
     def test_planning_module_reexports_domain_service_surface(self) -> None:
         import sisyphus.planning as public_planning
         from sisyphus.infra.orchestration import planning as service

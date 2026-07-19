@@ -1,0 +1,286 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path, PurePosixPath
+import errno
+import os
+import secrets
+import stat
+
+from .errors import WorkspaceFileSafetyError
+
+
+_DIRECTORY_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_DIRECTORY", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+)
+_FILE_FLAGS = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+_WRITE_FLAGS = (
+    os.O_WRONLY
+    | os.O_CREAT
+    | os.O_EXCL
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+)
+
+
+class SecureWorkspaceFiles:
+    def __init__(self, root: Path) -> None:
+        self.root = root.resolve()
+        self._dir_fd_supported = all(
+            function in os.supports_dir_fd
+            for function in (os.open, os.mkdir, os.stat, os.rename, os.unlink)
+        ) and bool(getattr(os, "O_NOFOLLOW", 0))
+
+    def read_text(self, relative: PurePosixPath, *, max_bytes: int) -> str:
+        if self._dir_fd_supported:
+            data = self._read_bytes_at(relative, max_bytes=max_bytes)
+        else:
+            data = self._read_bytes_fallback(relative, max_bytes=max_bytes)
+        return data.decode("utf-8")
+
+    def write_text_atomic(self, relative: PurePosixPath, content: str) -> bool:
+        payload = content.encode("utf-8")
+        if self._dir_fd_supported:
+            return self._write_bytes_at(relative, payload)
+        return self._write_bytes_fallback(relative, payload)
+
+    def reject_existing_symlinks(self, relative: PurePosixPath) -> None:
+        current = self.root
+        for part in relative.parts:
+            if part == ".":
+                continue
+            current = current / part
+            try:
+                metadata = current.lstat()
+            except FileNotFoundError:
+                return
+            if stat.S_ISLNK(metadata.st_mode):
+                raise WorkspaceFileSafetyError(
+                    f"workspace path contains a symlink: {relative.as_posix()}"
+                )
+
+    def _read_bytes_at(self, relative: PurePosixPath, *, max_bytes: int) -> bytes:
+        with self._parent_fd(relative, create=False) as (parent_fd, leaf):
+            return self._read_leaf_at(
+                parent_fd,
+                leaf,
+                relative=relative,
+                max_bytes=max_bytes,
+            )
+
+    def _write_bytes_at(self, relative: PurePosixPath, payload: bytes) -> bool:
+        with self._parent_fd(relative, create=True) as (parent_fd, leaf):
+            existing_mode: int | None = None
+            try:
+                metadata = os.stat(leaf, dir_fd=parent_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                metadata = None
+            if metadata is not None:
+                if not stat.S_ISREG(metadata.st_mode):
+                    raise WorkspaceFileSafetyError(
+                        f"workspace write target is not a regular file: {relative.as_posix()}"
+                    )
+                existing_mode = stat.S_IMODE(metadata.st_mode)
+                if metadata.st_size == len(payload) and self._read_leaf_at(
+                    parent_fd,
+                    leaf,
+                    relative=relative,
+                    max_bytes=max(len(payload), 1),
+                ) == payload:
+                    return False
+
+            temporary_name = f".{leaf}.{secrets.token_hex(8)}.tmp"
+            temporary_fd: int | None = None
+            try:
+                temporary_fd = os.open(
+                    temporary_name,
+                    _WRITE_FLAGS,
+                    0o600,
+                    dir_fd=parent_fd,
+                )
+                _write_all(temporary_fd, payload)
+                if existing_mode is not None:
+                    os.fchmod(temporary_fd, existing_mode)
+                os.fsync(temporary_fd)
+                os.close(temporary_fd)
+                temporary_fd = None
+                os.rename(
+                    temporary_name,
+                    leaf,
+                    src_dir_fd=parent_fd,
+                    dst_dir_fd=parent_fd,
+                )
+                os.fsync(parent_fd)
+            finally:
+                if temporary_fd is not None:
+                    os.close(temporary_fd)
+                try:
+                    os.unlink(temporary_name, dir_fd=parent_fd)
+                except FileNotFoundError:
+                    pass
+            return True
+
+    def _read_leaf_at(
+        self,
+        parent_fd: int,
+        leaf: str,
+        *,
+        relative: PurePosixPath,
+        max_bytes: int,
+    ) -> bytes:
+        try:
+            file_fd = os.open(leaf, _FILE_FLAGS, dir_fd=parent_fd)
+        except OSError as exc:
+            self._raise_for_unsafe_open(exc, relative)
+            raise
+        try:
+            metadata = os.fstat(file_fd)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise WorkspaceFileSafetyError(
+                    f"workspace path is not a regular file: {relative.as_posix()}"
+                )
+            if metadata.st_size > max_bytes:
+                raise WorkspaceFileSafetyError(
+                    f"file exceeds workspace read limit of {max_bytes} bytes: {relative.as_posix()}"
+                )
+            return _read_bounded(file_fd, max_bytes=max_bytes, relative=relative)
+        finally:
+            os.close(file_fd)
+
+    @contextmanager
+    def _parent_fd(
+        self,
+        relative: PurePosixPath,
+        *,
+        create: bool,
+    ) -> Iterator[tuple[int, str]]:
+        parts = tuple(part for part in relative.parts if part != ".")
+        if not parts:
+            raise WorkspaceFileSafetyError("workspace path must identify a file")
+        current_fd = os.open(self.root, _DIRECTORY_FLAGS)
+        try:
+            for part in parts[:-1]:
+                try:
+                    next_fd = os.open(part, _DIRECTORY_FLAGS, dir_fd=current_fd)
+                except FileNotFoundError:
+                    if not create:
+                        raise
+                    try:
+                        os.mkdir(part, mode=0o777, dir_fd=current_fd)
+                    except FileExistsError:
+                        pass
+                    try:
+                        next_fd = os.open(part, _DIRECTORY_FLAGS, dir_fd=current_fd)
+                    except OSError as exc:
+                        self._raise_for_unsafe_open(exc, relative)
+                        raise
+                except OSError as exc:
+                    self._raise_for_unsafe_open(exc, relative)
+                    raise
+                os.close(current_fd)
+                current_fd = next_fd
+            yield current_fd, parts[-1]
+        finally:
+            os.close(current_fd)
+
+    def _read_bytes_fallback(self, relative: PurePosixPath, *, max_bytes: int) -> bytes:
+        path = self._fallback_path(relative)
+        with path.open("rb") as handle:
+            metadata = os.fstat(handle.fileno())
+            if not stat.S_ISREG(metadata.st_mode):
+                raise WorkspaceFileSafetyError(
+                    f"workspace path is not a regular file: {relative.as_posix()}"
+                )
+            if metadata.st_size > max_bytes:
+                raise WorkspaceFileSafetyError(
+                    f"file exceeds workspace read limit of {max_bytes} bytes: {relative.as_posix()}"
+                )
+            return _read_bounded(handle.fileno(), max_bytes=max_bytes, relative=relative)
+
+    def _write_bytes_fallback(self, relative: PurePosixPath, payload: bytes) -> bool:
+        path = self._fallback_path(relative)
+        if path.exists():
+            metadata = path.stat()
+            if not stat.S_ISREG(metadata.st_mode):
+                raise WorkspaceFileSafetyError(
+                    f"workspace write target is not a regular file: {relative.as_posix()}"
+                )
+            if metadata.st_size == len(payload) and self._read_bytes_fallback(
+                relative,
+                max_bytes=max(len(payload), 1),
+            ) == payload:
+                return False
+        path.parent.mkdir(parents=True, exist_ok=True)
+        existing_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
+        temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+        try:
+            with temporary.open("xb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            if existing_mode is not None:
+                temporary.chmod(existing_mode)
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return True
+
+    def _fallback_path(self, relative: PurePosixPath) -> Path:
+        candidate = self.root.joinpath(*relative.parts)
+        resolved = candidate.resolve(strict=False)
+        try:
+            resolved.relative_to(self.root)
+        except ValueError as exc:
+            raise WorkspaceFileSafetyError(
+                f"path escapes local agent workspace: {relative.as_posix()}"
+            ) from exc
+        current = self.root
+        for part in relative.parts:
+            if part == ".":
+                continue
+            current = current / part
+            if current.is_symlink():
+                raise WorkspaceFileSafetyError(
+                    f"workspace path contains a symlink: {relative.as_posix()}"
+                )
+        return candidate
+
+    @staticmethod
+    def _raise_for_unsafe_open(exc: OSError, relative: PurePosixPath) -> None:
+        if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
+            raise WorkspaceFileSafetyError(
+                f"workspace path contains a symlink or non-directory: {relative.as_posix()}"
+            ) from exc
+
+
+def _read_bounded(file_fd: int, *, max_bytes: int, relative: PurePosixPath) -> bytes:
+    chunks: list[bytes] = []
+    remaining = max_bytes + 1
+    while remaining > 0:
+        chunk = os.read(file_fd, min(remaining, 64 * 1024))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    data = b"".join(chunks)
+    if len(data) > max_bytes:
+        raise WorkspaceFileSafetyError(
+            f"file exceeds workspace read limit of {max_bytes} bytes: {relative.as_posix()}"
+        )
+    return data
+
+
+def _write_all(file_fd: int, payload: bytes) -> None:
+    offset = 0
+    while offset < len(payload):
+        written = os.write(file_fd, payload[offset:])
+        if written <= 0:
+            raise OSError("workspace write returned no progress")
+        offset += written
+
+
+__all__ = ["SecureWorkspaceFiles"]

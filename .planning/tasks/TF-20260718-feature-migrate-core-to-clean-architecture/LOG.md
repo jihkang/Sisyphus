@@ -48,6 +48,11 @@
 - 2026-07-19: Removed the Agent facade's concrete repository dependency and restored the two pre-migration domain repository import paths as identity-preserving, import-only shims.
 - 2026-07-19: Tightened the architecture baseline to exactly those two shim edges and documented the remaining implementation debt with removal and verification gates.
 - 2026-07-19: Passed 47 persistence/interface/mapping contracts and the expanded full suite with 575 tests after the repository compatibility slice.
+- 2026-07-19: Moved WorkspaceExecutor into `infra/workspace`, introduced the inward WorkspacePort action contract, and retained the provider import path as an identity-preserving outer shim.
+- 2026-07-19: Replaced path-based workspace reads/writes with descriptor-relative no-follow traversal, durable atomic replacement, resolved protected-path checks, and symbolic-link patch rejection.
+- 2026-07-19: Added protected alias and resolve/open race regressions and passed the expanded full suite with 580 tests after the Workspace adapter slice.
+- 2026-07-19: Moved Workspace mutation ordering and completion eligibility into the pure `domain/agent/workspace.py` state model while preserving the provider facade's result shape.
+- 2026-07-19: Passed 27 focused Workspace/architecture regressions and the expanded full suite with 583 tests after activating descriptor-relative I/O and extracting Workspace policy.
 
 ## Notes
 
@@ -58,6 +63,6 @@
 
 ## Follow-ups
 
-- Execute the ordered debt ledger in `docs/clean-architecture-implementation-debt.md`, beginning with Workspace and remaining effect adapters.
+- Execute the ordered debt ledger in `docs/clean-architecture-implementation-debt.md`, beginning with the remaining Workspace Git/test effects and other effect adapters.
 - Isolate Evolve candidate generation from Control-owned approval, signing, active-policy, and queue authority.
 - Rewire remaining CLI/MCP consumers, validate architecture documentation, then run final package and merged-main verification.

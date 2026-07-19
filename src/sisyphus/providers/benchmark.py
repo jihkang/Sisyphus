@@ -14,7 +14,7 @@ from urllib.parse import urlsplit, urlunsplit
 from ..events import utc_now
 from .local_agent import ChatCompletionClient, LocalAgentRunResult, LocalCodingAgent
 from .local_openai import LocalProviderConfig, OpenAICompatibleClient
-from .workspace import PROTECTED_PATH_PARTS, WorkspaceExecutor
+from ..infra.workspace import PROTECTED_PATH_PARTS, WorkspaceExecutor
 
 
 LOCAL_AGENT_BENCHMARK_FIXTURE_SCHEMA_VERSION = (

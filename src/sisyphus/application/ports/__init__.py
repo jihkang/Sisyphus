@@ -35,6 +35,7 @@ from .workflow import (
     VerificationPort,
     WorkflowPlanningPort,
 )
+from .workspace import SUPPORTED_WORKSPACE_ACTIONS, WorkspacePort
 
 __all__ = [
     "AgentProcessPort",
@@ -61,10 +62,12 @@ __all__ = [
     "TaskRecordPort",
     "TaskRepository",
     "SpecValidationPort",
+    "SUPPORTED_WORKSPACE_ACTIONS",
     "VerificationPort",
     "VerificationCommandPort",
     "VerificationConformancePort",
     "VerificationDocumentPort",
     "WorkflowPlanningPort",
+    "WorkspacePort",
     "VersionControlPort",
 ]

@@ -1,19 +1,17 @@
-"""Compatibility imports for the pre-migration workspace provider path."""
-
-from __future__ import annotations
-
-from ..infra.workspace import (
+from .executor import (
     MAX_READ_FILE_BYTES,
     PROTECTED_PATH_PARTS,
     SUPPORTED_ACTIONS,
     WorkspaceActionError,
     WorkspaceExecutor,
 )
+from .secure_files import SecureWorkspaceFiles
 
 __all__ = [
-    "PROTECTED_PATH_PARTS",
     "MAX_READ_FILE_BYTES",
+    "PROTECTED_PATH_PARTS",
     "SUPPORTED_ACTIONS",
     "WorkspaceActionError",
     "WorkspaceExecutor",
+    "SecureWorkspaceFiles",
 ]

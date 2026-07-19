@@ -8,12 +8,12 @@ import re
 import tempfile
 from typing import Protocol
 
+from ..application.ports.workspace import SUPPORTED_WORKSPACE_ACTIONS, WorkspacePort
 from ..events import utc_now
-from .workspace import SUPPORTED_ACTIONS, WorkspaceExecutor
 
 
 LOCAL_AGENT_SCHEMA_VERSION = "sisyphus.local_agent_run.v1"
-LOCAL_AGENT_ACTIONS = (*sorted(SUPPORTED_ACTIONS), "finish")
+LOCAL_AGENT_ACTIONS = (*SUPPORTED_WORKSPACE_ACTIONS, "finish")
 
 SYSTEM_PROMPT = """You are a bounded local coding policy inside Sisyphus.
 Return exactly one JSON object per turn and no prose.
@@ -81,7 +81,7 @@ class LocalCodingAgent:
         *,
         config,
         client: ChatCompletionClient,
-        executor: WorkspaceExecutor,
+        executor: WorkspacePort,
         receipt_path: Path | None = None,
         observation_hash: str | None = None,
     ) -> None:

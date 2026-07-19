@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -227,6 +228,27 @@ class WorkspaceExecutorTests(unittest.TestCase):
         self.assertTrue(search["ok"])
         self.assertIn("app.py:2", search["output"])
 
+    def test_descriptor_relative_workspace_io_is_used_when_supported(self) -> None:
+        descriptor_io_supported = all(
+            function in os.supports_dir_fd
+            for function in (os.open, os.mkdir, os.stat, os.rename, os.unlink)
+        ) and bool(getattr(os, "O_NOFOLLOW", 0))
+        if not descriptor_io_supported:
+            self.skipTest("descriptor-relative no-follow I/O is unavailable")
+
+        with mock.patch.object(
+            self.executor._files,
+            "_read_bytes_fallback",
+            side_effect=AssertionError("fallback path must not be used"),
+        ):
+            result = self.executor.execute(
+                {"action": "read_file", "path": "app.py"},
+                step=1,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertIn("return left - right", result["output"])
+
     def test_read_search_and_test_outputs_are_actually_truncated(self) -> None:
         long_path = self.root / "long.txt"
         long_path.write_text(("needle " + ("x" * 80) + "\n") * 30, encoding="utf-8")
@@ -282,6 +304,98 @@ class WorkspaceExecutorTests(unittest.TestCase):
         self.assertTrue(result["blocked"])
         self.assertFalse((outside_dir / "bad.py").exists())
 
+    def test_symlink_alias_cannot_bypass_protected_path_policy(self) -> None:
+        planning = self.root / ".planning"
+        planning.mkdir()
+        (planning / "secret.txt").write_text("secret\n", encoding="utf-8")
+        alias = self.root / "tests" / "planning-alias"
+        try:
+            alias.symlink_to(planning, target_is_directory=True)
+        except OSError as exc:
+            self.skipTest(f"directory symlinks are unavailable: {exc}")
+
+        read = self.executor.execute(
+            {"action": "read_file", "path": "tests/planning-alias/secret.txt"},
+            step=1,
+        )
+        write = self.executor.execute(
+            {
+                "action": "write_file",
+                "path": "tests/planning-alias/secret.txt",
+                "content": "replaced\n",
+            },
+            step=2,
+        )
+
+        self.assertFalse(read["ok"])
+        self.assertTrue(read["blocked"])
+        self.assertFalse(write["ok"])
+        self.assertTrue(write["blocked"])
+        self.assertEqual((planning / "secret.txt").read_text(encoding="utf-8"), "secret\n")
+
+    def test_read_rejects_parent_replaced_by_symlink_after_resolution(self) -> None:
+        safe = self.root / "tests" / "safe"
+        safe.mkdir()
+        (safe / "value.txt").write_text("inside\n", encoding="utf-8")
+        outside_temp = tempfile.TemporaryDirectory(dir=self.root.parent)
+        self.addCleanup(outside_temp.cleanup)
+        outside = Path(outside_temp.name)
+        (outside / "value.txt").write_text("outside secret\n", encoding="utf-8")
+        moved = self.root / "tests" / "safe-before-swap"
+        original_resolve = self.executor._resolve_path
+
+        def resolve_then_swap(value: str, *, write: bool) -> Path:
+            resolved = original_resolve(value, write=write)
+            safe.rename(moved)
+            safe.symlink_to(outside, target_is_directory=True)
+            return resolved
+
+        try:
+            with mock.patch.object(self.executor, "_resolve_path", side_effect=resolve_then_swap):
+                result = self.executor.execute(
+                    {"action": "read_file", "path": "tests/safe/value.txt"},
+                    step=1,
+                )
+        except OSError as exc:
+            self.skipTest(f"directory symlinks are unavailable: {exc}")
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["blocked"])
+        self.assertNotIn("outside secret", str(result))
+
+    def test_write_rejects_parent_replaced_by_symlink_after_resolution(self) -> None:
+        safe = self.root / "tests" / "safe"
+        safe.mkdir()
+        outside_temp = tempfile.TemporaryDirectory(dir=self.root.parent)
+        self.addCleanup(outside_temp.cleanup)
+        outside = Path(outside_temp.name)
+        moved = self.root / "tests" / "safe-before-swap"
+        original_resolve = self.executor._resolve_path
+        self.executor.execute({"action": "run_test", "command_id": 0}, step=1)
+
+        def resolve_then_swap(value: str, *, write: bool) -> Path:
+            resolved = original_resolve(value, write=write)
+            safe.rename(moved)
+            safe.symlink_to(outside, target_is_directory=True)
+            return resolved
+
+        try:
+            with mock.patch.object(self.executor, "_resolve_path", side_effect=resolve_then_swap):
+                result = self.executor.execute(
+                    {
+                        "action": "write_file",
+                        "path": "tests/safe/value.txt",
+                        "content": "outside write\n",
+                    },
+                    step=2,
+                )
+        except OSError as exc:
+            self.skipTest(f"directory symlinks are unavailable: {exc}")
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["blocked"])
+        self.assertFalse((outside / "value.txt").exists())
+
     def test_oversized_file_read_is_rejected_before_loading_content(self) -> None:
         path = self.root / "large.bin"
         path.write_bytes(b"x" * 1_000_001)
@@ -328,6 +442,27 @@ class WorkspaceExecutorTests(unittest.TestCase):
         )
         self.assertTrue(rewritten["ok"])
         self.assertFalse(self.executor.completion_facts()["completion_ready"])
+
+    def test_patch_cannot_create_a_symbolic_link(self) -> None:
+        patch = """diff --git a/tests/escape b/tests/escape
+new file mode 120000
+index 0000000..0123456
+--- /dev/null
++++ b/tests/escape
+@@ -0,0 +1 @@
++../../outside
+"""
+        self.executor.execute({"action": "run_test", "command_id": 0}, step=1)
+
+        result = self.executor.execute(
+            {"action": "apply_patch", "patch": patch},
+            step=2,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["blocked"])
+        self.assertIn("symbolic links", result["error"])
+        self.assertFalse((self.root / "tests" / "escape").exists())
 
     def test_identical_write_is_a_no_op_and_does_not_move_mutation_order(self) -> None:
         self.executor.execute({"action": "run_test", "command_id": 0}, step=1)
