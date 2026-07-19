@@ -32,6 +32,9 @@
 - 2026-07-19: Moved promotion execution and merge-receipt orchestration behind application ports for version control, pull requests, artifacts, closeout, conformance, intervention, and reopened-task events.
 - 2026-07-19: Retained the public promotion facade, GitOperationError contract, GitHub CLI patch point, receipt paths, changeset projection, and stacked-child retarget behavior.
 - 2026-07-19: Added direct PromotionService tests and passed the expanded full suite with 556 tests after the promotion application slice.
+- 2026-07-19: Split tracked Agent execution into an application-owned registration/start/heartbeat/finalization use case and an infra-owned UTF-8 subprocess adapter.
+- 2026-07-19: Preserved command launch, environment merge, output summary, heartbeat failure, interrupt cancellation, process-start failure, and public AgentTrackingError behavior.
+- 2026-07-19: Added failure-injection AgentExecutionService tests and passed the expanded full suite with 561 tests after the Agent process slice.
 
 ## Notes
 

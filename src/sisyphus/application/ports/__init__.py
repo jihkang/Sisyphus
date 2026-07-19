@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+from .agent_execution import (
+    AgentProcessPort,
+    AgentRegistration,
+    AgentTrackingPort,
+    AgentTrackingUpdate,
+    ProcessExecution,
+    ProcessExecutionRequest,
+    ProcessObserver,
+    ProcessStartError,
+)
 from .artifacts import ArtifactStorePort
 from .clock import ClockPort
 from .planning import DesignConformancePort, PlanningDocumentPort, SpecValidationPort
@@ -29,7 +39,11 @@ from .workflow import (
 )
 
 __all__ = [
+    "AgentProcessPort",
+    "AgentRegistration",
     "AgentRepository",
+    "AgentTrackingPort",
+    "AgentTrackingUpdate",
     "ArtifactStorePort",
     "ClockPort",
     "CloseoutPort",
@@ -40,6 +54,10 @@ __all__ = [
     "FeatureObligationPort",
     "ManualInterventionPort",
     "PlanningDocumentPort",
+    "ProcessExecution",
+    "ProcessExecutionRequest",
+    "ProcessObserver",
+    "ProcessStartError",
     "ProviderPort",
     "PromotionTaskPort",
     "PullRequestPort",

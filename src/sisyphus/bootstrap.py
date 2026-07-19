@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .application import AgentQueryService, LifecycleApplicationService, TaskQueryService
+from .composition.agent_execution import build_agent_execution_service
 from .composition.planning import build_planning_service
 from .composition.promotion import build_promotion_service
 from .composition.verification import build_verification_service
@@ -31,6 +32,7 @@ def build_application(repo_root: Path, task_dir_name: str) -> Application:
 __all__ = [
     "Application",
     "build_application",
+    "build_agent_execution_service",
     "build_planning_service",
     "build_promotion_service",
     "build_verification_service",
