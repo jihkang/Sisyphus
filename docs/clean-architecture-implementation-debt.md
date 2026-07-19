@@ -38,6 +38,7 @@ separation, and real 30.5B model evidence, is not part of this repository migrat
 | Event publishing | Completed | Canonical noop/JSONL publishers live in `infra/events`; JSONL append uses descriptor locking, identity-preserving public facades, file and creation-directory fsync, atomic create detection, and no-follow leaf opens |
 | Verification/artifact document writes | Completed | Verification documents delegate to the canonical atomic `RepositoryArtifactStore`; infra imports the canonical config loader instead of the public config facade |
 | Task-record creation boundary | Completed | `CreateTaskRecordCommand`, `TaskRecordCreationService`, and the composition root own construction and persistence ordering; `state.py` delegates creation and preserves identity-compatible repository exports |
+| Workspace patch containment | Completed | Descriptor-relative tree snapshots hash regular files, modes, symlink targets, and special-file identity before and after `git apply`; only declared non-protected regular-file transitions are accepted, and partial-failure mutations are quarantined |
 
 ## Accepted Domain Dependency Exceptions
 
@@ -61,7 +62,6 @@ change.
 
 | ID | Priority | Boundary and current evidence | Required end state | Verification gate |
 | --- | --- | --- | --- | --- |
-| CA-02 | High | Narrow residual: file reads/writes, domain completion policy, and Git/test subprocess effects are separated, but patch materialization still delegates to `git apply`, which cannot use the descriptor-relative file adapter | Give patch application an explicit containment and postcondition contract, then retain `providers/workspace.py` only for its documented compatibility window | Patch application proves only declared contained regular files changed; traversal, symlink, resolve/open race, patch-mode, mutation-order, timeout, output-bound, and effect failure-injection tests pass |
 | CA-04 | High | `daemon.py` is 902 lines and `creation.py`/`closeout.py` still coordinate queue, task state, worktrees, providers, verification, events, and promotion through root modules | Introduce application use cases for creation, daemon event handling, and closeout with narrow repository/effect ports; keep side-effect order explicit | Event replay, retry, gate, partial-failure, close, and end-to-end workflow characterization tests pass |
 | CA-05 | High | CLI and MCP handlers still import root implementations such as `state`, `planning`, `audit`, `closeout`, `creation`, and `daemon` | Route handlers through application command/query services assembled by composition roots; interfaces retain only adaptation, dispatch, trace, and rendering | CLI help/exit/output and MCP tools/resources/schema/trace fixtures remain identical; interfaces have no implementation imports |
 | CA-06 | High | Infrastructure workflow, verification evidence/conformance, task factory, spec validation, provider launch, and provider receipts still call root facades such as `closeout`, `conformance`, `evidence_graph`, `state`, and `codex_prompt` | Make adapters depend on inward policy/record functions and existing repository/effect ports; complete verifier, prompt, receipt, Git, and worktree boundaries without public-facade calls | Architecture test rejects adapter-to-facade edges; adapter contract and failure-injection suites pass |
@@ -73,7 +73,7 @@ change.
 
 ## Execution Order
 
-1. Complete the residual Workspace patch contract and Verifier, prompt, receipt, evidence, and conformance adapter dependencies.
+1. Complete Verifier, prompt, receipt, evidence, and conformance adapter dependencies.
 2. Move full worktree creation, daemon processing, and closeout orchestration into application use cases.
 3. Rewire CLI and MCP to application commands and queries.
 4. Restrict Evolve to read/evaluation/append-only ports and add authority tests.

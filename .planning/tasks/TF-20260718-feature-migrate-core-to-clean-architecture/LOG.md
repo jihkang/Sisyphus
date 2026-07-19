@@ -62,6 +62,8 @@
 - 2026-07-19: Passed 59 focused event/artifact/persistence/interface/architecture regressions and the expanded full suite with 597 tests.
 - 2026-07-19: Moved task-record construction and save ordering behind `CreateTaskRecordCommand`, `TaskRecordCreationService`, and a dedicated composition root while preserving the public `state.py` surface.
 - 2026-07-19: Relocated the file task-record adapter to canonical persistence ownership, added application/facade/identity contracts, and passed the expanded full suite with 600 tests.
+- 2026-07-19: Added descriptor-relative Workspace tree fingerprints and a tree-hash mutation guard around patch execution; undeclared, protected, symlink/special-file, no-op, and partial-failure mutations cannot be recorded as successful Agent work.
+- 2026-07-19: Added real and injected patch postcondition regressions and passed the expanded full suite with 603 tests.
 
 ## Notes
 
@@ -72,6 +74,6 @@
 
 ## Follow-ups
 
-- Execute the ordered debt ledger in `docs/clean-architecture-implementation-debt.md`, beginning with the residual Workspace patch contract and remaining verifier/prompt/receipt/evidence adapters.
+- Execute the ordered debt ledger in `docs/clean-architecture-implementation-debt.md`, beginning with the remaining verifier/prompt/receipt/evidence adapters.
 - Isolate Evolve candidate generation from Control-owned approval, signing, active-policy, and queue authority.
 - Rewire remaining CLI/MCP consumers, validate architecture documentation, then run final package and merged-main verification.

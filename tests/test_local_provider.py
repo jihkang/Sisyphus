@@ -424,6 +424,8 @@ class WorkspaceExecutorTests(unittest.TestCase):
         self.assertFalse(baseline["ok"])
         self.assertEqual(baseline["test_first_phase"], "run_baseline_tests")
         self.assertTrue(changed["ok"])
+        self.assertEqual(changed["changed_paths"], ["app.py"])
+        self.assertNotEqual(changed["tree_hash_before"], changed["tree_hash_after"])
         before_test = self.executor.completion_facts()
         self.assertFalse(before_test["completion_ready"])
         self.assertIn("passing test", before_test["reason"])

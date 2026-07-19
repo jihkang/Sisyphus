@@ -10,6 +10,7 @@ from ...domain.agent.workspace import WorkspaceCompletion, WorkspaceExecutionSta
 from .effects import WorkspaceGitEffects, WorkspaceTestEffects
 from .errors import WorkspaceActionError, WorkspaceFileSafetyError, WorkspaceGitError
 from .git import SubprocessWorkspaceGit
+from .mutation_guard import TreeHashMutationGuard, WorkspaceTreeMutation
 from .secure_files import SecureWorkspaceFiles
 from .test_runner import SubprocessWorkspaceTests
 
@@ -39,6 +40,7 @@ class WorkspaceExecutor:
         self.command_timeout_seconds = max(float(command_timeout_seconds), 0.1)
         self.max_output_chars = max(int(max_output_chars), 256)
         self._files = SecureWorkspaceFiles(self.workspace)
+        self._mutations = TreeHashMutationGuard(self._files)
         self._state = WorkspaceExecutionState()
         self._git = git_effects or SubprocessWorkspaceGit(
             self.workspace,
@@ -229,14 +231,52 @@ class WorkspaceExecutor:
         for relative in paths:
             self._resolve_path(relative, write=True)
         self._require_baseline_test()
+        before = self._mutations.capture()
         execution = self._git.apply_patch(patch)
+        mutation = self._mutations.inspect(
+            before,
+            declared_paths=frozenset(paths),
+        )
         if not execution.ok:
+            if mutation.changed_paths:
+                raise WorkspaceActionError(
+                    "git apply failed after mutating the workspace: "
+                    + ", ".join(mutation.changed_paths)
+                )
             return {
                 "ok": False,
                 "blocked": False,
                 "error": self._bounded(execution.error or "git apply failed"),
             }
-        return {"ok": True, "blocked": False, "mutated": True, "changed_paths": sorted(paths)}
+        self._require_safe_patch_mutation(mutation)
+        return {
+            "ok": True,
+            "blocked": False,
+            "mutated": True,
+            "changed_paths": list(mutation.changed_paths),
+            "tree_hash_before": mutation.before_hash,
+            "tree_hash_after": mutation.after_hash,
+        }
+
+    @staticmethod
+    def _require_safe_patch_mutation(mutation: WorkspaceTreeMutation) -> None:
+        if mutation.protected_paths:
+            raise WorkspaceActionError(
+                "patch mutated protected workspace paths: "
+                + ", ".join(mutation.protected_paths)
+            )
+        if mutation.unexpected_paths:
+            raise WorkspaceActionError(
+                "patch mutated paths it did not declare: "
+                + ", ".join(mutation.unexpected_paths)
+            )
+        if mutation.non_regular_paths:
+            raise WorkspaceActionError(
+                "patch mutation includes a symbolic link or special file: "
+                + ", ".join(mutation.non_regular_paths)
+            )
+        if not mutation.changed_paths:
+            raise WorkspaceActionError("patch reported success without changing a regular file")
 
     def _git_diff(self) -> dict[str, object]:
         status = self._git.status()

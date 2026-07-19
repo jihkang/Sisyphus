@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 import errno
+import hashlib
 import os
 import secrets
 import stat
@@ -25,6 +27,14 @@ _WRITE_FLAGS = (
     | getattr(os, "O_CLOEXEC", 0)
     | getattr(os, "O_NOFOLLOW", 0)
 )
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspacePathFingerprint:
+    kind: str
+    mode: int
+    size: int
+    digest: str
 
 
 class SecureWorkspaceFiles:
@@ -62,6 +72,26 @@ class SecureWorkspaceFiles:
                 raise WorkspaceFileSafetyError(
                     f"workspace path contains a symlink: {relative.as_posix()}"
                 )
+
+    def snapshot_tree(
+        self,
+        *,
+        excluded_names: frozenset[str] = frozenset({".git"}),
+    ) -> dict[str, WorkspacePathFingerprint]:
+        if self._dir_fd_supported and os.scandir in os.supports_fd:
+            root_fd = os.open(self.root, _DIRECTORY_FLAGS)
+            try:
+                result: dict[str, WorkspacePathFingerprint] = {}
+                self._snapshot_tree_at(
+                    root_fd,
+                    prefix=PurePosixPath("."),
+                    excluded_names=excluded_names,
+                    result=result,
+                )
+                return result
+            finally:
+                os.close(root_fd)
+        return self._snapshot_tree_fallback(excluded_names=excluded_names)
 
     def _read_bytes_at(self, relative: PurePosixPath, *, max_bytes: int) -> bytes:
         with self._parent_fd(relative, create=False) as (parent_fd, leaf):
@@ -151,6 +181,123 @@ class SecureWorkspaceFiles:
         finally:
             os.close(file_fd)
 
+    def _snapshot_tree_at(
+        self,
+        directory_fd: int,
+        *,
+        prefix: PurePosixPath,
+        excluded_names: frozenset[str],
+        result: dict[str, WorkspacePathFingerprint],
+    ) -> None:
+        try:
+            with os.scandir(directory_fd) as entries:
+                names = sorted(entry.name for entry in entries)
+        except OSError as exc:
+            raise WorkspaceFileSafetyError("workspace tree changed during snapshot") from exc
+
+        for name in names:
+            if name in excluded_names:
+                continue
+            relative = PurePosixPath(name) if prefix == PurePosixPath(".") else prefix / name
+            try:
+                metadata = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            except OSError as exc:
+                raise WorkspaceFileSafetyError(
+                    f"workspace tree changed during snapshot: {relative.as_posix()}"
+                ) from exc
+            if stat.S_ISDIR(metadata.st_mode):
+                try:
+                    child_fd = os.open(name, _DIRECTORY_FLAGS, dir_fd=directory_fd)
+                except OSError as exc:
+                    self._raise_for_unsafe_open(exc, relative)
+                    raise WorkspaceFileSafetyError(
+                        f"workspace tree changed during snapshot: {relative.as_posix()}"
+                    ) from exc
+                try:
+                    self._snapshot_tree_at(
+                        child_fd,
+                        prefix=relative,
+                        excluded_names=excluded_names,
+                        result=result,
+                    )
+                finally:
+                    os.close(child_fd)
+                continue
+            result[relative.as_posix()] = self._fingerprint_leaf_at(
+                directory_fd,
+                name,
+                relative=relative,
+                metadata=metadata,
+            )
+
+    def _fingerprint_leaf_at(
+        self,
+        parent_fd: int,
+        leaf: str,
+        *,
+        relative: PurePosixPath,
+        metadata: os.stat_result,
+    ) -> WorkspacePathFingerprint:
+        mode = stat.S_IMODE(metadata.st_mode)
+        if stat.S_ISLNK(metadata.st_mode):
+            try:
+                target = os.readlink(leaf, dir_fd=parent_fd)
+            except OSError as exc:
+                raise WorkspaceFileSafetyError(
+                    f"workspace tree changed during snapshot: {relative.as_posix()}"
+                ) from exc
+            return WorkspacePathFingerprint(
+                kind="symlink",
+                mode=mode,
+                size=metadata.st_size,
+                digest=_digest_bytes(os.fsencode(target)),
+            )
+        if not stat.S_ISREG(metadata.st_mode):
+            return WorkspacePathFingerprint(
+                kind="special",
+                mode=mode,
+                size=metadata.st_size,
+                digest="",
+            )
+        try:
+            file_fd = os.open(leaf, _FILE_FLAGS, dir_fd=parent_fd)
+        except OSError as exc:
+            self._raise_for_unsafe_open(exc, relative)
+            raise WorkspaceFileSafetyError(
+                f"workspace tree changed during snapshot: {relative.as_posix()}"
+            ) from exc
+        try:
+            opened = os.fstat(file_fd)
+            if not stat.S_ISREG(opened.st_mode) or (
+                opened.st_dev,
+                opened.st_ino,
+            ) != (metadata.st_dev, metadata.st_ino):
+                raise WorkspaceFileSafetyError(
+                    f"workspace tree changed during snapshot: {relative.as_posix()}"
+                )
+            digest = _digest_file(file_fd)
+            finished = os.fstat(file_fd)
+            if (
+                opened.st_size,
+                opened.st_mtime_ns,
+                opened.st_ctime_ns,
+            ) != (
+                finished.st_size,
+                finished.st_mtime_ns,
+                finished.st_ctime_ns,
+            ):
+                raise WorkspaceFileSafetyError(
+                    f"workspace file changed during snapshot: {relative.as_posix()}"
+                )
+            return WorkspacePathFingerprint(
+                kind="regular",
+                mode=stat.S_IMODE(opened.st_mode),
+                size=opened.st_size,
+                digest=digest,
+            )
+        finally:
+            os.close(file_fd)
+
     @contextmanager
     def _parent_fd(
         self,
@@ -186,6 +333,81 @@ class SecureWorkspaceFiles:
             yield current_fd, parts[-1]
         finally:
             os.close(current_fd)
+
+    def _snapshot_tree_fallback(
+        self,
+        *,
+        excluded_names: frozenset[str],
+    ) -> dict[str, WorkspacePathFingerprint]:
+        result: dict[str, WorkspacePathFingerprint] = {}
+        stack = [self.root]
+        while stack:
+            directory = stack.pop()
+            try:
+                entries = sorted(directory.iterdir(), key=lambda path: path.name)
+            except OSError as exc:
+                raise WorkspaceFileSafetyError("workspace tree changed during snapshot") from exc
+            for path in entries:
+                if path.name in excluded_names:
+                    continue
+                relative = PurePosixPath(path.relative_to(self.root).as_posix())
+                try:
+                    metadata = path.lstat()
+                except OSError as exc:
+                    raise WorkspaceFileSafetyError(
+                        f"workspace tree changed during snapshot: {relative.as_posix()}"
+                    ) from exc
+                if stat.S_ISDIR(metadata.st_mode):
+                    stack.append(path)
+                    continue
+                if stat.S_ISLNK(metadata.st_mode):
+                    result[relative.as_posix()] = WorkspacePathFingerprint(
+                        kind="symlink",
+                        mode=stat.S_IMODE(metadata.st_mode),
+                        size=metadata.st_size,
+                        digest=_digest_bytes(os.fsencode(os.readlink(path))),
+                    )
+                    continue
+                if not stat.S_ISREG(metadata.st_mode):
+                    result[relative.as_posix()] = WorkspacePathFingerprint(
+                        kind="special",
+                        mode=stat.S_IMODE(metadata.st_mode),
+                        size=metadata.st_size,
+                        digest="",
+                    )
+                    continue
+                try:
+                    file_fd = os.open(path, _FILE_FLAGS)
+                except OSError as exc:
+                    self._raise_for_unsafe_open(exc, relative)
+                    raise WorkspaceFileSafetyError(
+                        f"workspace tree changed during snapshot: {relative.as_posix()}"
+                    ) from exc
+                try:
+                    opened = os.fstat(file_fd)
+                    digest = _digest_file(file_fd)
+                    finished = os.fstat(file_fd)
+                    if (
+                        opened.st_size,
+                        opened.st_mtime_ns,
+                        opened.st_ctime_ns,
+                    ) != (
+                        finished.st_size,
+                        finished.st_mtime_ns,
+                        finished.st_ctime_ns,
+                    ):
+                        raise WorkspaceFileSafetyError(
+                            f"workspace file changed during snapshot: {relative.as_posix()}"
+                        )
+                    result[relative.as_posix()] = WorkspacePathFingerprint(
+                        kind="regular",
+                        mode=stat.S_IMODE(opened.st_mode),
+                        size=opened.st_size,
+                        digest=digest,
+                    )
+                finally:
+                    os.close(file_fd)
+        return result
 
     def _read_bytes_fallback(self, relative: PurePosixPath, *, max_bytes: int) -> bytes:
         path = self._fallback_path(relative)
@@ -283,4 +505,17 @@ def _write_all(file_fd: int, payload: bytes) -> None:
         offset += written
 
 
-__all__ = ["SecureWorkspaceFiles"]
+def _digest_file(file_fd: int) -> str:
+    digest = hashlib.sha256()
+    while True:
+        chunk = os.read(file_fd, 64 * 1024)
+        if not chunk:
+            return "sha256:" + digest.hexdigest()
+        digest.update(chunk)
+
+
+def _digest_bytes(value: bytes) -> str:
+    return "sha256:" + hashlib.sha256(value).hexdigest()
+
+
+__all__ = ["SecureWorkspaceFiles", "WorkspacePathFingerprint"]
