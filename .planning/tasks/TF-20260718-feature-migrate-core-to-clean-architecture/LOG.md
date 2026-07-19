@@ -25,6 +25,10 @@
 - 2026-07-19: Replaced planning's direct persistence and filesystem orchestration with an application use case using task, document, validation, design-conformance, intervention, and clock ports.
 - 2026-07-19: Split planning and workflow composition roots to prevent eager adapter imports from recreating an audit/planning cycle.
 - 2026-07-19: Passed the expanded full suite with 547 tests after the planning application slice.
+- 2026-07-19: Replaced audit.py orchestration with a typed Verification application service, ArtifactRef/CommandExecution receipts, and document, command, conformance, evidence, event, repository, validation, and clock ports.
+- 2026-07-19: Preserved VerifyOutcome, verify Markdown, evidence graph, event payloads, command result records, and lifecycle behavior through the public audit facade.
+- 2026-07-19: Re-anchored the bounded evolution review-gate target to its new verification-policy owner instead of the audit facade.
+- 2026-07-19: Passed the expanded full suite with 552 tests after the verification application slice.
 
 ## Notes
 

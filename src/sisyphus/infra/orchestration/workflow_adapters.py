@@ -9,11 +9,9 @@ from ...application.ports.workflow import (
     ProviderRequest,
     TaskRecord,
     VerificationResult,
-    WorkflowEvent,
 )
 from ...application.use_cases.planning import PlanningService
-from ...audit import run_verify
-from ...bus import build_event_publisher
+from ...application.use_cases.verification import VerificationService
 from ...closeout import run_close
 from ...config import SisyphusConfig
 from ...conformance import (
@@ -23,7 +21,6 @@ from ...conformance import (
     run_pre_execution_conformance_check,
     summarize_task_conformance,
 )
-from ...events import new_event_envelope
 from ...obligation_runtime import converge_feature_change_obligations
 from ...shared.paths import task_dir as resolve_task_dir
 
@@ -134,16 +131,11 @@ class ProviderAdapter:
 
 
 class VerificationAdapter:
-    def __init__(self, repo_root: Path, config: SisyphusConfig) -> None:
-        self._repo_root = repo_root
-        self._config = config
+    def __init__(self, service: VerificationService) -> None:
+        self._service = service
 
     def verify(self, task_id: str) -> VerificationResult:
-        outcome = run_verify(
-            repo_root=self._repo_root,
-            config=self._config,
-            task_id=task_id,
-        )
+        outcome = self._service.verify(task_id)
         return VerificationResult(gates=tuple(outcome.gates))
 
 
@@ -162,24 +154,9 @@ class CloseoutAdapter:
         return CloseoutResult(closed=outcome.closed)
 
 
-class EventPublisherAdapter:
-    def __init__(self, repo_root: Path, config: SisyphusConfig) -> None:
-        self._publisher = build_event_publisher(repo_root, config)
-
-    def publish(self, event: WorkflowEvent) -> None:
-        self._publisher.publish(
-            new_event_envelope(
-                event.event_type,
-                source=event.source,
-                data=event.data,
-            )
-        )
-
-
 __all__ = [
     "CloseoutAdapter",
     "ConformanceAdapter",
-    "EventPublisherAdapter",
     "FeatureObligationAdapter",
     "PlanningWorkflowAdapter",
     "ProviderAdapter",

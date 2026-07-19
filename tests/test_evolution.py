@@ -2447,7 +2447,9 @@ class EvolutionHarnessTests(unittest.TestCase):
 
         materialization = materialize_evolution_evaluation(plan.candidate, task=evaluation_task)
         conformance_text = (self.repo_root / "src/sisyphus/conformance.py").read_text(encoding="utf-8")
-        audit_text = (self.repo_root / "src/sisyphus/audit.py").read_text(encoding="utf-8")
+        verification_text = (
+            self.repo_root / "src/sisyphus/application/use_cases/verification.py"
+        ).read_text(encoding="utf-8")
 
         self.assertEqual(materialization.status, EVOLUTION_MATERIALIZATION_STATUS_CANDIDATE_APPLIED)
         self.assertEqual(
@@ -2455,13 +2457,13 @@ class EvolutionHarnessTests(unittest.TestCase):
             ("execution-contract-wording", "review-gate-explanation-text"),
         )
         self.assertIn("must be resolved before continuing", conformance_text)
-        self.assertIn("before review can pass", audit_text)
+        self.assertIn("before review can pass", verification_text)
         self.assertTrue((self.repo_root / materialization.manifest_path).is_file())
         self.assertTrue(
             (
                 self.repo_root
                 / materialization.snapshot_root
-                / "src/sisyphus/audit.py"
+                / "src/sisyphus/application/use_cases/verification.py"
             ).is_file()
         )
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .models import (
+    ConformanceState,
     GateSpec,
     LifecycleAction,
     LifecycleSnapshot,
@@ -150,7 +151,14 @@ def _spec_gates(snapshot: LifecycleSnapshot, *, action_label: str) -> tuple[Gate
 
 
 def _conformance_gates(snapshot: LifecycleSnapshot, *, action_label: str) -> list[GateSpec]:
-    conformance = snapshot.conformance
+    return list(collect_conformance_gate_specs(snapshot.conformance, action_label=action_label))
+
+
+def collect_conformance_gate_specs(
+    conformance: ConformanceState,
+    *,
+    action_label: str,
+) -> tuple[GateSpec, ...]:
     gates: list[GateSpec] = []
     if conformance.status == "red":
         gates.append(
@@ -195,7 +203,7 @@ def _conformance_gates(snapshot: LifecycleSnapshot, *, action_label: str) -> lis
                     subtask_id=subtask.subtask_id,
                 )
             )
-    return list(dedupe_gate_specs(gates))
+    return dedupe_gate_specs(gates)
 
 
 def _close_gates(snapshot: LifecycleSnapshot) -> list[GateSpec]:
@@ -274,4 +282,8 @@ def _blocked(
     )
 
 
-__all__ = ["HUMAN_GATED_ACTIONS", "evaluate_lifecycle_policy"]
+__all__ = [
+    "HUMAN_GATED_ACTIONS",
+    "collect_conformance_gate_specs",
+    "evaluate_lifecycle_policy",
+]

@@ -83,19 +83,42 @@ def record_planning_lifecycle_transition(
 
 
 def gate_spec_to_record(gate: GateSpec, *, created_at: str) -> dict:
+    return make_gate_record(
+        gate.code,
+        gate.message,
+        gate.source,
+        created_at=created_at,
+        blocking=gate.blocking,
+        severity=gate.severity,
+        checkpoint_type=gate.checkpoint_type,
+        subtask_id=gate.subtask_id,
+    )
+
+
+def make_gate_record(
+    code: str,
+    message: str,
+    source: str,
+    *,
+    created_at: str,
+    blocking: bool = True,
+    severity: str | None = None,
+    checkpoint_type: str | None = None,
+    subtask_id: str | None = None,
+) -> dict:
     record = {
-        "code": gate.code,
-        "message": gate.message,
-        "blocking": gate.blocking,
-        "source": gate.source,
+        "code": code,
+        "message": message,
+        "blocking": blocking,
+        "source": source,
         "created_at": created_at,
     }
-    if gate.severity:
-        record["severity"] = gate.severity
-    if gate.checkpoint_type:
-        record["checkpoint_type"] = gate.checkpoint_type
-    if gate.subtask_id:
-        record["subtask_id"] = gate.subtask_id
+    if severity:
+        record["severity"] = severity
+    if checkpoint_type:
+        record["checkpoint_type"] = checkpoint_type
+    if subtask_id:
+        record["subtask_id"] = subtask_id
     return record
 
 
@@ -128,5 +151,6 @@ __all__ = [
     "current_spec_status",
     "dedupe_gate_records",
     "gate_spec_to_record",
+    "make_gate_record",
     "record_planning_lifecycle_transition",
 ]

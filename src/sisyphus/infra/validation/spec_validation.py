@@ -6,6 +6,10 @@ import hashlib
 import json
 import re
 
+from ...application.contracts.spec_validation import (
+    SPEC_VALIDATION_GATE_CODES,
+    SPEC_VALIDATION_SOURCES,
+)
 from ...config import SisyphusConfig
 from ...design import ensure_task_design_defaults
 from ...gates import dedupe_gates, make_gate
@@ -17,12 +21,6 @@ from ...strategy import sync_test_strategy_from_docs
 
 SPEC_VALIDATION_REPORT = "artifacts/spec-validation/latest.json"
 SPEC_VALIDATION_SCHEMA_VERSION = "sisyphus.spec_validation.v1"
-SPEC_VALIDATION_GATE_CODES = {
-    "SPEC_VALIDATION_FAILED",
-    "SPEC_VALIDATION_MISSING",
-    "SPEC_VALIDATION_STALE",
-}
-SPEC_VALIDATION_SOURCES = {"spec_validation"}
 
 SECTION_PATTERN = re.compile(r"^##\s+(?P<title>.+?)\s*$", re.MULTILINE)
 CHECKLIST_PATTERN = re.compile(r"^-\s+\[[ xX]\]\s+(?P<item>.+?)\s*$", re.MULTILINE)

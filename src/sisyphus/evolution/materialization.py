@@ -123,22 +123,22 @@ _TARGET_MUTATIONS: dict[str, tuple[EvolutionTextMutation, ...]] = {
     ),
     "review-gate-explanation-text": (
         EvolutionTextMutation(
-            source_path="src/sisyphus/audit.py",
+            source_path="src/sisyphus/application/use_cases/verification.py",
             before=(
-                '            gates.append(_gate("ACCEPTANCE_CRITERIA_MISSING", "feature task requires filled acceptance criteria", source="docs"))\n'
+                '                        "feature task requires filled acceptance criteria",\n'
             ),
             after=(
-                '            gates.append(_gate("ACCEPTANCE_CRITERIA_MISSING", "feature task must define explicit acceptance criteria before review can pass", source="docs"))\n'
+                '                        "feature task must define explicit acceptance criteria before review can pass",\n'
             ),
             description="make the acceptance-criteria gate actionable",
         ),
         EvolutionTextMutation(
-            source_path="src/sisyphus/audit.py",
+            source_path="src/sisyphus/application/use_cases/verification.py",
             before=(
-                '        gates.append(_gate("TEST_STRATEGY_MISSING", "normal, edge, exception cases and verification methods must be defined", source="strategy"))\n'
+                '                    "normal, edge, exception cases and verification methods must be defined",\n'
             ),
             after=(
-                '        gates.append(_gate("TEST_STRATEGY_MISSING", "define normal, edge, and exception cases plus verification methods before review can pass", source="strategy"))\n'
+                '                    "define normal, edge, and exception cases plus verification methods before review can pass",\n'
             ),
             description="make the test-strategy gate actionable",
         ),

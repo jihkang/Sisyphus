@@ -13,7 +13,7 @@ from .models import (
     WorkflowPhase,
     dedupe_gate_specs,
 )
-from .policy import HUMAN_GATED_ACTIONS, evaluate_lifecycle_policy
+from .policy import HUMAN_GATED_ACTIONS, collect_conformance_gate_specs, evaluate_lifecycle_policy
 from .rules import normalize_terminal_lifecycle_state
 
 __all__ = [
@@ -29,6 +29,7 @@ __all__ = [
     "TransitionDecision",
     "WorkflowPhase",
     "dedupe_gate_specs",
+    "collect_conformance_gate_specs",
     "evaluate_lifecycle_policy",
     "normalize_terminal_lifecycle_state",
 ]

@@ -7,7 +7,7 @@ from ...config import SisyphusConfig
 from ...conformance import mark_design_anchor
 from ...shared.paths import task_dir as resolve_task_dir
 from ...strategy import sync_test_strategy_from_docs
-from ..validation.spec_validation import collect_spec_validation_gates
+from ..validation.spec_validation import collect_spec_validation_gates, spec_validation_required
 
 
 class PlanningDocumentAdapter:
@@ -24,6 +24,10 @@ class SpecValidationAdapter:
     def __init__(self, repo_root: Path, config: SisyphusConfig) -> None:
         self._repo_root = repo_root
         self._config = config
+
+    def required(self, task_id: str, task: TaskRecord) -> bool:
+        directory = resolve_task_dir(self._repo_root, self._config.task_dir, task_id)
+        return spec_validation_required(task, directory)
 
     def collect_gates(
         self,

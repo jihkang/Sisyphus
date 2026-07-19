@@ -63,7 +63,7 @@ _REGISTERED_TARGETS: tuple[EvolutionTarget, ...] = (
         kind=EVOLUTION_TARGET_KIND_TEXT_POLICY,
         title="Review and Gate Explanation Text",
         description="Gate and audit wording surfaced during plan, spec, and verify review flows.",
-        source_paths=("src/sisyphus/audit.py",),
+        source_paths=("src/sisyphus/application/use_cases/verification.py",),
         symbol_names=("_collect_spec_gates", "_collect_test_strategy_gates", "_gate"),
     ),
 )

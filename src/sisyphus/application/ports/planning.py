@@ -10,6 +10,8 @@ class PlanningDocumentPort(Protocol):
 
 
 class SpecValidationPort(Protocol):
+    def required(self, task_id: str, task: TaskRecord) -> bool: ...
+
     def collect_gates(
         self,
         task_id: str,
