@@ -513,6 +513,44 @@ class ArchitectureDependencyTests(unittest.TestCase):
                 f"episode trace facade contains {type(node).__name__}; it must remain import-only"
             )
 
+    def test_artifact_resource_interfaces_use_composed_queries(self) -> None:
+        source_modules = {
+            "sisyphus.interfaces.mcp.service",
+            "sisyphus.interfaces.mcp.task_resources",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency == "sisyphus.artifact_resources"
+        }
+
+        self.assertFalse(
+            forbidden,
+            "artifact resources regained the flat query implementation:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_artifact_resources_facade_remains_import_only(self) -> None:
+        module = self.modules["sisyphus.artifact_resources"]
+        tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                continue
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                self.assertIsInstance(node.value.value, str, "artifact resource facade has executable code")
+                continue
+            if isinstance(node, ast.Assign):
+                self.assertEqual(
+                    [target.id for target in node.targets if isinstance(target, ast.Name)],
+                    ["__all__"],
+                    "artifact resource facade may assign only __all__",
+                )
+                continue
+            self.fail(
+                f"artifact resource facade contains {type(node).__name__}; it must remain import-only"
+            )
+
     def test_verification_and_lifecycle_adapters_do_not_import_public_facades(self) -> None:
         source_modules = {
             "sisyphus.infra.persistence.lifecycle_mapper",

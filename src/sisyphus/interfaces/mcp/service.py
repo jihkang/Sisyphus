@@ -3,7 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import urlparse
 
-from ...artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
+from ...composition.artifact_resources import (
+    is_feature_task_artifact_resource,
+    read_feature_task_artifact_resource,
+)
 from ...composition.closeout import close_task as run_close
 from ...composition.episode_trace import default_episode_id, record_episode_step
 from ...composition.repository_status import (

@@ -9,6 +9,7 @@ from .agent_execution import (
     ProcessStartError,
 )
 from .artifacts import ArtifactStorePort
+from .artifact_queries import FeatureArtifactQueryPort, FeatureArtifactReadModel
 from .clock import ClockPort
 from .closeout import CloseoutEvidencePort, WorktreeStatusPort
 from .episode_trace import EpisodeTracePort
@@ -62,6 +63,8 @@ __all__ = [
     "AgentRepository",
     "AgentTrackingPort",
     "ArtifactStorePort",
+    "FeatureArtifactQueryPort",
+    "FeatureArtifactReadModel",
     "ClockPort",
     "CloseoutEvidencePort",
     "CloseoutPort",

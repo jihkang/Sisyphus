@@ -7,8 +7,11 @@ from ...application.conformance_records import (
     summarize_subtask_conformance,
     summarize_task_conformance,
 )
-from ...artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
 from ...config import SisyphusConfig
+from ...composition.artifact_resources import (
+    is_feature_task_artifact_resource,
+    read_feature_task_artifact_resource,
+)
 from ...composition.repository_requests import load_task_record_with_path
 from ...composition.resource_queries import build_spec_validation_resource
 from ...domain.promotion.state import promotion_summary
