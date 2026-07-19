@@ -858,6 +858,48 @@ class ArchitectureDependencyTests(unittest.TestCase):
             "domain models own persistence/transport mapping:\n" + _format_pairs(violations),
         )
 
+    def test_application_models_do_not_own_boundary_mapping_methods(self) -> None:
+        violations: set[tuple[str, str]] = set()
+        boundary_method_names = {"from_dict", "from_json", "to_dict", "to_json"}
+        for module in self.modules.values():
+            if not module.name.startswith("sisyphus.application"):
+                continue
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                for member in node.body:
+                    if (
+                        isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and member.name in boundary_method_names
+                    ):
+                        violations.add((f"{module.name}.{node.name}", member.name))
+
+        self.assertFalse(
+            violations,
+            "application models own persistence/transport mapping:\n"
+            + _format_pairs(violations),
+        )
+
+    def test_models_do_not_reintroduce_generic_mapping_methods(self) -> None:
+        violations: set[tuple[str, str]] = set()
+        for module in self.modules.values():
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                for member in node.body:
+                    if (
+                        isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and member.name in {"from_dict", "to_dict"}
+                    ):
+                        violations.add((f"{module.name}.{node.name}", member.name))
+
+        self.assertFalse(
+            violations,
+            "models regained generic boundary mapping methods:\n" + _format_pairs(violations),
+        )
+
 
 def _module_sources() -> dict[str, ModuleSource]:
     result: dict[str, ModuleSource] = {}

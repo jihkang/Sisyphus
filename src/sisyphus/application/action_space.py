@@ -34,18 +34,6 @@ class ActionSpec:
     description: str
     lifecycle_action: LifecycleAction | None = None
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "name": self.name,
-            "risk": self.risk.value,
-            "allowed_for_policy": self.allowed_for_policy,
-            "requires_human": self.requires_human,
-            "mutates_state": self.mutates_state,
-            "description": self.description,
-            "lifecycle_action": self.lifecycle_action.value if self.lifecycle_action else None,
-        }
-
-
 ACTION_REGISTRY: dict[str, ActionSpec] = {
     "sisyphus.get_task": ActionSpec(
         name="sisyphus.get_task",

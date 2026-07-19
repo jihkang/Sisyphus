@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 
+from ..application.codecs.events import encode_event_envelope_json
 from ..application.events import new_event_envelope
 from ..application.metrics import (
     MANUAL_INTERVENTION_REQUIRED_EVENT,
@@ -120,7 +121,7 @@ def _emit_metric_event(
     }:
         paths.add(resolve_event_bus_path(repo_root, config))
     for path in paths:
-        append_jsonl_text(path, envelope.to_json())
+        append_jsonl_text(path, encode_event_envelope_json(envelope))
 
 
 def _parse_timestamp(raw: object) -> datetime | None:

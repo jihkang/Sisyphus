@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ...application.codecs.search import decode_search_document, encode_search_document
 from ...application.search.models import (
     SearchDocument,
     SearchIndexError,
@@ -32,7 +33,12 @@ def rebuild_search_index(
     resolved_path = resolve_search_index_path(repo_root, index_path)
     documents = project_repo_search_documents(repo_root, config)
     rendered = "".join(
-        json.dumps(_json_safe(document.to_dict()), separators=(",", ":"), sort_keys=True) + "\n"
+        json.dumps(
+            _json_safe(encode_search_document(document)),
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
         for document in documents
     )
     changed = _write_text_if_changed(resolved_path, rendered)
@@ -59,7 +65,7 @@ def read_search_index(repo_root: Path, *, index_path: str | Path | None = None) 
         if not isinstance(raw, dict):
             raise SearchIndexError(f"search index line must decode to an object at {resolved_path}:{line_number}")
         try:
-            documents.append(SearchDocument.from_dict(raw))
+            documents.append(decode_search_document(raw))
         except Exception as exc:
             raise SearchIndexError(f"invalid search document at {resolved_path}:{line_number}: {exc}") from exc
     return tuple(sorted(documents, key=lambda document: document.document_id))

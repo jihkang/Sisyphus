@@ -5,11 +5,32 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from sisyphus.application.codecs.search import (
+    decode_search_document,
+    encode_search_document,
+)
 from sisyphus.application.search.models import SearchDocument
 from sisyphus.infra.search import DEFAULT_SEARCH_INDEX_PATH, RepositorySearchIndex
 
 
 class SearchInfrastructureTests(unittest.TestCase):
+    def test_search_document_codec_preserves_optional_field_omission(self) -> None:
+        document = SearchDocument(
+            document_id="searchdoc:task://TF-1/brief",
+            source_type="task_doc",
+            source_ref="task://TF-1/brief",
+            title="existing index",
+            content="existing searchable evidence",
+            task_id="TF-1",
+            metadata={"tags": ("architecture", "search")},
+        )
+
+        payload = encode_search_document(document)
+
+        self.assertEqual(decode_search_document(payload), document)
+        self.assertNotIn("artifact_id", payload)
+        self.assertEqual(payload["metadata"], {"tags": ["architecture", "search"]})
+
     def test_existing_index_reads_and_status_do_not_load_repository_config(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo_root = Path(directory)
@@ -24,7 +45,7 @@ class SearchInfrastructureTests(unittest.TestCase):
             index_path = repo_root / DEFAULT_SEARCH_INDEX_PATH
             index_path.parent.mkdir(parents=True)
             index_path.write_text(
-                json.dumps(document.to_dict(), separators=(",", ":"), sort_keys=True)
+                json.dumps(encode_search_document(document), separators=(",", ":"), sort_keys=True)
                 + "\n",
                 encoding="utf-8",
             )

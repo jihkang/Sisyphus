@@ -21,16 +21,6 @@ class RetrievalResult:
     matched_terms: tuple[str, ...]
     excerpt: str
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "rank": self.rank,
-            "score": self.score,
-            "matched_terms": list(self.matched_terms),
-            "excerpt": self.excerpt,
-            "document": self.document.to_dict(),
-        }
-
-
 def tokenize(text: str) -> tuple[str, ...]:
     return tuple(match.group(0).lower() for match in TOKEN_RE.finditer(text))
 

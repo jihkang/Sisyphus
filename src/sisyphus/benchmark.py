@@ -5,8 +5,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 import json
 
+from .benchmark_codec import (
+    BENCHMARK_MODES,
+    BENCHMARK_SCHEMA_VERSION,
+    encode_benchmark_run_result,
+)
 
-BENCHMARK_SCHEMA_VERSION = "sisyphus.benchmark.v1"
 BENCHMARK_FIXTURE_SCHEMA_VERSION = "sisyphus.benchmark.fixtures.v1"
 
 BENCHMARK_SCENARIOS = (
@@ -17,14 +21,6 @@ BENCHMARK_SCENARIOS = (
     "failure_gated",
     "spec_drift",
     "promotion_ready",
-)
-
-BENCHMARK_MODES = (
-    "plain_agent",
-    "sisyphus_basic",
-    "sisyphus_observation",
-    "sisyphus_observation_evidence",
-    "sisyphus_full_trace",
 )
 
 BENCHMARK_METRICS = (
@@ -78,17 +74,6 @@ class BenchmarkRunResult:
     mode_count: int
     metrics: dict[str, dict[str, float]]
     scenarios: tuple[dict[str, object], ...]
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "schema_version": BENCHMARK_SCHEMA_VERSION,
-            "fixture_count": self.fixture_count,
-            "mode_count": self.mode_count,
-            "modes": list(BENCHMARK_MODES),
-            "metrics": self.metrics,
-            "scenarios": list(self.scenarios),
-        }
-
 
 def default_benchmark_fixture_dir(repo_root: Path) -> Path:
     return repo_root / DEFAULT_BENCHMARK_FIXTURE_DIR
@@ -337,6 +322,7 @@ __all__ = [
     "BenchmarkRunResult",
     "DEFAULT_BENCHMARK_FIXTURE_DIR",
     "default_benchmark_fixture_dir",
+    "encode_benchmark_run_result",
     "evaluate_benchmark_fixtures",
     "load_benchmark_fixtures",
     "render_benchmark_markdown",

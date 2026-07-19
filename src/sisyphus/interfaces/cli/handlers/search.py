@@ -4,6 +4,10 @@ from pathlib import Path
 import json
 import sys
 
+from ....application.codecs.search import (
+    encode_retrieval_result,
+    encode_search_index_rebuild_result,
+)
 from ....application.search.models import SearchIndexError
 from ....composition.search import (
     build_and_persist_context_pack,
@@ -15,7 +19,7 @@ from ....config import SisyphusConfig
 
 def handle_index_rebuild(*, repo_root: Path, config: SisyphusConfig, as_json: bool) -> int:
     result = rebuild_search_index(repo_root, config)
-    payload = result.to_dict()
+    payload = encode_search_index_rebuild_result(result)
     if as_json:
         print(json.dumps(payload, indent=2))
         return 0
@@ -38,7 +42,7 @@ def handle_search(*, repo_root: Path, query: str, limit: int, as_json: bool) -> 
     payload = {
         "query": query,
         "result_count": len(results),
-        "results": [result.to_dict() for result in results],
+        "results": [encode_retrieval_result(result) for result in results],
     }
     if as_json:
         print(json.dumps(payload, indent=2))

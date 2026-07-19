@@ -29,24 +29,6 @@ class EpisodeStep:
     actor: dict[str, object]
     schema_version: str = EPISODE_TRACE_SCHEMA_VERSION
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "schema_version": self.schema_version,
-            "episode_id": self.episode_id,
-            "task_id": self.task_id,
-            "step": self.step,
-            "timestamp": self.timestamp,
-            "state_ref": self.state_ref,
-            "observation_hash": self.observation_hash,
-            "actor": self.actor,
-            "action": self.action,
-            "result": self.result,
-            "state_before": self.state_before,
-            "state_after": self.state_after,
-            "state_diff": self.state_diff,
-        }
-
-
 def build_episode_step(
     *,
     episode_id: str,

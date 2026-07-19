@@ -17,6 +17,7 @@ from sisyphus.benchmark import (
     BENCHMARK_MODES,
     BENCHMARK_SCENARIOS,
     BenchmarkFixtureError,
+    encode_benchmark_run_result,
     load_benchmark_fixtures,
     render_benchmark_markdown,
     run_benchmark_suite,
@@ -46,7 +47,10 @@ class BenchmarkTests(unittest.TestCase):
 
     def test_failure_gated_proves_sisyphus_blocks_false_close(self) -> None:
         result = run_benchmark_suite(PROJECT_ROOT / "benchmarks" / "tasks")
-        scenarios = {scenario["scenario"]: scenario for scenario in result.to_dict()["scenarios"]}
+        scenarios = {
+            scenario["scenario"]: scenario
+            for scenario in encode_benchmark_run_result(result)["scenarios"]
+        }
         failure = scenarios["failure_gated"]["results"]
 
         self.assertTrue(failure["plain_agent"]["false_close"])
@@ -59,7 +63,10 @@ class BenchmarkTests(unittest.TestCase):
 
     def test_spec_drift_detected_before_close_for_harness_modes(self) -> None:
         result = run_benchmark_suite(PROJECT_ROOT / "benchmarks" / "tasks")
-        scenarios = {scenario["scenario"]: scenario for scenario in result.to_dict()["scenarios"]}
+        scenarios = {
+            scenario["scenario"]: scenario
+            for scenario in encode_benchmark_run_result(result)["scenarios"]
+        }
         drift = scenarios["spec_drift"]["results"]
 
         self.assertFalse(drift["plain_agent"]["spec_drift_detected"])

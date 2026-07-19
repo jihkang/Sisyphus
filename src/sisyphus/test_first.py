@@ -29,14 +29,6 @@ class TestFirstPhaseEvent:
     step: int | None
     source: str
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "phase": self.phase,
-            "step": self.step,
-            "source": self.source,
-        }
-
-
 @dataclass(frozen=True, slots=True)
 class TestFirstEvaluation:
     status: str
@@ -44,16 +36,6 @@ class TestFirstEvaluation:
     observed_phases: tuple[TestFirstPhaseEvent, ...]
     missing_phases: tuple[str, ...]
     violations: tuple[str, ...]
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "status": self.status,
-            "required_phases": list(self.required_phases),
-            "observed_phases": [event.to_dict() for event in self.observed_phases],
-            "missing_phases": list(self.missing_phases),
-            "violations": list(self.violations),
-        }
-
 
 def evaluate_test_first_loop(episode_steps: list[dict[str, object]]) -> TestFirstEvaluation:
     events: list[TestFirstPhaseEvent] = []

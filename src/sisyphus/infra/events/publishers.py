@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Protocol, TextIO
 
+from ...application.codecs.events import encode_event_envelope_json
 from ...application.events import EventEnvelope, normalize_event_envelope
 from ...shared.paths import event_log_file
 from ..config.loader import SisyphusConfig
@@ -28,7 +29,7 @@ class JsonlEventPublisher:
 
     def publish(self, event: EventEnvelope | dict[str, object]) -> None:
         envelope = normalize_event_envelope(event)
-        append_jsonl_text(self.path, envelope.to_json())
+        append_jsonl_text(self.path, encode_event_envelope_json(envelope))
 
 
 def append_jsonl_text(path: Path, line: str) -> None:

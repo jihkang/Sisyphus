@@ -19,7 +19,7 @@ from sisyphus.audit import run_verify
 from sisyphus.config import load_config
 from sisyphus.conformance import append_conformance_log
 from sisyphus.episode_trace import check_episode_trace, read_episode_steps
-from sisyphus.events import new_event_envelope
+from sisyphus.events import encode_event_envelope_json, new_event_envelope
 from sisyphus.mcp_core import SisyphusMcpCoreService
 from sisyphus.observation import build_task_observation
 from sisyphus.planning import approve_task_plan, freeze_task_spec
@@ -600,8 +600,20 @@ class McpCoreTests(unittest.TestCase):
         event_path.write_text(
             "\n".join(
                 [
-                    new_event_envelope("task.created", data={"task_id": "TF-1"}, event_id="evt_1").to_json(),
-                    new_event_envelope("task.updated", data={"task_id": "TF-1"}, event_id="evt_2").to_json(),
+                    encode_event_envelope_json(
+                        new_event_envelope(
+                            "task.created",
+                            data={"task_id": "TF-1"},
+                            event_id="evt_1",
+                        )
+                    ),
+                    encode_event_envelope_json(
+                        new_event_envelope(
+                            "task.updated",
+                            data={"task_id": "TF-1"},
+                            event_id="evt_2",
+                        )
+                    ),
                 ]
             )
             + "\n",
@@ -649,16 +661,20 @@ class McpCoreTests(unittest.TestCase):
                             "timestamp": "2026-04-21T00:00:05Z",
                         }
                     ),
-                    new_event_envelope(
-                        "verify.completed",
-                        data={"task_id": task["id"], "status": "passed"},
-                        timestamp="2026-04-21T00:01:00Z",
-                    ).to_json(),
-                    new_event_envelope(
-                        "task.manual_intervention_required",
-                        data={"task_id": task["id"], "reason": "promotion_required"},
-                        timestamp="2026-04-21T00:01:30Z",
-                    ).to_json(),
+                    encode_event_envelope_json(
+                        new_event_envelope(
+                            "verify.completed",
+                            data={"task_id": task["id"], "status": "passed"},
+                            timestamp="2026-04-21T00:01:00Z",
+                        )
+                    ),
+                    encode_event_envelope_json(
+                        new_event_envelope(
+                            "task.manual_intervention_required",
+                            data={"task_id": task["id"], "reason": "promotion_required"},
+                            timestamp="2026-04-21T00:01:30Z",
+                        )
+                    ),
                 ]
             )
             + "\n",

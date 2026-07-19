@@ -21,14 +21,6 @@ class SearchIndexRebuildResult:
     document_count: int
     changed: bool
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "index_path": str(self.index_path),
-            "document_count": self.document_count,
-            "changed": self.changed,
-        }
-
-
 @dataclass(frozen=True, slots=True)
 class SearchDocument:
     document_id: str
@@ -74,66 +66,6 @@ class SearchDocument:
             _fingerprint_payload(self)
         )
         object.__setattr__(self, "fingerprint", fingerprint)
-
-    def to_dict(self) -> dict[str, object]:
-        data: dict[str, object] = {
-            "schema_version": self.schema_version,
-            "document_id": self.document_id,
-            "source_type": self.source_type,
-            "source_ref": self.source_ref,
-            "title": self.title,
-            "content": self.content,
-            "metadata": _json_safe(self.metadata),
-            "fingerprint": self.fingerprint,
-        }
-        for key in (
-            "task_id",
-            "task_type",
-            "task_slug",
-            "doc_key",
-            "doc_path",
-            "artifact_id",
-            "artifact_type",
-            "freshness_status",
-            "updated_at",
-        ):
-            value = getattr(self, key)
-            if value is not None:
-                data[key] = value
-        return data
-
-    @classmethod
-    def from_dict(cls, raw: Mapping[str, object]) -> SearchDocument:
-        schema_version = str(raw.get("schema_version") or "").strip()
-        if schema_version != SEARCH_DOCUMENT_SCHEMA_VERSION:
-            raise ValueError(
-                "search document schema_version must be "
-                f"{SEARCH_DOCUMENT_SCHEMA_VERSION!r}, got {schema_version!r}"
-            )
-        metadata = raw.get("metadata", {})
-        if metadata is None:
-            metadata = {}
-        if not isinstance(metadata, Mapping):
-            raise ValueError("search document metadata must be an object")
-        return cls(
-            document_id=_require_string(raw.get("document_id"), "document_id"),
-            source_type=_require_string(raw.get("source_type"), "source_type"),
-            source_ref=_require_string(raw.get("source_ref"), "source_ref"),
-            title=_require_string(raw.get("title"), "title"),
-            content=_require_string(raw.get("content"), "content"),
-            task_id=_optional_string(raw.get("task_id")),
-            task_type=_optional_string(raw.get("task_type")),
-            task_slug=_optional_string(raw.get("task_slug")),
-            doc_key=_optional_string(raw.get("doc_key")),
-            doc_path=_optional_string(raw.get("doc_path")),
-            artifact_id=_optional_string(raw.get("artifact_id")),
-            artifact_type=_optional_string(raw.get("artifact_type")),
-            freshness_status=_optional_string(raw.get("freshness_status")),
-            updated_at=_optional_string(raw.get("updated_at")),
-            metadata={str(key): value for key, value in metadata.items()},
-            fingerprint=_require_string(raw.get("fingerprint"), "fingerprint"),
-        )
-
 
 def fingerprint_search_document_payload(payload: Mapping[str, object]) -> str:
     rendered = json.dumps(_json_safe(payload), separators=(",", ":"), sort_keys=True)

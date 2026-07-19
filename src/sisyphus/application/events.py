@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from collections.abc import Mapping
-import json
 import uuid
 
 from ..shared.clock import utc_now
@@ -23,20 +22,6 @@ class EventEnvelope:
     event_id: str = field(default_factory=new_event_id)
     timestamp: str = field(default_factory=utc_now)
     schema_version: str = SCHEMA_VERSION
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "event_id": self.event_id,
-            "event_type": self.event_type,
-            "timestamp": self.timestamp,
-            "schema_version": self.schema_version,
-            "source": dict(self.source),
-            "data": dict(self.data),
-        }
-
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), separators=(",", ":"))
-
 
 def new_event_envelope(
     event_type: str,

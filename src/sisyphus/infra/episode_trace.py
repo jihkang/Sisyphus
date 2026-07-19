@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 
+from ..application.codecs.episode_trace import encode_episode_step
 from ..application.episode_trace import EpisodeStep, validate_episode_id
 from ..shared.paths import contained_path
 from .events import append_jsonl_text
@@ -20,7 +21,7 @@ class RepositoryEpisodeTraceStore:
 
     def append(self, episode_step: EpisodeStep) -> Path:
         path = self._episode_path(episode_step.episode_id)
-        line = json.dumps(episode_step.to_dict(), separators=(",", ":"), sort_keys=True)
+        line = json.dumps(encode_episode_step(episode_step), separators=(",", ":"), sort_keys=True)
         append_jsonl_text(path, line)
         return path
 

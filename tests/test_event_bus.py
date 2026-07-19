@@ -18,7 +18,13 @@ if str(SRC_ROOT) not in sys.path:
 from sisyphus.bus import NoopEventPublisher, build_event_publisher
 from sisyphus.bus_jsonl import JsonlEventPublisher, read_jsonl_events, resolve_event_bus_path
 from sisyphus.config import load_config
-from sisyphus.events import EventEnvelope, new_event_envelope, normalize_event_envelope
+from sisyphus.events import (
+    EventEnvelope,
+    encode_event_envelope,
+    encode_event_envelope_json,
+    new_event_envelope,
+    normalize_event_envelope,
+)
 from sisyphus.application.events import EventEnvelope as CanonicalEventEnvelope
 from sisyphus.infra.events import JsonlEventPublisher as CanonicalJsonlEventPublisher
 
@@ -26,6 +32,22 @@ from sisyphus.infra.events import JsonlEventPublisher as CanonicalJsonlEventPubl
 class EventBusTests(unittest.TestCase):
     def test_public_event_envelope_preserves_canonical_identity(self) -> None:
         self.assertIs(EventEnvelope, CanonicalEventEnvelope)
+
+    def test_event_codec_preserves_public_wire_shape(self) -> None:
+        envelope = new_event_envelope(
+            "task.created",
+            data={"task_id": "TF-1"},
+            source={"module": "tests"},
+            event_id="evt_codec",
+            timestamp="2026-07-19T00:00:00Z",
+        )
+
+        payload = encode_event_envelope(envelope)
+
+        self.assertEqual(json.loads(encode_event_envelope_json(envelope)), payload)
+        self.assertEqual(payload["event_id"], "evt_codec")
+        self.assertEqual(payload["event_type"], "task.created")
+        self.assertEqual(payload["data"], {"task_id": "TF-1"})
 
     def test_public_jsonl_publisher_preserves_canonical_identity(self) -> None:
         self.assertIs(JsonlEventPublisher, CanonicalJsonlEventPublisher)

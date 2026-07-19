@@ -53,7 +53,7 @@ from sisyphus.daemon import (
 from sisyphus.discovery import detect_repo_root
 from sisyphus.discord_bot import build_discord_source_context, queue_discord_conversation
 from sisyphus.evidence_graph import read_evidence_graph, write_evidence_graph
-from sisyphus.events import new_event_envelope
+from sisyphus.events import encode_event_envelope_json, new_event_envelope
 from sisyphus.metrics import (
     MANUAL_INTERVENTION_REQUIRED_EVENT,
     REOPENED_AFTER_VERIFY_EVENT,
@@ -2442,21 +2442,27 @@ class SisyphusDaemonTests(unittest.TestCase):
                             "timestamp": "2026-04-21T00:00:12Z",
                         }
                     ),
-                    new_event_envelope(
-                        "verify.completed",
-                        data={"task_id": task["id"], "status": "passed"},
-                        timestamp="2026-04-21T00:01:00Z",
-                    ).to_json(),
-                    new_event_envelope(
-                        MANUAL_INTERVENTION_REQUIRED_EVENT,
-                        data={"task_id": task["id"], "reason": "promotion_required"},
-                        timestamp="2026-04-21T00:02:00Z",
-                    ).to_json(),
-                    new_event_envelope(
-                        REOPENED_AFTER_VERIFY_EVENT,
-                        data={"task_id": task["id"], "reason": "stacked_parent_merged"},
-                        timestamp="2026-04-21T00:07:00Z",
-                    ).to_json(),
+                    encode_event_envelope_json(
+                        new_event_envelope(
+                            "verify.completed",
+                            data={"task_id": task["id"], "status": "passed"},
+                            timestamp="2026-04-21T00:01:00Z",
+                        )
+                    ),
+                    encode_event_envelope_json(
+                        new_event_envelope(
+                            MANUAL_INTERVENTION_REQUIRED_EVENT,
+                            data={"task_id": task["id"], "reason": "promotion_required"},
+                            timestamp="2026-04-21T00:02:00Z",
+                        )
+                    ),
+                    encode_event_envelope_json(
+                        new_event_envelope(
+                            REOPENED_AFTER_VERIFY_EVENT,
+                            data={"task_id": task["id"], "reason": "stacked_parent_merged"},
+                            timestamp="2026-04-21T00:07:00Z",
+                        )
+                    ),
                 ]
             )
             + "\n",

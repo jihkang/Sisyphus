@@ -12,6 +12,7 @@ from time import perf_counter
 from urllib.parse import urlsplit, urlunsplit
 
 from ..shared.clock import utc_now
+from .codecs import encode_local_agent_benchmark_run_result
 from .local_agent import ChatCompletionClient, LocalAgentRunResult, LocalCodingAgent
 from .local_openai import LocalProviderConfig, OpenAICompatibleClient
 from ..infra.workspace import PROTECTED_PATH_PARTS, WorkspaceExecutor
@@ -69,26 +70,6 @@ class LocalAgentBenchmarkCaseResult:
     compaction_count: int
     duration_ms: int
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "fixture_id": self.fixture_id,
-            "title": self.title,
-            "kind": self.kind,
-            "passed": self.passed,
-            "reason": self.reason,
-            "status": self.status,
-            "terminal_finish": self.terminal_finish,
-            "completion_ready": self.completion_ready,
-            "expected_changed_paths": list(self.expected_changed_paths),
-            "actual_changed_paths": list(self.actual_changed_paths),
-            "action_count": self.action_count,
-            "protocol_error_count": self.protocol_error_count,
-            "blocked_action_count": self.blocked_action_count,
-            "compaction_count": self.compaction_count,
-            "duration_ms": self.duration_ms,
-        }
-
-
 @dataclass(frozen=True, slots=True)
 class LocalAgentBenchmarkRunResult:
     provider_profile: dict[str, object]
@@ -100,46 +81,6 @@ class LocalAgentBenchmarkRunResult:
     @property
     def passed(self) -> bool:
         return bool(self.cases) and all(case.passed for case in self.cases)
-
-    def to_dict(self) -> dict[str, object]:
-        coding = tuple(case for case in self.cases if case.kind == "coding")
-        safety = tuple(case for case in self.cases if case.kind == "safety")
-        passed_count = sum(1 for case in self.cases if case.passed)
-        return {
-            "schema_version": self.schema_version,
-            "started_at": self.started_at,
-            "finished_at": self.finished_at,
-            "passed": self.passed,
-            "provider": dict(self.provider_profile),
-            "summary": {
-                "fixture_count": len(self.cases),
-                "passed_count": passed_count,
-                "success_rate": _rate(passed_count, len(self.cases)),
-                "coding_count": len(coding),
-                "coding_passed_count": sum(1 for case in coding if case.passed),
-                "coding_success_rate": _rate(
-                    sum(1 for case in coding if case.passed), len(coding)
-                ),
-                "safety_count": len(safety),
-                "safety_passed_count": sum(1 for case in safety if case.passed),
-                "safety_success_rate": _rate(
-                    sum(1 for case in safety if case.passed), len(safety)
-                ),
-                "action_count": sum(case.action_count for case in self.cases),
-                "protocol_error_count": sum(
-                    case.protocol_error_count for case in self.cases
-                ),
-                "blocked_action_count": sum(
-                    case.blocked_action_count for case in self.cases
-                ),
-                "compaction_count": sum(
-                    case.compaction_count for case in self.cases
-                ),
-                "duration_ms": sum(case.duration_ms for case in self.cases),
-            },
-            "cases": [case.to_dict() for case in self.cases],
-        }
-
 
 LocalAgentBenchmarkClientFactory = Callable[
     [LocalProviderConfig, LocalAgentBenchmarkFixture], ChatCompletionClient
@@ -241,7 +182,7 @@ def run_local_agent_benchmark(
 def render_local_agent_benchmark_markdown(
     result: LocalAgentBenchmarkRunResult,
 ) -> str:
-    payload = result.to_dict()
+    payload = encode_local_agent_benchmark_run_result(result)
     summary = payload["summary"]
     assert isinstance(summary, dict)
     provider = result.provider_profile
@@ -705,12 +646,6 @@ def _fixture_hash(fixture: LocalAgentBenchmarkFixture) -> str:
 
 def _elapsed_ms(started: float) -> int:
     return max(0, int((perf_counter() - started) * 1000))
-
-
-def _rate(numerator: int, denominator: int) -> float | None:
-    if denominator == 0:
-        return None
-    return numerator / denominator
 
 
 __all__ = [

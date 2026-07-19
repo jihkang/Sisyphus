@@ -21,6 +21,7 @@ from sisyphus.dataset_export import (
     export_dataset,
 )
 from sisyphus.episode_trace import append_episode_step, build_episode_step, next_episode_step
+from sisyphus.eval.codecs import encode_eval_loop_result
 from sisyphus.eval.loop import build_task_eval_loop_result
 from sisyphus.evidence_graph import write_evidence_graph
 from sisyphus.test_first import TEST_FIRST_LOOP_PHASES, TEST_FIRST_STATUS_SATISFIED
@@ -58,7 +59,9 @@ class DatasetExportTests(unittest.TestCase):
                 _append_action(task_dir, task["id"], f"phase.{phase}", ok=True, test_first_phase=phase)
 
             records = build_task_dataset_records(task, task_dir, format=DATASET_FORMAT_RL)
-            expected = build_task_eval_loop_result(task, task_dir, episode_id="ep-dataset").to_dict()
+            expected = encode_eval_loop_result(
+                build_task_eval_loop_result(task, task_dir, episode_id="ep-dataset")
+            )
 
             self.assertEqual(len(records), len(TEST_FIRST_LOOP_PHASES))
             first = records[0]
