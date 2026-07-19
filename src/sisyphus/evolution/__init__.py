@@ -104,8 +104,6 @@ from .harness import (
     build_worktree_evaluation_command_plan,
     build_sisyphus_evaluation_request,
     execute_evolution_harness,
-    execute_worktree_backed_evaluation,
-    execute_sisyphus_evaluation,
     plan_evolution_harness,
     summarize_dataset_evaluation,
 )
@@ -118,7 +116,6 @@ from .materialization import (
     EvolutionMaterializationError,
     EvolutionMaterializedTarget,
     EvolutionTextMutation,
-    materialize_evolution_evaluation,
     ordered_target_source_paths,
 )
 from .invalidation import (
@@ -225,6 +222,11 @@ from ..composition.evolution_followups import bridge_evolution_followup_request
 from ..composition.evolution_projections import project_followup_execution, project_followup_verification
 from ..composition.evolution_decisions import record_evolution_decision_envelope
 from ..composition.evolution_events import publish_evolution_event
+from ..composition.evolution_evaluation import (
+    execute_sisyphus_evaluation,
+    execute_worktree_backed_evaluation,
+    materialize_evolution_evaluation,
+)
 from ..composition.evolution_operator import (
     evaluate_evolution_followup_decision,
     request_evolution_followup,

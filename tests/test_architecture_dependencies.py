@@ -555,6 +555,8 @@ class ArchitectureDependencyTests(unittest.TestCase):
         source_modules = {
             "sisyphus.evolution.bridge",
             "sisyphus.evolution.dataset",
+            "sisyphus.evolution.harness",
+            "sisyphus.evolution.materialization",
             "sisyphus.evolution.operator",
             "sisyphus.evolution.orchestrator",
             "sisyphus.evolution.presentation",
@@ -586,6 +588,34 @@ class ArchitectureDependencyTests(unittest.TestCase):
             "Evolution core regained canonical lifecycle authority imports:\n"
             + _format_pairs(forbidden),
         )
+
+    def test_evolution_harness_and_materialization_are_effect_free(self) -> None:
+        forbidden_modules = {"json", "os", "pathlib", "subprocess"}
+        forbidden_functions = {
+            "execute_sisyphus_evaluation",
+            "execute_worktree_backed_evaluation",
+            "materialize_evolution_evaluation",
+        }
+        for name in ("sisyphus.evolution.harness", "sisyphus.evolution.materialization"):
+            module = self.modules[name]
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            imported_roots: set[str] = set()
+            for node in tree.body:
+                if isinstance(node, ast.Import):
+                    imported_roots.update(alias.name.split(".", 1)[0] for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imported_roots.add(node.module.split(".", 1)[0])
+            declared_functions = {
+                node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            self.assertFalse(
+                imported_roots.intersection(forbidden_modules),
+                f"{name} regained process or filesystem implementation imports",
+            )
+            self.assertFalse(
+                declared_functions.intersection(forbidden_functions),
+                f"{name} regained Control-owned evaluation effects",
+            )
 
     def test_evolution_ports_expose_no_lifecycle_authority_verbs(self) -> None:
         module = self.modules["sisyphus.application.ports.evolution"]

@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import asdict, dataclass
-from pathlib import Path
-import json
-
-from ..shared.coerce import optional_str
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from .targets import get_evolution_target
 
 
@@ -48,6 +44,12 @@ class EvolutionMaterialization:
     file_paths: tuple[str, ...]
     targets: tuple[EvolutionMaterializedTarget, ...]
     notes: str
+
+
+@dataclass(frozen=True, slots=True)
+class EvolutionMaterializedSourceProjection:
+    file_texts: tuple[tuple[str, str], ...]
+    targets: tuple[EvolutionMaterializedTarget, ...]
 
 
 class EvolutionMaterializationError(RuntimeError):
@@ -146,40 +148,37 @@ _TARGET_MUTATIONS: dict[str, tuple[EvolutionTextMutation, ...]] = {
 }
 
 
-def materialize_evolution_evaluation(
+def ordered_target_source_paths(target_ids: Sequence[str]) -> tuple[str, ...]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for target_id in target_ids:
+        target = get_evolution_target(target_id)
+        if target is None:
+            raise EvolutionMaterializationError(f"unknown evolution target id: {target_id}")
+        for source_path in target.source_paths:
+            if source_path in seen:
+                continue
+            seen.add(source_path)
+            ordered.append(source_path)
+    return tuple(ordered)
+
+
+def project_evolution_materialized_sources(
     evaluation,
-    *,
-    task: dict,
-) -> EvolutionMaterialization:
-    worktree_root = Path(str(task.get("worktree_path") or "")).resolve()
-    if not worktree_root.is_dir():
-        raise EvolutionMaterializationError(f"evaluation worktree does not exist: {worktree_root}")
-
-    task_dir_value = str(task.get("task_dir") or "").strip()
-    if not task_dir_value:
-        raise EvolutionMaterializationError("evaluation task is missing task_dir metadata")
-
-    artifact_root = worktree_root / task_dir_value / "evolution" / _artifact_slug(evaluation.evaluation_id)
-    snapshot_root = artifact_root / "sources"
-    snapshot_root.mkdir(parents=True, exist_ok=True)
-
-    file_texts: dict[str, str] = {}
+    source_texts: Mapping[str, str],
+) -> EvolutionMaterializedSourceProjection:
     ordered_paths = ordered_target_source_paths(evaluation.target_ids)
+    missing_paths = [path for path in ordered_paths if path not in source_texts]
+    if missing_paths:
+        raise EvolutionMaterializationError(
+            "materialization source text is unavailable: " + ", ".join(missing_paths)
+        )
+    file_texts = {path: str(source_texts[path]) for path in ordered_paths}
     target_results: list[EvolutionMaterializedTarget] = []
-
-    for source_path in ordered_paths:
-        file_path = worktree_root / source_path
-        if not file_path.is_file():
-            raise EvolutionMaterializationError(
-                f"materialization source file is missing from the evaluation worktree: {source_path}"
-            )
-        file_texts[source_path] = file_path.read_text(encoding="utf-8")
-
     for target_id in evaluation.target_ids:
         target = get_evolution_target(target_id)
         if target is None:
             raise EvolutionMaterializationError(f"unknown evolution target id: {target_id}")
-
         mutation_count = 0
         if evaluation.role == "candidate":
             mutation_count = _apply_candidate_mutations(target_id, file_texts)
@@ -198,73 +197,10 @@ def materialize_evolution_evaluation(
                 detail=detail,
             )
         )
-
-    for source_path in ordered_paths:
-        final_text = file_texts[source_path]
-        source_file = worktree_root / source_path
-        if evaluation.role == "candidate":
-            source_file.write_text(final_text, encoding="utf-8")
-        snapshot_path = snapshot_root / source_path
-        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-        snapshot_path.write_text(final_text, encoding="utf-8")
-
-    status = (
-        EVOLUTION_MATERIALIZATION_STATUS_CANDIDATE_APPLIED
-        if evaluation.role == "candidate"
-        else EVOLUTION_MATERIALIZATION_STATUS_BASELINE_CAPTURED
-    )
-    notes = (
-        f"{evaluation.role} materialization captured {len(ordered_paths)} source files"
-        if evaluation.role != "candidate"
-        else f"candidate materialization applied bounded rewrites across {len(ordered_paths)} source files"
-    )
-
-    manifest_path = artifact_root / "materialization.json"
-    manifest = {
-        "evaluation_id": evaluation.evaluation_id,
-        "role": evaluation.role,
-        "status": status,
-        "mode": EVOLUTION_MATERIALIZATION_MODE_TASK_WORKTREE,
-        "task_id": optional_str(task.get("id")),
-        "task_dir": task_dir_value,
-        "worktree_path": str(worktree_root),
-        "target_ids": list(evaluation.target_ids),
-        "file_paths": list(ordered_paths),
-        "targets": [asdict(target_result) for target_result in target_results],
-        "notes": notes,
-    }
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-
-    return EvolutionMaterialization(
-        evaluation_id=evaluation.evaluation_id,
-        role=evaluation.role,
-        status=status,
-        mode=EVOLUTION_MATERIALIZATION_MODE_TASK_WORKTREE,
-        task_id=optional_str(task.get("id")),
-        task_dir=task_dir_value,
-        worktree_path=str(worktree_root),
-        manifest_path=_relative_to_root(manifest_path, worktree_root),
-        snapshot_root=_relative_to_root(snapshot_root, worktree_root),
-        target_ids=tuple(evaluation.target_ids),
-        file_paths=ordered_paths,
+    return EvolutionMaterializedSourceProjection(
+        file_texts=tuple((path, file_texts[path]) for path in ordered_paths),
         targets=tuple(target_results),
-        notes=notes,
     )
-
-
-def ordered_target_source_paths(target_ids: Sequence[str]) -> tuple[str, ...]:
-    ordered: list[str] = []
-    seen: set[str] = set()
-    for target_id in target_ids:
-        target = get_evolution_target(target_id)
-        if target is None:
-            raise EvolutionMaterializationError(f"unknown evolution target id: {target_id}")
-        for source_path in target.source_paths:
-            if source_path in seen:
-                continue
-            seen.add(source_path)
-            ordered.append(source_path)
-    return tuple(ordered)
 
 
 def _apply_candidate_mutations(target_id: str, file_texts: dict[str, str]) -> int:
@@ -290,11 +226,3 @@ def _apply_candidate_mutations(target_id: str, file_texts: dict[str, str]) -> in
             f"bounded mutation anchor missing for target `{target_id}` in {mutation.source_path}: {mutation.description}"
         )
     return applied
-
-
-def _artifact_slug(evaluation_id: str) -> str:
-    return str(evaluation_id).lower().replace(":", "-")
-
-
-def _relative_to_root(path: Path, root: Path) -> str:
-    return path.resolve().relative_to(root).as_posix()

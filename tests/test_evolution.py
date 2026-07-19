@@ -2499,6 +2499,54 @@ class EvolutionHarnessTests(unittest.TestCase):
         with self.assertRaisesRegex(EvolutionMaterializationError, "bounded mutation anchor missing"):
             materialize_evolution_evaluation(plan.candidate, task=evaluation_task)
 
+    def test_materialize_rejects_symlinked_source_and_artifact_paths(self) -> None:
+        self._seed_phase_1_sources()
+        self._new_task("materialize-symlink-guard")
+        run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+
+        source_worktree = self.repo_root / "_worktrees" / "source-symlink"
+        source_worktree.mkdir(parents=True, exist_ok=True)
+        self._seed_phase_1_sources(source_worktree)
+        source_task = self._build_evaluation_task("TF-source-symlink", source_worktree)
+        source_path = source_worktree / "src/sisyphus/application/conformance_records.py"
+        outside_source = self.repo_root / "outside-source.py"
+        outside_source.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+        source_path.unlink()
+        source_path.symlink_to(outside_source)
+
+        with self.assertRaisesRegex(EvolutionMaterializationError, "symlink"):
+            materialize_evolution_evaluation(plan.candidate, task=source_task)
+
+        artifact_worktree = self.repo_root / "_worktrees" / "artifact-symlink"
+        artifact_worktree.mkdir(parents=True, exist_ok=True)
+        self._seed_phase_1_sources(artifact_worktree)
+        artifact_task = self._build_evaluation_task("TF-artifact-symlink", artifact_worktree)
+        evolution_root = artifact_worktree / artifact_task["task_dir"] / "evolution"
+        evolution_root.parent.mkdir(parents=True, exist_ok=True)
+        outside_artifacts = self.repo_root / "outside-artifacts"
+        outside_artifacts.mkdir()
+        evolution_root.symlink_to(outside_artifacts, target_is_directory=True)
+
+        with self.assertRaisesRegex(EvolutionMaterializationError, "symlink"):
+            materialize_evolution_evaluation(plan.candidate, task=artifact_task)
+        self.assertEqual(list(outside_artifacts.iterdir()), [])
+
+    def test_materialize_rejects_unsafe_evaluation_id(self) -> None:
+        self._seed_phase_1_sources()
+        self._new_task("materialize-unsafe-id")
+        run = plan_evolution_run(self.repo_root, target_ids=["execution-contract-wording"])
+        dataset = build_evolution_dataset(self.repo_root)
+        plan = plan_evolution_harness(run, dataset)
+        evaluation_task = self._build_evaluation_task("TF-eval-unsafe-id", self.repo_root)
+
+        with self.assertRaisesRegex(EvolutionMaterializationError, "unsafe evolution evaluation id"):
+            materialize_evolution_evaluation(
+                replace(plan.candidate, evaluation_id="../escape"),
+                task=evaluation_task,
+            )
+
     def test_execute_sisyphus_evaluation_records_materialization_evidence_and_manifest_owned_path(self) -> None:
         self._seed_phase_1_sources()
         self._new_task("harness-sisyphus-materialized")
