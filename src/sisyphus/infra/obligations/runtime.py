@@ -5,33 +5,49 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ...application.codecs.artifact_dsl import (
+    encode_compiled_obligation,
+    encode_obligation_intent,
+    encode_protocol_spec,
+)
+from ...application.codecs.artifact_evaluation import encode_feature_change_evaluation
+from ...application.codecs.artifact_snapshots import (
+    encode_feature_task_artifact_snapshot_status,
+)
 from ...application.results.obligations import (
     ObligationExecutionResult,
     ObligationQueueMaterialization,
 )
-from ...artifact_evaluator import FeatureChangeEvaluation, evaluate_feature_task_projection
-from ...artifact_projection import FeatureTaskArtifactProjection, project_feature_task_record
-from ...artifact_snapshot import (
+from ...application.artifacts.evaluation import evaluate_feature_task_projection
+from ...application.artifacts.projection import FeatureTaskArtifactProjection
+from ...application.artifacts.obligations import (
+    DEFAULT_FEATURE_CHANGE_PROTOCOL_DECLARATION,
+    compile_feature_change_obligations,
+    obligation_intents_from_feature_change_evaluation,
+)
+from ...application.artifacts.execution_policy import (
+    DEFAULT_EXECUTION_POLICY_REGISTRY_DECLARATION,
+    EXECUTION_RUNNER_SISYPHUS_VERIFY,
+    execution_policy_receipt_fields,
+    resolve_execution_policy,
+)
+from ...application.codecs.execution_policies import encode_execution_policy_registry
+from ...domain.artifact.evaluation import FeatureChangeEvaluation
+from ..artifacts.snapshot import (
     evaluate_feature_task_artifact_snapshot_status,
     read_feature_task_artifact_snapshot,
 )
-from ...dsl import ObligationIntent
-from ...feature_change_dsl import (
-    compile_feature_change_obligations,
-    default_feature_change_protocol_spec,
-    obligation_intents_from_feature_change_evaluation,
-)
-from ...execution_policy import (
-    EXECUTION_RUNNER_SISYPHUS_VERIFY,
-    execution_policy_receipt_fields,
-    execution_policy_registry_to_dict,
-    resolve_execution_policy,
-)
+from ...domain.artifact.dsl import ObligationIntent
 from ...shared.clock import utc_now
 from ...shared.paths import contained_path, task_dir as resolve_task_dir
 from ..config.loader import SisyphusConfig
 from ..persistence.atomic_text import write_text_file
 from ..persistence.task_repository import load_task_record
+from ..artifacts.projection import project_feature_task_record
+from ..artifacts.declarations import (
+    load_execution_policy_declaration,
+    load_feature_change_protocol_declaration,
+)
 
 
 COMPILED_OBLIGATION_QUEUE_SCHEMA_VERSION = "sisyphus.compiled_obligation_queue.v1"
@@ -62,7 +78,12 @@ def build_feature_change_compiled_obligation_queue(
     *,
     additional_intents: tuple[ObligationIntent, ...] = (),
 ) -> dict[str, object]:
-    protocol = default_feature_change_protocol_spec()
+    protocol = load_feature_change_protocol_declaration(
+        DEFAULT_FEATURE_CHANGE_PROTOCOL_DECLARATION
+    )
+    execution_policies = load_execution_policy_declaration(
+        DEFAULT_EXECUTION_POLICY_REGISTRY_DECLARATION
+    )
     intents = _merge_obligation_intents(
         obligation_intents_from_feature_change_evaluation(evaluation),
         additional_intents,
@@ -73,11 +94,13 @@ def build_feature_change_compiled_obligation_queue(
         "task_id": projection.task_id,
         "feature_id": projection.feature_id,
         "source_artifact_id": projection.feature_change_artifact.artifact_id,
-        "protocol": protocol.to_dict(),
-        "execution_policies": execution_policy_registry_to_dict(),
-        "evaluation": evaluation.to_dict(),
-        "intents": [intent.to_dict() for intent in intents],
-        "compiled_obligations": [obligation.to_dict() for obligation in compiled],
+        "protocol": encode_protocol_spec(protocol),
+        "execution_policies": encode_execution_policy_registry(execution_policies),
+        "evaluation": encode_feature_change_evaluation(evaluation),
+        "intents": [encode_obligation_intent(intent) for intent in intents],
+        "compiled_obligations": [
+            encode_compiled_obligation(obligation) for obligation in compiled
+        ],
         "obligation_count": len(compiled),
     }
 
@@ -175,7 +198,12 @@ def execute_next_feature_change_obligation(
     obligation_id = str(obligation.get("id") or "")
     spec_ref = str(obligation.get("spec_ref") or "")
     execution_policy_ref = _obligation_execution_policy_ref(obligation)
-    execution_policy = resolve_execution_policy(execution_policy_ref)
+    execution_policy = resolve_execution_policy(
+        execution_policy_ref,
+        registry=load_execution_policy_declaration(
+            DEFAULT_EXECUTION_POLICY_REGISTRY_DECLARATION
+        ),
+    )
     if execution_policy is None:
         receipt = {
             "status": OBLIGATION_STATUS_BLOCKED,
@@ -297,7 +325,13 @@ def _snapshot_invalidation_obligation_intents(
     snapshot = read_feature_task_artifact_snapshot(task_dir)
     if snapshot is None:
         return None, ()
-    status = evaluate_feature_task_artifact_snapshot_status(snapshot, task=task, task_dir=task_dir).to_dict()
+    status = encode_feature_task_artifact_snapshot_status(
+        evaluate_feature_task_artifact_snapshot_status(
+            snapshot,
+            task=task,
+            task_dir=task_dir,
+        )
+    )
     if status.get("status") != "stale":
         return status, ()
     fingerprint = str(status.get("fingerprint") or "")

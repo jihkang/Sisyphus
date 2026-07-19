@@ -57,6 +57,7 @@ separation, and real 30.5B model evidence, is not part of this repository migrat
 | Artifact resource query boundary | Completed | `FeatureArtifactResourceService` owns resource selection and public payload shape over `FeatureArtifactQueryPort`; repository projection, snapshot status, and obligation reads are supplied by an infra adapter. MCP task resources use composition, the legacy module is import-only, call-order and snapshot-preference tests pass, and the full 699-test suite is green |
 | Evolution read, handoff, projection, and run-artifact boundaries | Completed | Dataset extraction, follow-up task reads, execution/verification projection, and decision events use read-only task/event ports; follow-up creation accepts only a request-only command with `auto_run=False`; run artifacts use a validated append-only store with exclusive creation, no-follow bounded reads, containment, and fsync. CLI/MCP use composition, surface/event modules are import-only facades, authority/path guards pass, and the full 708-test suite is green |
 | Evolution evaluation authority and worktree effects | Completed | `evolution/harness.py` now owns only plans, metrics, requests, and command projections. Control-owned composition performs task request, plan approval, spec freeze, and provider ordering; infrastructure owns bounded mutation materialization, process execution, atomic output/receipt persistence, containment, and symlink rejection. Authority and path-security guards pass, and the full 711-test suite is green |
+| Artifact, DSL, snapshot, and execution-policy ownership | Completed | Artifact and DSL value models are domain-owned without boundary mapping methods; pure projection, evaluation, obligation, snapshot, and execution-policy decisions are application-owned; explicit codecs own wire shapes; package declaration reads and secure document/snapshot IO are infrastructure-owned; default declaration selection is composed outside the inner layers. The seven stable root modules are import-only facades, infrastructure imports only canonical owners, symlink regressions are covered, and the full 716-test suite is green |
 
 ## Accepted Domain Dependency Exceptions
 
@@ -78,21 +79,48 @@ change.
 
 ## Remaining Implementation Debt
 
+Current accounting: `0` High implementation items, exactly `2` accepted import
+compatibility shims, `3` Medium implementation items, and `1` release gate. The
+two shims are intentionally excluded from implementation debt because they own
+no behavior; they remain tracked compatibility debt until their retirement
+conditions are met.
+
 | ID | Priority | Boundary and current evidence | Required end state | Verification gate |
 | --- | --- | --- | --- | --- |
-| CA-07 | High | Evolution authority leakage is closed: the bounded context retains plans, metrics, recommendations, and pure mutation projections only. The remaining High debt is the artifact path: artifact query, obligation, and search adapters still import flat `artifact_projection`, `artifact_evaluator`, `artifact_snapshot`, `artifacts`, and `dsl` implementation modules | Expose canonical artifact read/evaluation/execution-policy contracts, move artifact/DSL policy under explicit application/domain owners, and leave the stable root modules as import-only compatibility facades | Architecture tests prove artifact policy has no infrastructure dependency, adapters target canonical owners, baseline/candidate/obligation payloads remain wire-compatible, and root facades preserve symbol identity |
-| CA-08 | Medium | There are 58 model-owned `to_dict`/`from_dict` methods across 14 non-domain modules | Group only wire-shape-equivalent records under explicit codecs/mappers; retain custom mappers where schemas, omission rules, digests, or compatibility differ | Golden wire fixtures, unknown-field behavior, digest fixtures, and round-trip tests pass before each method is removed |
-| CA-09 | Medium | Several modules mix multiple change reasons: `artifacts.py` (767), `providers/benchmark.py` (729), `dsl.py` (674), and large planning/verification/promotion use cases | Split only along demonstrated ownership or side-effect boundaries; do not create one-method ports or generic manager classes | Each extracted boundary has multiple meaningful consumers or a replaceable side effect and its own contract tests |
+| CA-08 | Medium | There are 14 model-owned `to_dict`/`from_dict` methods across 10 non-domain modules. They are an audit inventory, not 14 automatically equivalent mappings | Move wire mapping to explicit codecs only where records share a real schema boundary; retain specialized mapping when omission rules, digests, compatibility, or presentation differ | Golden wire fixtures, unknown-field behavior, digest fixtures, and round-trip tests pass before each method is removed |
+| CA-09 | Medium | The current review hotspots are `application/use_cases/promotion.py` (798), `interfaces/cli/app.py` (784), `providers/benchmark.py` (729), `infra/validation/spec_validation.py` (701), `application/use_cases/planning.py` (600), `interfaces/inbox/parser.py` (572), `evolution/harness.py` (557), and `application/use_cases/verification.py` (523). Size alone is not a violation, but each is a candidate for mixed change reasons | Split only along demonstrated policy, orchestration, parsing, presentation, or replaceable-effect boundaries; do not create one-method ports or generic manager classes | Every extracted boundary has a distinct change axis and focused contract tests; modules found cohesive are documented and intentionally retained |
 | CA-10 | Medium | `docs/architecture.md` describes the pre-migration staged layout and lacks the implemented application/composition dependency flow | Update architecture and data-pipeline diagrams only after runtime boundaries are final; add an ADR for dependency direction, mapper ownership, shim lifetime, and Evolve authority | Documentation path checks and an implementation-to-document conformance review pass |
 | CA-11 | Release gate | Final coverage, wheel/offline build, independent review, PR/CI/merge, merge receipt, and merged-main validation are not complete | Run the frozen verification matrix after integrating latest `main`, then promote and verify the merged commit | Coverage >=80%, wheel install smoke, Sisyphus verify green, CI green, merge recorded, and tests green on updated `main` |
 
+### CA-08 Serialization Inventory
+
+| Module | Methods | Disposition to prove |
+| --- | ---: | --- |
+| `test_first.py` | 2 | Compare the two result projections before introducing a codec |
+| `benchmark.py` | 1 | Keep separate from provider benchmark records unless golden payloads prove one schema |
+| `providers/benchmark.py` | 2 | Extract only the benchmark wire boundary shared by persistence/reporting consumers |
+| `providers/local_agent.py` | 1 | Preserve provider receipt omission and compatibility rules |
+| `eval/loop.py` | 1 | Preserve evaluation result metrics and ordering |
+| `application/episode_trace.py` | 1 | Move only if the trace store is the actual wire owner |
+| `application/events.py` | 1 | Move only if all event publishers consume the same envelope codec |
+| `application/action_space.py` | 1 | Distinguish lifecycle projection from persisted records |
+| `application/search/retrieval.py` | 1 | Treat ranked-result presentation separately from indexed-document storage |
+| `application/search/models.py` | 3 | Consolidate the `SearchDocument` encode/decode pair while preserving search-result and ContextPack projections |
+
+The inventory is enforced indirectly by the domain-model mapping guard: no new
+`to_dict`/`from_dict` method may move into `domain`. CA-08 is complete only after
+each remaining method is either moved to a named codec or explicitly retained
+with a documented boundary reason.
+
 ## Execution Order
 
-1. Rewire CLI and MCP to application commands and queries.
-2. Restrict Evolve to read/evaluation/append-only ports and add authority tests.
-3. Consolidate serialization only where golden wire contracts prove equivalence.
-4. Review oversized modules for real responsibility splits, then synchronize architecture documentation.
-5. Run the full verification and promotion sequence on the latest `main`.
+1. Audit the 14 remaining serialization methods against golden wire contracts and
+   extract only genuinely shared codecs.
+2. Review the CA-09 hotspots for independent change axes and split only the
+   boundaries that have focused contract evidence.
+3. Synchronize architecture/data-pipeline documentation and record the dependency,
+   mapper, shim-lifetime, and Evolve-authority ADR.
+4. Run the full verification and promotion sequence on the latest `main`.
 
 This order follows dependency direction: outer effects must be injectable before
 orchestrators and interfaces can stop importing their implementations.

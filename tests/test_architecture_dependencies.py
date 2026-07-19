@@ -551,6 +551,66 @@ class ArchitectureDependencyTests(unittest.TestCase):
                 f"artifact resource facade contains {type(node).__name__}; it must remain import-only"
             )
 
+    def test_artifact_policy_facades_remain_import_only(self) -> None:
+        for name in (
+            "sisyphus.artifact_evaluator",
+            "sisyphus.artifact_projection",
+            "sisyphus.artifact_snapshot",
+            "sisyphus.artifacts",
+            "sisyphus.dsl",
+            "sisyphus.execution_policy",
+            "sisyphus.feature_change_dsl",
+        ):
+            module = self.modules[name]
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom):
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    self.assertIsInstance(node.value.value, str, f"{name} has executable code")
+                    continue
+                if isinstance(node, ast.Assign):
+                    self.assertEqual(
+                        [target.id for target in node.targets if isinstance(target, ast.Name)],
+                        ["__all__"],
+                        f"{name} may assign only __all__",
+                    )
+                    self.assertTrue(
+                        isinstance(node.value, (ast.List, ast.Tuple))
+                        and all(
+                            isinstance(item, ast.Constant) and isinstance(item.value, str)
+                            for item in node.value.elts
+                        ),
+                        f"{name} __all__ must be a literal string list",
+                    )
+                    continue
+                self.fail(
+                    f"{name} contains {type(node).__name__}; compatibility facade must remain import-only"
+                )
+
+    def test_artifact_adapters_do_not_import_flat_policy_facades(self) -> None:
+        facade_modules = {
+            "sisyphus.artifact_evaluator",
+            "sisyphus.artifact_projection",
+            "sisyphus.artifact_snapshot",
+            "sisyphus.artifacts",
+            "sisyphus.dsl",
+            "sisyphus.execution_policy",
+            "sisyphus.feature_change_dsl",
+        }
+        forbidden = {
+            (module.name, dependency)
+            for module in self.modules.values()
+            if module.name.startswith("sisyphus.infra")
+            for dependency in _declared_imports(module)
+            if dependency in facade_modules
+        }
+
+        self.assertFalse(
+            forbidden,
+            "artifact adapters import flat policy facades:\n" + _format_pairs(forbidden),
+        )
+
     def test_migrated_evolution_core_has_no_canonical_authority_imports(self) -> None:
         source_modules = {
             "sisyphus.evolution.bridge",

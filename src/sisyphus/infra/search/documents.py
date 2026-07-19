@@ -10,13 +10,15 @@ from ...application.search.models import (
     SearchDocument,
     fingerprint_search_document_payload,
 )
-from ...artifact_evaluator import evaluate_feature_task_projection
-from ...artifact_projection import project_feature_task_record
-from ...artifact_snapshot import (
+from ...application.artifacts.evaluation import evaluate_feature_task_projection
+from ..artifacts.projection import project_feature_task_record
+from ...application.artifacts.snapshot import (
     FeatureTaskArtifactSnapshotStatus,
     build_feature_task_artifact_snapshot,
-    evaluate_feature_task_artifact_snapshot_status,
     feature_task_artifact_snapshot_with_status,
+)
+from ..artifacts.snapshot import (
+    evaluate_feature_task_artifact_snapshot_status,
     read_feature_task_artifact_snapshot,
 )
 from ..config.loader import SisyphusConfig

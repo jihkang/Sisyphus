@@ -65,6 +65,50 @@ class InterfaceStructureTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIs(getattr(legacy, name), getattr(canonical, name))
 
+    def test_artifact_policy_facades_preserve_canonical_identity(self) -> None:
+        import sisyphus.artifact_evaluator as public_evaluator
+        import sisyphus.artifact_projection as public_projection
+        import sisyphus.artifact_snapshot as public_snapshot
+        import sisyphus.artifacts as public_artifacts
+        import sisyphus.dsl as public_dsl
+        import sisyphus.execution_policy as public_execution_policy
+        import sisyphus.feature_change_dsl as public_feature_dsl
+        from sisyphus.application.artifacts import evaluation, obligations, projection, snapshot
+        from sisyphus.application.codecs import artifacts as artifact_codecs
+        from sisyphus.composition import execution_policy, feature_change_dsl
+        from sisyphus.domain.artifact import dsl, models
+        from sisyphus.infra.artifacts import projection as projection_adapter
+        from sisyphus.infra.artifacts import snapshot as snapshot_adapter
+
+        self.assertIs(public_artifacts.ArtifactRecord, models.ArtifactRecord)
+        self.assertIs(public_artifacts.load_artifact_record, artifact_codecs.decode_artifact_record)
+        self.assertIs(public_dsl.ProtocolSpec, dsl.ProtocolSpec)
+        self.assertIs(
+            public_projection.FeatureTaskArtifactProjection,
+            projection.FeatureTaskArtifactProjection,
+        )
+        self.assertIs(public_projection.project_feature_task, projection_adapter.project_feature_task)
+        self.assertIs(
+            public_evaluator.evaluate_feature_task_projection,
+            evaluation.evaluate_feature_task_projection,
+        )
+        self.assertIs(
+            public_snapshot.materialize_feature_task_artifact_snapshot,
+            snapshot_adapter.materialize_feature_task_artifact_snapshot,
+        )
+        self.assertIs(
+            public_feature_dsl.compile_feature_change_obligations,
+            feature_change_dsl.compile_feature_change_obligations,
+        )
+        self.assertIs(
+            public_feature_dsl.fingerprint_materialized_inputs,
+            obligations.fingerprint_materialized_inputs,
+        )
+        self.assertIs(
+            public_execution_policy.resolve_execution_policy,
+            execution_policy.resolve_execution_policy,
+        )
+
     def test_planning_module_reexports_domain_service_surface(self) -> None:
         import sisyphus.planning as public_planning
         from sisyphus.infra.orchestration import planning as service

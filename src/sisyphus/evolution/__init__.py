@@ -1,3 +1,5 @@
+from importlib import import_module
+
 from .artifacts import (
     EVOLUTION_ARTIFACT_KIND_CANDIDATE,
     EVOLUTION_ARTIFACT_KIND_DATASET,
@@ -216,22 +218,6 @@ from .targets import (
     list_evolution_targets,
     resolve_evolution_targets,
 )
-from ..composition.evolution_queries import build_evolution_dataset
-from ..composition.evolution_runs import execute_evolution_run
-from ..composition.evolution_followups import bridge_evolution_followup_request
-from ..composition.evolution_projections import project_followup_execution, project_followup_verification
-from ..composition.evolution_decisions import record_evolution_decision_envelope
-from ..composition.evolution_events import publish_evolution_event
-from ..composition.evolution_evaluation import (
-    execute_sisyphus_evaluation,
-    execute_worktree_backed_evaluation,
-    materialize_evolution_evaluation,
-)
-from ..composition.evolution_operator import (
-    evaluate_evolution_followup_decision,
-    request_evolution_followup,
-)
-
 __all__ = [
     "EVOLUTION_ALL_RUN_STAGES",
     "EVOLUTION_ARTIFACT_KIND_CANDIDATE",
@@ -433,3 +419,69 @@ __all__ = [
     "resolve_evolution_targets",
     "summarize_dataset_evaluation",
 ]
+
+
+_COMPOSED_EXPORTS = {
+    "bridge_evolution_followup_request": (
+        "sisyphus.composition.evolution_followups",
+        "bridge_evolution_followup_request",
+    ),
+    "build_evolution_dataset": (
+        "sisyphus.composition.evolution_queries",
+        "build_evolution_dataset",
+    ),
+    "evaluate_evolution_followup_decision": (
+        "sisyphus.composition.evolution_operator",
+        "evaluate_evolution_followup_decision",
+    ),
+    "execute_evolution_run": (
+        "sisyphus.composition.evolution_runs",
+        "execute_evolution_run",
+    ),
+    "execute_sisyphus_evaluation": (
+        "sisyphus.composition.evolution_evaluation",
+        "execute_sisyphus_evaluation",
+    ),
+    "execute_worktree_backed_evaluation": (
+        "sisyphus.composition.evolution_evaluation",
+        "execute_worktree_backed_evaluation",
+    ),
+    "materialize_evolution_evaluation": (
+        "sisyphus.composition.evolution_evaluation",
+        "materialize_evolution_evaluation",
+    ),
+    "project_followup_execution": (
+        "sisyphus.composition.evolution_projections",
+        "project_followup_execution",
+    ),
+    "project_followup_verification": (
+        "sisyphus.composition.evolution_projections",
+        "project_followup_verification",
+    ),
+    "publish_evolution_event": (
+        "sisyphus.composition.evolution_events",
+        "publish_evolution_event",
+    ),
+    "record_evolution_decision_envelope": (
+        "sisyphus.composition.evolution_decisions",
+        "record_evolution_decision_envelope",
+    ),
+    "request_evolution_followup": (
+        "sisyphus.composition.evolution_operator",
+        "request_evolution_followup",
+    ),
+}
+
+
+def __getattr__(name: str):
+    target = _COMPOSED_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(name)
+    module_name, attribute_name = target
+    value = getattr(import_module(module_name), attribute_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted({*globals(), *_COMPOSED_EXPORTS})

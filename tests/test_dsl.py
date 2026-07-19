@@ -21,6 +21,16 @@ from sisyphus.dsl import (
     ProtocolSpec,
     RefSelector,
 )
+from sisyphus.application.codecs.artifact_dsl import (
+    decode_compiled_obligation,
+    decode_execution_policy,
+    decode_obligation_intent,
+    decode_protocol_spec,
+    encode_compiled_obligation,
+    encode_execution_policy,
+    encode_obligation_intent,
+    encode_protocol_spec,
+)
 
 
 class DslModelTests(unittest.TestCase):
@@ -72,7 +82,7 @@ class DslModelTests(unittest.TestCase):
             obligations=(obligation,),
         )
 
-        restored = ProtocolSpec.from_dict(protocol.to_dict())
+        restored = decode_protocol_spec(encode_protocol_spec(protocol))
 
         self.assertEqual(restored, protocol)
         self.assertEqual(
@@ -105,8 +115,8 @@ class DslModelTests(unittest.TestCase):
             execution_policy_ref="witness_default",
         )
 
-        restored_intent = ObligationIntent.from_dict(intent.to_dict())
-        restored_compiled = CompiledObligation.from_dict(compiled.to_dict())
+        restored_intent = decode_obligation_intent(encode_obligation_intent(intent))
+        restored_compiled = decode_compiled_obligation(encode_compiled_obligation(compiled))
 
         self.assertEqual(restored_intent.intent_kind, "verify_required_claims")
         self.assertEqual(restored_compiled.spec_ref, "verify_composite_feature")
@@ -126,7 +136,7 @@ class DslModelTests(unittest.TestCase):
             budget={"max_tokens": 12000},
         )
 
-        restored = ExecutionPolicy.from_dict(policy.to_dict())
+        restored = decode_execution_policy(encode_execution_policy(policy))
 
         self.assertEqual(restored, policy)
         self.assertEqual(restored.provider, "codex")

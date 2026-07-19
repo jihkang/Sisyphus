@@ -7,7 +7,7 @@ from ...application.results.obligations import (
     ObligationExecutionResult,
     ObligationQueueMaterialization,
 )
-from ...artifact_snapshot import materialize_feature_task_artifact_snapshot
+from ..artifacts.snapshot import materialize_feature_task_artifact_snapshot
 from ..config.loader import SisyphusConfig
 from .runtime import (
     execute_next_feature_change_obligation,

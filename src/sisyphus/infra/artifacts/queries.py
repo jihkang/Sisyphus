@@ -3,13 +3,23 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
+from ...application.codecs.artifacts import (
+    encode_feature_change_slot_bindings,
+    encode_verification_claim,
+)
+from ...application.codecs.artifact_evaluation import (
+    encode_artifact_promotion_decision,
+    encode_invalidation_record,
+)
 from ...application.ports.artifact_queries import FeatureArtifactReadModel
-from ...artifact_evaluator import evaluate_feature_task_projection
-from ...artifact_projection import project_feature_task_record
-from ...artifact_snapshot import (
+from ...application.artifacts.evaluation import evaluate_feature_task_projection
+from .projection import project_feature_task_record
+from ...application.artifacts.snapshot import (
     build_feature_task_artifact_snapshot,
-    evaluate_feature_task_artifact_snapshot_status,
     feature_task_artifact_snapshot_with_status,
+)
+from .snapshot import (
+    evaluate_feature_task_artifact_snapshot_status,
     read_feature_task_artifact_snapshot,
 )
 from ..obligations.runtime import (
@@ -52,10 +62,12 @@ class RepositoryFeatureArtifactQueries:
             task_id=projection.task_id,
             feature_id=projection.feature_id,
             artifact_graph=build_feature_task_artifact_snapshot(projection, evaluation),
-            slot_bindings=projection.slot_bindings.to_dict(),
-            verification_claims=tuple(claim.to_dict() for claim in projection.verification_claims),
-            promotion=evaluation.promotion.to_dict(),
-            invalidation=evaluation.invalidation.to_dict(),
+            slot_bindings=encode_feature_change_slot_bindings(projection.slot_bindings),
+            verification_claims=tuple(
+                encode_verification_claim(claim) for claim in projection.verification_claims
+            ),
+            promotion=encode_artifact_promotion_decision(evaluation.promotion),
+            invalidation=encode_invalidation_record(evaluation.invalidation),
             derived_state=evaluation.derived_state,
             compiled_obligations=obligations,
         )
