@@ -14,13 +14,14 @@ from ..infra.orchestration.common_adapters import FileTaskRecordAdapter, ManualI
 
 
 def build_planning_service(repo_root: Path, config: SisyphusConfig) -> PlanningService:
+    clock = SystemClock()
     return PlanningService(
         tasks=FileTaskRecordAdapter(repo_root, config),
         documents=PlanningDocumentAdapter(repo_root, config),
         validation=SpecValidationAdapter(repo_root, config),
-        design_conformance=DesignConformanceAdapter(),
+        design_conformance=DesignConformanceAdapter(clock),
         interventions=ManualInterventionAdapter(repo_root, config),
-        clock=SystemClock(),
+        clock=clock,
     )
 
 

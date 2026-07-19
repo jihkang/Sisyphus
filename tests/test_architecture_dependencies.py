@@ -218,6 +218,30 @@ class ArchitectureDependencyTests(unittest.TestCase):
             "verification/lifecycle adapters import public facades:\n" + _format_pairs(forbidden),
         )
 
+    def test_spec_validation_adapters_do_not_import_public_facades(self) -> None:
+        source_modules = {
+            "sisyphus.infra.orchestration.planning_adapters",
+            "sisyphus.infra.validation.spec_validation",
+        }
+        facade_modules = {
+            "sisyphus.conformance",
+            "sisyphus.design",
+            "sisyphus.gates",
+            "sisyphus.state",
+            "sisyphus.strategy",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in facade_modules
+        }
+
+        self.assertFalse(
+            forbidden,
+            "spec-validation adapters import public facades:\n" + _format_pairs(forbidden),
+        )
+
     def test_provider_launch_and_receipt_adapters_do_not_import_public_facades(self) -> None:
         source_modules = {
             "sisyphus.infra.providers.launch",

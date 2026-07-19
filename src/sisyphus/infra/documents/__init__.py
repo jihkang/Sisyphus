@@ -1,0 +1,2 @@
+"""Document-backed infrastructure adapters."""
+

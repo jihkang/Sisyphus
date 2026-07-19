@@ -70,6 +70,8 @@
 - 2026-07-19: Extracted canonical local-provider config, validation, availability, and worker-command construction; provider launch now receives prompt builders and no longer imports public prompt/provider facades.
 - 2026-07-19: Bound new local-agent receipts to stable request and receipt digests, added a bounded no-follow strict parser plus atomic persistence, and retained digest-less v1 fixture compatibility through explicit parsing rules.
 - 2026-07-19: Injected episode recording at composition, added identity/tamper/symlink/request-binding regressions, and passed the expanded full suite with 617 tests.
+- 2026-07-19: Moved document-backed test-strategy synchronization to `infra/documents` and rewired spec validation to domain design rules, application gate records, and the canonical task repository.
+- 2026-07-19: Replaced Planning's public conformance-facade call with an injected-clock adapter over domain conformance mutation, added facade-dependency and design-anchor regressions, and passed the expanded full suite with 619 tests.
 
 ## Notes
 

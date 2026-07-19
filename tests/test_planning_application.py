@@ -13,6 +13,7 @@ if str(SRC_ROOT) not in sys.path:
 
 
 from sisyphus.application.use_cases.planning import PlanningService  # noqa: E402
+from sisyphus.infra.orchestration.planning_adapters import DesignConformanceAdapter  # noqa: E402
 
 
 class MemoryTasks:
@@ -186,6 +187,29 @@ class PlanningApplicationTests(unittest.TestCase):
             dependencies["validation"].calls,
             [("subtask generation", False, True)],
         )
+
+
+class PlanningAdapterTests(unittest.TestCase):
+    def test_design_conformance_adapter_records_domain_anchor_with_injected_time(self) -> None:
+        task = _task(plan_status="approved", spec_status="frozen")
+        task["design"] = {
+            "mode": "full",
+            "layer_impact": "layer-adding",
+            "required_artifacts": ["boundary_note"],
+            "artifacts": {"boundary_note": "design/boundary.md"},
+        }
+
+        result = DesignConformanceAdapter(FixedClock()).mark_design_anchor(
+            task,
+            source="planning.freeze_task_spec",
+        )
+
+        conformance = result["conformance"]
+        self.assertEqual(conformance["last_design_anchor_at"], "2026-07-19T12:00:00Z")
+        self.assertEqual(conformance["last_design_anchor_source"], "planning.freeze_task_spec")
+        self.assertEqual(conformance["last_checkpoint_type"], "design_anchor")
+        self.assertEqual(conformance["status"], "green")
+        self.assertEqual(len(conformance["history"]), 1)
 
 
 def _service(

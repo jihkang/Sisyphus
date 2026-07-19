@@ -10,13 +10,13 @@ from ...application.contracts.spec_validation import (
     SPEC_VALIDATION_GATE_CODES,
     SPEC_VALIDATION_SOURCES,
 )
-from ..config.loader import SisyphusConfig
-from ...design import ensure_task_design_defaults
-from ...gates import dedupe_gates, make_gate
-from ...infra.persistence.json_store import read_json_file, write_json_file
+from ...application.planning_records import dedupe_gate_records, make_gate_record
+from ...domain.task.design import ensure_task_design_defaults
 from ...shared.clock import utc_now
-from ...state import load_task_record, save_task_record
-from ...strategy import sync_test_strategy_from_docs
+from ..config.loader import SisyphusConfig
+from ..documents.task_strategy import sync_test_strategy_from_docs
+from ..persistence.json_store import read_json_file, write_json_file
+from ..persistence.task_repository import load_task_record, save_task_record
 
 
 SPEC_VALIDATION_REPORT = "artifacts/spec-validation/latest.json"
@@ -169,7 +169,7 @@ def persist_spec_validation_report(
     write_json_file(outcome.report_path, outcome.report)
     _record_validation_state(task, outcome.report, stale=False)
     task.setdefault("meta", {})["spec_validation_required"] = True
-    task["gates"] = dedupe_gates(
+    task["gates"] = dedupe_gate_records(
         [
             gate
             for gate in task.get("gates", [])
@@ -212,19 +212,21 @@ def collect_spec_validation_gates(
     if require_existing_report and report is None:
         _record_validation_state(task, None, status="missing", stale=False)
         return [
-            make_gate(
+            make_gate_record(
                 "SPEC_VALIDATION_MISSING",
                 f"task spec must be validated before {action}",
-                source="spec_validation",
+                "spec_validation",
+                created_at=utc_now(),
             )
         ]
     if require_existing_report and stale:
         _record_validation_state(task, report, status="stale", stale=True)
         return [
-            make_gate(
+            make_gate_record(
                 "SPEC_VALIDATION_STALE",
                 f"task spec validation report is stale before {action}",
-                source="spec_validation",
+                "spec_validation",
+                created_at=utc_now(),
             )
         ]
 
@@ -281,10 +283,11 @@ def spec_validation_gates(report: dict[str, object], *, action: str) -> list[dic
     if len(findings) > 3:
         preview += f"; +{len(findings) - 3} more"
     return [
-        make_gate(
+        make_gate_record(
             "SPEC_VALIDATION_FAILED",
             f"task spec validation failed before {action}: {preview}",
-            source="spec_validation",
+            "spec_validation",
+            created_at=utc_now(),
         )
     ]
 
