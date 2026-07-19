@@ -44,16 +44,20 @@
 - 2026-07-19: Removed the Provider wrapper's normal CLI reverse dependency; provider launches now invoke AgentLaunchService directly.
 - 2026-07-19: Retained explicit public CLI runner overrides as a compatibility hook and added an architecture regression test prohibiting Provider-to-CLI imports.
 - 2026-07-19: Passed the expanded full suite with 572 tests after the Provider launch rewiring slice.
+- 2026-07-19: Moved conformance defaults and task-strategy parsing into pure task-domain modules, removing five facade symbol dependencies from the legacy task repository.
+- 2026-07-19: Removed the Agent facade's concrete repository dependency and restored the two pre-migration domain repository import paths as identity-preserving, import-only shims.
+- 2026-07-19: Tightened the architecture baseline to exactly those two shim edges and documented the remaining implementation debt with removal and verification gates.
+- 2026-07-19: Passed 47 persistence/interface/mapping contracts and the expanded full suite with 575 tests after the repository compatibility slice.
 
 ## Notes
 
 - Current canonical conformance is green with zero drift at the latest design anchor.
 - The plan intentionally separates the Sisyphus core refactor from the Sisyphus Harness Hermes/GEPA/model-execution roadmap.
 - Public lifecycle_state, lifecycle_rules, Task/Agent repository imports, dictionary results, and persisted record extensions remain compatible.
-- Domain outward dependencies and static internal import cycles are both zero under the architecture fitness tests.
+- Domain implementation outward dependencies and static internal import cycles are zero. The only domain outward edges are the two explicitly guarded import-only repository compatibility shims.
 
 ## Follow-ups
 
-- Separate workspace/provider execution from Agent policy and process state.
+- Execute the ordered debt ledger in `docs/clean-architecture-implementation-debt.md`, beginning with Workspace and remaining effect adapters.
 - Isolate Evolve candidate generation from Control-owned approval, signing, active-policy, and queue authority.
 - Rewire remaining CLI/MCP consumers, validate architecture documentation, then run final package and merged-main verification.

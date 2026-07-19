@@ -35,6 +35,22 @@ class InterfaceStructureTests(unittest.TestCase):
         self.assertIs(public_state.save_task_record, repository.save_task_record)
         self.assertIs(public_state.sync_task_support_files, repository.sync_task_support_files)
 
+    def test_legacy_domain_task_repository_is_an_identity_preserving_shim(self) -> None:
+        from sisyphus.domain.task import repository as legacy
+        from sisyphus.infra.persistence import task_repository as canonical
+
+        for name in legacy.__all__:
+            with self.subTest(name=name):
+                self.assertIs(getattr(legacy, name), getattr(canonical, name))
+
+    def test_legacy_domain_agent_repository_is_an_identity_preserving_shim(self) -> None:
+        from sisyphus.domain.agent import repository as legacy
+        from sisyphus.infra.persistence import agent_repository as canonical
+
+        for name in legacy.__all__:
+            with self.subTest(name=name):
+                self.assertIs(getattr(legacy, name), getattr(canonical, name))
+
     def test_planning_module_reexports_domain_service_surface(self) -> None:
         import sisyphus.planning as public_planning
         from sisyphus.infra.orchestration import planning as service

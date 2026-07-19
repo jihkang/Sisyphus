@@ -12,6 +12,19 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 PACKAGE_ROOT = SRC_ROOT / "sisyphus"
 
+DOMAIN_IMPORT_COMPATIBILITY_SHIMS = frozenset(
+    {
+        (
+            "src/sisyphus/domain/agent/repository.py",
+            "sisyphus.infra.persistence.agent_repository",
+        ),
+        (
+            "src/sisyphus/domain/task/repository.py",
+            "sisyphus.infra.persistence.task_repository",
+        ),
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class ModuleSource:
@@ -42,10 +55,41 @@ class ArchitectureDependencyTests(unittest.TestCase):
                 relative_path = module.path.relative_to(PROJECT_ROOT).as_posix()
                 actual.add((relative_path, dependency))
 
-        self.assertFalse(
+        self.assertEqual(
             actual,
-            "domain has outward dependencies:\n" + _format_pairs(actual),
+            DOMAIN_IMPORT_COMPATIBILITY_SHIMS,
+            "domain outward dependencies must be exactly the two documented import-compatibility "
+            "shims:\n" + _format_pairs(actual),
         )
+
+    def test_domain_compatibility_allowlist_contains_import_only_shims(self) -> None:
+        for relative_path, _dependency in DOMAIN_IMPORT_COMPATIBILITY_SHIMS:
+            path = PROJECT_ROOT / relative_path
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom):
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    self.assertIsInstance(node.value.value, str, f"{relative_path} has executable code")
+                    continue
+                if isinstance(node, ast.Assign):
+                    self.assertEqual(
+                        [target.id for target in node.targets if isinstance(target, ast.Name)],
+                        ["__all__"],
+                        f"{relative_path} may assign only __all__",
+                    )
+                    self.assertTrue(
+                        isinstance(node.value, (ast.List, ast.Tuple))
+                        and all(
+                            isinstance(item, ast.Constant) and isinstance(item.value, str)
+                            for item in node.value.elts
+                        ),
+                        f"{relative_path} __all__ must be a literal string list",
+                    )
+                    continue
+                self.fail(
+                    f"{relative_path} contains {type(node).__name__}; compatibility shims must remain import-only"
+                )
 
     def test_application_only_depends_on_inward_packages(self) -> None:
         forbidden: set[tuple[str, str]] = set()

@@ -3,14 +3,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from ...conformance import default_task_conformance, ensure_task_conformance_defaults
-from ...design import ensure_task_design_defaults
+from ...domain.promotion.state import ensure_task_promotion_defaults
+from ...domain.task.conformance import default_task_conformance, ensure_task_conformance_defaults
+from ...domain.task.design import ensure_task_design_defaults
 from ...domain.lifecycle import normalize_terminal_lifecycle_state
 from ...domain.task.models import default_task_docs
-from ...promotion_state import ensure_task_promotion_defaults
+from ...domain.task.strategy import sync_test_strategy_from_content
 from ...shared.clock import utc_now
 from ...shared.paths import task_dir
-from ...strategy import sync_test_strategy_from_docs
 from .json_store import locked_json_update, read_json_file
 from .task_mapper import TASK_RECORD_MAPPER
 
@@ -179,7 +179,11 @@ def normalize_task_projection(
 
     if task_dir_path is None or not task_dir_path.exists():
         return task
-    return sync_test_strategy_from_docs(task=task, task_dir=task_dir_path)
+    source_name = "PLAN.md" if task["type"] == "feature" else "FIX_PLAN.md"
+    source_path = task_dir_path / source_name
+    if not source_path.exists():
+        return task
+    return sync_test_strategy_from_content(task, source_path.read_text(encoding="utf-8"))
 
 
 def sync_task_support_files(task: dict) -> None:

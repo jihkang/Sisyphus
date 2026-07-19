@@ -24,6 +24,10 @@ The package uses a staged ownership model. Stable top-level modules such as `sis
 
 For visual diagrams of the current task runtime, artifact-governed feature-change path, target artifact authority, and adapter boundaries, see [runtime-relationship-diagrams.md](./runtime-relationship-diagrams.md).
 
+The active Clean Architecture migration, its two temporary import-compatibility
+shims, and the evidence-based removal order are tracked in
+[clean-architecture-implementation-debt.md](./clean-architecture-implementation-debt.md).
+
 ## Hard State And Soft Cognition
 
 The architecture separates two categories of system responsibility.

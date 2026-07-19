@@ -14,9 +14,9 @@ from .domain.agent import (
     FINAL_AGENT_STATUSES,
     AgentPolicyError,
 )
-from .infra.persistence import agent_repository
 from .interfaces.agent_presenter import present_agent
 from .shared.mappings import find_unknown_fields
+from .shared.paths import agent_dir
 
 
 class AgentTrackingError(RuntimeError):
@@ -132,7 +132,7 @@ def load_agent_record(
         raise AgentTrackingError(str(error)) from error
     return (
         present_agent(view),
-        agent_repository.agent_file(repo_root, config.task_dir, task_id, agent_id),
+        agent_dir(repo_root, config.task_dir, task_id) / f"{agent_id}.json",
     )
 
 
