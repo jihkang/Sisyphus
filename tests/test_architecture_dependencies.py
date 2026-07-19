@@ -180,6 +180,48 @@ class ArchitectureDependencyTests(unittest.TestCase):
             + ", ".join(sorted(actual.intersection(forbidden_modules))),
         )
 
+    def test_conversation_provider_does_not_dispatch_through_daemon(self) -> None:
+        module = self.modules["sisyphus.infra.providers.conversation"]
+        dependencies = _declared_imports(module)
+
+        self.assertNotIn(
+            "sisyphus.daemon",
+            dependencies,
+            "conversation provider regained a daemon facade dependency",
+        )
+        tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+        dynamic_imports = {
+            alias.name
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom) and node.module == "importlib"
+            for alias in node.names
+        }
+        self.assertFalse(
+            dynamic_imports.intersection({"import_module"}),
+            "conversation provider regained dynamic daemon dispatch",
+        )
+
+    def test_daemon_facade_does_not_reabsorb_concrete_effects(self) -> None:
+        module = self.modules["sisyphus.daemon"]
+        forbidden = {
+            dependency
+            for dependency in _declared_imports(module)
+            if dependency
+            in {
+                "sisyphus.creation",
+                "sisyphus.gitops",
+                "sisyphus.infra.persistence",
+                "sisyphus.promotion",
+                "sisyphus.state",
+            }
+        }
+
+        self.assertFalse(
+            forbidden,
+            "daemon facade regained concrete orchestration effects: "
+            + ", ".join(sorted(forbidden)),
+        )
+
     def test_infrastructure_does_not_import_config_or_event_facades(self) -> None:
         forbidden: set[tuple[str, str]] = set()
         facade_modules = {"sisyphus.bus", "sisyphus.bus_jsonl", "sisyphus.config"}

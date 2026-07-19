@@ -8,11 +8,14 @@ from .agents import AgentTrackingError, update_agent
 from .application.commands.agent import RunTrackedAgentCommand
 from .application.use_cases.agent_launch import AgentLaunchError
 from .composition.agent_launch import build_agent_launch_service
+from .composition.daemon import build_repository_inbox_processing_service
+from .composition.inbox import build_inbox_queue_service
 from .composition.provider_receipts import persist_local_provider_receipt
 from .config import load_config
 from .codex_prompt import build_codex_prompt, build_local_worker_prompt
 from .discovery import detect_repo_root
 from .infra.providers.conversation import run_legacy_conversation
+from .infra.daemon import new_event_id
 from .infra.providers.launch import (
     ProviderLaunch,
     build_default_launch,
@@ -168,6 +171,12 @@ def _run_conversation_mode(
         provider=provider,
         repo_root=repo_root,
         config=config,
+        queue=build_inbox_queue_service(
+            repo_root,
+            config,
+            new_event_id=new_event_id,
+        ),
+        processor=build_repository_inbox_processing_service(repo_root, config),
         message=message,
         title=title,
         task_type=task_type,

@@ -4,6 +4,11 @@ from .agent_execution import AgentExecutionService
 from .agent_launch import AgentLaunchService
 from .agents import AgentManagementService
 from .closeout import CloseoutService
+from .conversation import ConversationEventService
+from .daemon_loop import DaemonLoopService
+from .inbox import DaemonError, InboxQueueService
+from .inbox_processing import InboxProcessingService
+from .merge_events import PullRequestMergedEventService
 from .obligations import ObligationConvergenceService
 from .planning import PlanningService
 from .promotion import PromotionService
@@ -16,9 +21,15 @@ __all__ = [
     "AgentLaunchService",
     "AgentManagementService",
     "CloseoutService",
+    "ConversationEventService",
+    "DaemonError",
+    "DaemonLoopService",
+    "InboxProcessingService",
+    "InboxQueueService",
     "ObligationConvergenceService",
     "PlanningService",
     "PromotionService",
+    "PullRequestMergedEventService",
     "TaskRecordCreationService",
     "TaskCreationError",
     "TaskWorkspaceCreationService",

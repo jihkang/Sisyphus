@@ -46,6 +46,8 @@ separation, and real 30.5B model evidence, is not part of this repository migrat
 | Closeout orchestration | Completed | `CloseoutService` owns lifecycle/evidence/dirty-check ordering, state transitions, events, and intervention requests over explicit ports; workflow and promotion compose the same service; `closeout.py` preserves the public function and dirty-check patch point |
 | Obligation convergence orchestration | Completed | Queue→execute→snapshot ordering and max-step policy live in `ObligationConvergenceService`; verification is injected into the infra runtime; queue writes are atomic; the workflow adapter has zero root-facade dependencies and the public obligation module preserves result identity and function signatures |
 | Task workspace creation | Completed | `TaskWorkspaceCreationService` owns duplicate detection, worktree/task-directory provisioning order, persistence, template materialization, and rollback policy over narrow workspace/template ports; `creation.py` is an import-compatible facade and preserves its template patch point |
+| Inbox and daemon orchestration | Completed | Queue creation, strict parsing, claim/process/complete/fail transitions, quarantine, retry recovery, statistics, and polling live in separate application services; conversation and PR-merge handlers own their explicit effect order over ports; daemon logs share the locked, no-follow, file/directory-fsync JSONL primitive; `daemon.py` is a 195-line compatibility facade instead of a 902-line orchestrator; the full 654-test suite passes |
+| Provider-to-daemon dependency | Removed | Conversation provider execution receives queue and processing services explicitly; architecture guards reject both direct and dynamic `sisyphus.daemon` dispatch and reject concrete persistence/Git/promotion effects returning to the daemon facade |
 
 ## Accepted Domain Dependency Exceptions
 
@@ -69,9 +71,7 @@ change.
 
 | ID | Priority | Boundary and current evidence | Required end state | Verification gate |
 | --- | --- | --- | --- | --- |
-| CA-04 | High | `daemon.py` is 902 lines and still coordinates queue storage, task state, providers, verification, events, and promotion through root modules. Creation and closeout orchestration are closed | Introduce application use cases for daemon event handling with narrow inbox, task, provider, and workflow ports; keep retry and side-effect order explicit | Event replay, retry, gate, partial-failure, and end-to-end workflow characterization tests pass |
 | CA-05 | High | CLI and MCP handlers still import root implementations such as `state`, `planning`, `audit`, `closeout`, `creation`, and `daemon` | Route handlers through application command/query services assembled by composition roots; interfaces retain only adaptation, dispatch, trace, and rendering | CLI help/exit/output and MCP tools/resources/schema/trace fixtures remain identical; interfaces have no implementation imports |
-| CA-06 | High | Workflow, planning, spec-validation, conformance, closeout, and obligation adapters have zero root-facade dependencies. The remaining edge is `infra/providers/conversation.py` dynamically loading root `daemon` | Replace dynamic legacy dispatch when creation/daemon orchestration moves inward | Architecture test rejects all migrated adapter-to-facade edges; conversation dispatch and daemon retry tests pass after the final edge is removed |
 | CA-07 | High | Evolution dataset, operator, receipts, and verification modules read canonical state directly; `evolution/harness.py` is 1,072 lines. Canonical obligation infra still imports flat artifact projection/evaluator/snapshot, DSL, and execution-policy modules | Expose read/query, evaluation, execution-policy, and append-only artifact ports; place artifact/DSL policy under explicit application/domain owners. Evolve may recommend/request work but cannot approve, freeze, verify, activate, promote, or mutate canonical authority | Authority tests prove forbidden actions are unreachable; baseline/candidate/obligation artifacts and existing MCP/CLI projections remain compatible |
 | CA-08 | Medium | There are 58 model-owned `to_dict`/`from_dict` methods across 15 non-domain modules | Group only wire-shape-equivalent records under explicit codecs/mappers; retain custom mappers where schemas, omission rules, digests, or compatibility differ | Golden wire fixtures, unknown-field behavior, digest fixtures, and round-trip tests pass before each method is removed |
 | CA-09 | Medium | Several modules mix multiple change reasons: `artifacts.py` (767), `providers/benchmark.py` (729), `dsl.py` (674), and large planning/verification/promotion use cases | Split only along demonstrated ownership or side-effect boundaries; do not create one-method ports or generic manager classes | Each extracted boundary has multiple meaningful consumers or a replaceable side effect and its own contract tests |
@@ -80,12 +80,11 @@ change.
 
 ## Execution Order
 
-1. Move daemon event processing into application use cases and remove the dynamic provider-to-daemon dispatch edge.
-2. Rewire CLI and MCP to application commands and queries.
-3. Restrict Evolve to read/evaluation/append-only ports and add authority tests.
-4. Consolidate serialization only where golden wire contracts prove equivalence.
-5. Review oversized modules for real responsibility splits, then synchronize architecture documentation.
-6. Run the full verification and promotion sequence on the latest `main`.
+1. Rewire CLI and MCP to application commands and queries.
+2. Restrict Evolve to read/evaluation/append-only ports and add authority tests.
+3. Consolidate serialization only where golden wire contracts prove equivalence.
+4. Review oversized modules for real responsibility splits, then synchronize architecture documentation.
+5. Run the full verification and promotion sequence on the latest `main`.
 
 This order follows dependency direction: outer effects must be injectable before
 orchestrators and interfaces can stop importing their implementations.

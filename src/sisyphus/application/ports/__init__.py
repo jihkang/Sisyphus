@@ -11,6 +11,14 @@ from .agent_execution import (
 from .artifacts import ArtifactStorePort
 from .clock import ClockPort
 from .closeout import CloseoutEvidencePort, WorktreeStatusPort
+from .inbox import InboxEventLogPort, InboxRepositoryPort
+from .inbox_handlers import (
+    ChangeAdoptionPort,
+    ConversationAgentPort,
+    ConversationDocumentPort,
+    PromotionMergePort,
+    TaskExecutionGatePort,
+)
 from .obligations import ObligationRuntimePort
 from .planning import DesignConformancePort, PlanningDocumentPort, SpecValidationPort
 from .promotion import (
@@ -21,6 +29,7 @@ from .promotion import (
 )
 from .repositories import AgentRepository, TaskRepository
 from .task_creation import (
+    TaskCreationPort,
     TaskFactoryPort,
     TaskTemplatePort,
     TaskWorkspacePort,
@@ -55,10 +64,15 @@ __all__ = [
     "CloseoutEvidencePort",
     "CloseoutPort",
     "ConformancePort",
+    "ChangeAdoptionPort",
+    "ConversationAgentPort",
+    "ConversationDocumentPort",
     "DesignConformancePort",
     "EventPublisherPort",
     "EvidenceGraphPort",
     "FeatureObligationPort",
+    "InboxEventLogPort",
+    "InboxRepositoryPort",
     "ManualInterventionPort",
     "ObligationRuntimePort",
     "PlanningDocumentPort",
@@ -68,8 +82,11 @@ __all__ = [
     "ProcessStartError",
     "ProviderPort",
     "PromotionTaskPort",
+    "PromotionMergePort",
     "PullRequestPort",
     "ReopenedTaskPort",
+    "TaskCreationPort",
+    "TaskExecutionGatePort",
     "TaskRecordPort",
     "TaskRepository",
     "TaskFactoryPort",

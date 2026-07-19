@@ -28,17 +28,21 @@ class JsonlEventPublisher:
 
     def publish(self, event: EventEnvelope | dict[str, object]) -> None:
         envelope = normalize_event_envelope(event)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        handle, created = _open_append_stream(self.path)
-        with handle:
-            with file_handle_lock(handle):
-                handle.seek(0, os.SEEK_END)
-                handle.write(envelope.to_json())
-                handle.write("\n")
-                handle.flush()
-                os.fsync(handle.fileno())
-        if created:
-            fsync_directory(self.path.parent)
+        append_jsonl_text(self.path, envelope.to_json())
+
+
+def append_jsonl_text(path: Path, line: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, created = _open_append_stream(path)
+    with handle:
+        with file_handle_lock(handle):
+            handle.seek(0, os.SEEK_END)
+            handle.write(line)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    if created:
+        fsync_directory(path.parent)
 
 
 def build_event_publisher(repo_root: Path, config: SisyphusConfig) -> EventPublisher:
@@ -99,6 +103,7 @@ def _open_read_stream(path: Path) -> TextIO:
 
 
 __all__ = [
+    "append_jsonl_text",
     "EventPublisher",
     "JsonlEventPublisher",
     "NoopEventPublisher",

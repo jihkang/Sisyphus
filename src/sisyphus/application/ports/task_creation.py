@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from ..results.task_creation import CreateOutcome
 
 from ..commands.task import CreateTaskRecordCommand
 from .workflow import TaskRecord
@@ -9,6 +12,10 @@ from .workflow import TaskRecord
 
 class TaskFactoryPort(Protocol):
     def build(self, command: CreateTaskRecordCommand) -> TaskRecord: ...
+
+
+class TaskCreationPort(Protocol):
+    def create(self, command: CreateTaskRecordCommand) -> CreateOutcome: ...
 
 
 class TaskTemplatePort(Protocol):
@@ -33,6 +40,7 @@ class TaskWorkspaceProvisioningError(RuntimeError):
 
 __all__ = [
     "TaskFactoryPort",
+    "TaskCreationPort",
     "TaskTemplatePort",
     "TaskWorkspacePort",
     "TaskWorkspaceProvisioningError",
