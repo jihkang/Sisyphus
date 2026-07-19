@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ..bus import build_event_publisher
 from ..config import SisyphusConfig, load_config
-from ..events import new_event_envelope
+from ..application.events import new_event_envelope
 
 
 EVOLUTION_EVENT_RUN_RECORDED = "evolution.run.recorded"

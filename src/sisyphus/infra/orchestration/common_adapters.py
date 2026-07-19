@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ...application.events import new_event_envelope
 from ...application.ports.workflow import WorkflowEvent
-from ...events import new_event_envelope
-from ...metrics import publish_manual_intervention_required, publish_reopened_after_verify
 from ..config.loader import SisyphusConfig
 from ..events import build_event_publisher
+from ..metrics import publish_manual_intervention_required, publish_reopened_after_verify
 from ..persistence.task_records import FileTaskRecordAdapter
 
 

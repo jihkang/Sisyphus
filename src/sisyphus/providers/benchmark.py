@@ -11,7 +11,7 @@ import tempfile
 from time import perf_counter
 from urllib.parse import urlsplit, urlunsplit
 
-from ..events import utc_now
+from ..shared.clock import utc_now
 from .local_agent import ChatCompletionClient, LocalAgentRunResult, LocalCodingAgent
 from .local_openai import LocalProviderConfig, OpenAICompatibleClient
 from ..infra.workspace import PROTECTED_PATH_PARTS, WorkspaceExecutor

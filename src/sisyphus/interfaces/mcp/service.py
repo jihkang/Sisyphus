@@ -4,8 +4,14 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from ...artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
-from ...bus_jsonl import read_jsonl_events, resolve_event_bus_path
 from ...composition.closeout import close_task as run_close
+from ...composition.repository_status import (
+    build_value_metrics_report,
+    repository_board_status,
+    repository_conformance_status,
+    repository_events_status,
+    repository_tasks_status,
+)
 from ...composition.runtime import run_daemon
 from ...composition.search import (
     build_and_persist_context_pack,
@@ -37,7 +43,6 @@ from ...composition.planning import (
     revise_task_plan,
     validate_task_spec,
 )
-from ...metrics import build_value_metrics_report
 from ...observation import build_task_observation
 from ...application.search.retrieval import retrieve_documents
 from ...composition.repository_requests import (
@@ -232,10 +237,11 @@ class SisyphusMcpCoreService:
             repo_root=self.repo_root,
             config=config,
             parsed=parsed,
-            list_tasks_fn=list_tasks,
-            resolve_event_bus=resolve_event_bus_path,
-            read_events=read_jsonl_events,
-            build_metrics=build_value_metrics_report,
+            tasks_status=repository_tasks_status,
+            conformance_status=repository_conformance_status,
+            board_status=repository_board_status,
+            events_status=repository_events_status,
+            metrics_status=build_value_metrics_report,
             search_status=search_index_status,
             schema_markdown=_mcp_schema_markdown,
         )

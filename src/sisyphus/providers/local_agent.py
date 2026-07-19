@@ -8,7 +8,7 @@ import re
 from typing import Protocol
 
 from ..application.ports.workspace import SUPPORTED_WORKSPACE_ACTIONS, WorkspacePort
-from ..events import utc_now
+from ..shared.clock import utc_now
 from ..infra.providers.receipt_schema import sign_local_agent_receipt
 from ..infra.persistence.json_store import write_json_file
 

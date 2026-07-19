@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Protocol, TextIO
 
-from ...events import EventEnvelope, normalize_event_envelope
+from ...application.events import EventEnvelope, normalize_event_envelope
 from ...shared.paths import event_log_file
 from ..config.loader import SisyphusConfig
 from ..persistence.atomic_text import fsync_directory

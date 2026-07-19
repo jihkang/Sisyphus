@@ -360,7 +360,13 @@ class ArchitectureDependencyTests(unittest.TestCase):
 
     def test_infrastructure_does_not_import_config_or_event_facades(self) -> None:
         forbidden: set[tuple[str, str]] = set()
-        facade_modules = {"sisyphus.bus", "sisyphus.bus_jsonl", "sisyphus.config"}
+        facade_modules = {
+            "sisyphus.bus",
+            "sisyphus.bus_jsonl",
+            "sisyphus.config",
+            "sisyphus.events",
+            "sisyphus.metrics",
+        }
         for module in self.modules.values():
             if not module.name.startswith("sisyphus.infra"):
                 continue
@@ -372,6 +378,49 @@ class ArchitectureDependencyTests(unittest.TestCase):
             forbidden,
             "infrastructure imports public config/event facades:\n" + _format_pairs(forbidden),
         )
+
+    def test_repository_resource_interface_uses_composed_status_queries(self) -> None:
+        source_modules = {
+            "sisyphus.interfaces.mcp.repo_resources",
+            "sisyphus.interfaces.mcp.service",
+        }
+        facade_modules = {
+            "sisyphus.bus_jsonl",
+            "sisyphus.metrics",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in facade_modules
+        }
+
+        self.assertFalse(
+            forbidden,
+            "repository resources regained flat event/metric dependencies:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_event_and_metric_facades_remain_import_only(self) -> None:
+        for name in ("sisyphus.events", "sisyphus.metrics"):
+            module = self.modules[name]
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom):
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    self.assertIsInstance(node.value.value, str, f"{name} has executable code")
+                    continue
+                if isinstance(node, ast.Assign):
+                    self.assertEqual(
+                        [target.id for target in node.targets if isinstance(target, ast.Name)],
+                        ["__all__"],
+                        f"{name} may assign only __all__",
+                    )
+                    continue
+                self.fail(
+                    f"{name} contains {type(node).__name__}; compatibility facades must remain import-only"
+                )
 
     def test_verification_and_lifecycle_adapters_do_not_import_public_facades(self) -> None:
         source_modules = {
