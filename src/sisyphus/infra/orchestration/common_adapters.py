@@ -3,11 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...application.ports.workflow import TaskMutator, TaskRecord, WorkflowEvent
-from ...bus import build_event_publisher
-from ...config import SisyphusConfig
 from ...events import new_event_envelope
 from ...metrics import publish_manual_intervention_required, publish_reopened_after_verify
 from ...shared.paths import task_dir as resolve_task_dir
+from ..config.loader import SisyphusConfig
+from ..events import build_event_publisher
 from ..persistence.task_repository import (
     list_task_records,
     load_task_record,

@@ -10,10 +10,10 @@ from ...application.use_cases.promotion import (
     PromotionExecutionError,
 )
 from ...composition.promotion import build_promotion_service
-from ...config import SisyphusConfig
 from ...domain.promotion import PromotionBaseResolution
 from ...gitops import GitOperationError
 from ...shared.paths import contained_path, task_dir as resolve_task_dir
+from ..config.loader import SisyphusConfig
 
 
 @dataclass(slots=True)

@@ -180,6 +180,21 @@ class ArchitectureDependencyTests(unittest.TestCase):
             + ", ".join(sorted(actual.intersection(forbidden_modules))),
         )
 
+    def test_infrastructure_does_not_import_config_or_event_facades(self) -> None:
+        forbidden: set[tuple[str, str]] = set()
+        facade_modules = {"sisyphus.bus", "sisyphus.bus_jsonl", "sisyphus.config"}
+        for module in self.modules.values():
+            if not module.name.startswith("sisyphus.infra"):
+                continue
+            for dependency in _declared_imports(module):
+                if dependency in facade_modules:
+                    forbidden.add((module.name, dependency))
+
+        self.assertFalse(
+            forbidden,
+            "infrastructure imports public config/event facades:\n" + _format_pairs(forbidden),
+        )
+
     def test_domain_models_do_not_own_boundary_mapping_methods(self) -> None:
         violations: set[tuple[str, str]] = set()
         for module in self.modules.values():

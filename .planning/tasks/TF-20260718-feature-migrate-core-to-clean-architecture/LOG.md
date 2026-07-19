@@ -57,6 +57,9 @@
 - 2026-07-19: Added real-adapter, injected-failure, timeout, and invalid-patch classification tests; passed 31 focused regressions and the expanded full suite with 587 tests.
 - 2026-07-19: Split provider wrapper argument parsing into `interfaces/provider_wrapper` and moved launch construction plus receipt finalization/persistence into focused infra adapters while retaining legacy patch points as delegates.
 - 2026-07-19: Added typed parser, launch identity, receipt cleanup/callback, and facade ownership guards; passed 37 focused regressions and the expanded full suite with 592 tests.
+- 2026-07-19: Moved noop/JSONL event publishing into `infra/events`, removed infra dependencies on public config/event facades, and routed verification document writes through the atomic artifact store.
+- 2026-07-19: Replaced sidecar event read locks after the full suite exposed read-only Evolution mutations; descriptor locking, `O_EXCL`, `O_NOFOLLOW`, file/directory fsync, and read-only regressions now pass.
+- 2026-07-19: Passed 59 focused event/artifact/persistence/interface/architecture regressions and the expanded full suite with 597 tests.
 
 ## Notes
 

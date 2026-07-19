@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -16,9 +19,13 @@ from sisyphus.bus import NoopEventPublisher, build_event_publisher
 from sisyphus.bus_jsonl import JsonlEventPublisher, read_jsonl_events, resolve_event_bus_path
 from sisyphus.config import load_config
 from sisyphus.events import EventEnvelope, new_event_envelope, normalize_event_envelope
+from sisyphus.infra.events import JsonlEventPublisher as CanonicalJsonlEventPublisher
 
 
 class EventBusTests(unittest.TestCase):
+    def test_public_jsonl_publisher_preserves_canonical_identity(self) -> None:
+        self.assertIs(JsonlEventPublisher, CanonicalJsonlEventPublisher)
+
     def test_load_config_defaults_event_bus_to_noop(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -122,6 +129,53 @@ class EventBusTests(unittest.TestCase):
             self.assertEqual(decoded["source"]["module"], "tests")
             self.assertEqual(decoded["data"]["status"], "open")
 
+    def test_jsonl_publisher_serializes_concurrent_durable_appends(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            path = Path(tempdir) / "events.jsonl"
+            publisher = JsonlEventPublisher(path)
+
+            def publish(index: int) -> None:
+                publisher.publish(
+                    new_event_envelope(
+                        "task.updated",
+                        event_id=f"evt_{index}",
+                        data={"index": index},
+                    )
+                )
+
+            with (
+                mock.patch("sisyphus.infra.events.publishers.os.fsync") as fsync,
+                mock.patch(
+                    "sisyphus.infra.events.publishers.fsync_directory"
+                ) as fsync_directory,
+            ):
+                with ThreadPoolExecutor(max_workers=8) as executor:
+                    list(executor.map(publish, range(40)))
+
+            events = read_jsonl_events(path, limit=100)
+            self.assertEqual(len(events), 40)
+            self.assertEqual({event["event_id"] for event in events}, {f"evt_{i}" for i in range(40)})
+            self.assertEqual(fsync.call_count, 40)
+            fsync_directory.assert_called_once_with(path.parent)
+
+    @unittest.skipUnless(getattr(os, "O_NOFOLLOW", 0), "O_NOFOLLOW is unavailable")
+    def test_jsonl_publisher_rejects_symbolic_link_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            outside = root / "outside.jsonl"
+            outside.write_text("original\n", encoding="utf-8")
+            path = root / "events.jsonl"
+            path.symlink_to(outside)
+
+            with self.assertRaises(OSError):
+                JsonlEventPublisher(path).publish(
+                    new_event_envelope("task.updated", event_id="evt_symlink")
+                )
+            with self.assertRaises(OSError):
+                read_jsonl_events(path)
+
+            self.assertEqual(outside.read_text(encoding="utf-8"), "original\n")
+
     def test_noop_publisher_accepts_events(self) -> None:
         publisher = NoopEventPublisher()
         publisher.publish(new_event_envelope("task.blocked", data={"task_id": "TF-1"}))
@@ -141,9 +195,11 @@ class EventBusTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
+            files_before = {entry.name for entry in path.parent.iterdir()}
             events = read_jsonl_events(path, limit=2)
 
             self.assertEqual([event["event_id"] for event in events], ["evt_2", "evt_3"])
+            self.assertEqual({entry.name for entry in path.parent.iterdir()}, files_before)
 
 
 if __name__ == "__main__":

@@ -4,8 +4,8 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from ...application.results.artifacts import ArtifactRef
-from ...config import SisyphusConfig
 from ...shared.paths import contained_path, task_dir as resolve_task_dir
+from ..config.loader import SisyphusConfig
 from ..persistence.atomic_text import write_text_file
 from ..persistence.json_store import write_json_file
 

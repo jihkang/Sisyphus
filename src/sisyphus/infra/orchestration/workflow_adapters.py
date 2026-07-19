@@ -13,7 +13,6 @@ from ...application.ports.workflow import (
 from ...application.use_cases.planning import PlanningService
 from ...application.use_cases.verification import VerificationService
 from ...closeout import run_close
-from ...config import SisyphusConfig
 from ...conformance import (
     append_conformance_log_markdown,
     build_execution_contract,
@@ -23,6 +22,7 @@ from ...conformance import (
 )
 from ...obligation_runtime import converge_feature_change_obligations
 from ...shared.paths import task_dir as resolve_task_dir
+from ..config.loader import SisyphusConfig
 
 
 class ProviderRunner(Protocol):

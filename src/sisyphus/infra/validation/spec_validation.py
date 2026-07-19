@@ -10,7 +10,7 @@ from ...application.contracts.spec_validation import (
     SPEC_VALIDATION_GATE_CODES,
     SPEC_VALIDATION_SOURCES,
 )
-from ...config import SisyphusConfig
+from ..config.loader import SisyphusConfig
 from ...design import ensure_task_design_defaults
 from ...gates import dedupe_gates, make_gate
 from ...infra.persistence.json_store import read_json_file, write_json_file

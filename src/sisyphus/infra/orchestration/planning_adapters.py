@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...application.ports.workflow import TaskRecord
-from ...config import SisyphusConfig
 from ...conformance import mark_design_anchor
 from ...shared.paths import task_dir as resolve_task_dir
 from ...strategy import sync_test_strategy_from_docs
+from ..config.loader import SisyphusConfig
 from ..validation.spec_validation import collect_spec_validation_gates, spec_validation_required
 
 

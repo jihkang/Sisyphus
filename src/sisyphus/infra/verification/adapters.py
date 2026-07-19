@@ -8,11 +8,12 @@ from ...application.ports.workflow import TaskRecord
 from ...application.results.artifacts import ArtifactRef
 from ...application.verification_records import command_execution_to_record
 from ...conformance import append_conformance_log
-from ...config import SisyphusConfig
 from ...domain.lifecycle import ConformanceState, LifecycleAction
 from ...domain.verification import CommandExecution, VerificationStatus
 from ...evidence_graph import build_evidence_graph, write_evidence_graph
 from ...shared.paths import contained_path, task_dir as resolve_task_dir
+from ..artifacts.store import RepositoryArtifactStore
+from ..config.loader import SisyphusConfig
 from ..persistence.lifecycle_mapper import LifecycleRecordMapper
 
 
@@ -20,6 +21,7 @@ class FileVerificationDocumentAdapter:
     def __init__(self, repo_root: Path, config: SisyphusConfig) -> None:
         self._repo_root = repo_root
         self._config = config
+        self._artifacts = RepositoryArtifactStore(repo_root, config)
 
     def read(self, task_id: str, relative_path: str) -> str | None:
         path = self._path(task_id, relative_path)
@@ -28,10 +30,7 @@ class FileVerificationDocumentAdapter:
         return path.read_text(encoding="utf-8")
 
     def write(self, task_id: str, relative_path: str, content: str) -> ArtifactRef:
-        path = self._path(task_id, relative_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-        return ArtifactRef(relative_path=relative_path)
+        return self._artifacts.write_text(task_id, relative_path, content)
 
     def resolve(self, task_id: str, relative_path: str) -> Path:
         return self._path(task_id, relative_path)

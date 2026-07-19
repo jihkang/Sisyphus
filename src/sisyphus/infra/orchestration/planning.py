@@ -25,7 +25,7 @@ from ...application.use_cases.planning import (
     reopen_task_plan_for_design_replan as _reopen_task_plan_for_design_replan,
 )
 from ...composition.planning import build_planning_service
-from ...config import SisyphusConfig
+from ..config.loader import SisyphusConfig
 from ..clock import SystemClock
 
 

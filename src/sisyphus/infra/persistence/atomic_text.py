@@ -22,13 +22,13 @@ def write_text_file(path: Path, content: str) -> None:
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temporary_path, path)
-            _fsync_directory(path.parent)
+            fsync_directory(path.parent)
         finally:
             if temporary_path.exists():
                 temporary_path.unlink()
 
 
-def _fsync_directory(directory: Path) -> None:
+def fsync_directory(directory: Path) -> None:
     if os.name == "nt":  # pragma: no cover - directory fsync is POSIX-specific.
         return
     descriptor = os.open(directory, os.O_RDONLY)
@@ -38,4 +38,4 @@ def _fsync_directory(directory: Path) -> None:
         os.close(descriptor)
 
 
-__all__ = ["write_text_file"]
+__all__ = ["fsync_directory", "write_text_file"]
