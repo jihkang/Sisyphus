@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import SisyphusConfig
-from .episode_trace import read_episode_steps
+from .composition.episode_trace import read_episode_steps
 from .eval.loop import build_task_eval_loop_result
 from .state import list_task_records, load_task_record
 

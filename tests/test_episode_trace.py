@@ -19,7 +19,9 @@ from sisyphus.episode_trace import (
     default_episode_id,
     diff_task_state,
     next_episode_step,
+    read_episode_steps,
 )
+from sisyphus.shared.paths import PathBoundaryError
 
 
 class EpisodeTraceTests(unittest.TestCase):
@@ -85,6 +87,31 @@ class EpisodeTraceTests(unittest.TestCase):
             self.assertEqual(summary["episode_count"], 1)
             self.assertEqual(summary["step_count"], 1)
             self.assertEqual(summary["actions"], ["sisyphus.verify_task"])
+
+    def test_episode_id_and_directory_cannot_escape_task_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside:
+            task_dir = Path(tmp)
+            with self.assertRaisesRegex(ValueError, "invalid episode id"):
+                read_episode_steps(task_dir, episode_id="../escape")
+
+            episode_dir = task_dir / "artifacts" / "episodes"
+            episode_dir.parent.mkdir(parents=True)
+            episode_dir.symlink_to(Path(outside), target_is_directory=True)
+            step = build_episode_step(
+                episode_id="ep-safe",
+                task_id="TF-test",
+                step=1,
+                observation={"observation_hash": "sha256:abc"},
+                action_name="sisyphus.verify_task",
+                arguments={},
+                result={},
+                state_before={},
+                state_after={},
+                timestamp="2026-06-14T00:00:00Z",
+            )
+
+            with self.assertRaisesRegex(PathBoundaryError, "escapes root"):
+                append_episode_step(task_dir, step)
 
 
 if __name__ == "__main__":

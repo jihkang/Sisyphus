@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from ...artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
 from ...composition.closeout import close_task as run_close
+from ...composition.episode_trace import default_episode_id, record_episode_step
 from ...composition.repository_status import (
     build_value_metrics_report,
     repository_board_status,
@@ -21,7 +22,6 @@ from ...composition.search import (
     search_index_status,
 )
 from ...config import load_config
-from ...episode_trace import append_episode_step, build_episode_step, default_episode_id, next_episode_step
 from ...evolution.operator import (
     evaluate_evolution_followup_decision,
     request_evolution_followup,
@@ -141,20 +141,17 @@ class SisyphusMcpCoreService:
             trace_result = dict(result or {})
             if error is not None:
                 trace_result.setdefault("ok", False)
-            append_episode_step(
+            record_episode_step(
                 task_dir,
-                build_episode_step(
-                    episode_id=episode_id,
-                    task_id=task_id,
-                    step=next_episode_step(task_dir, episode_id),
-                    observation=observation_before,
-                    action_name=tool_name,
-                    arguments=args,
-                    result=trace_result,
-                    state_before=state_before,
-                    state_after=state_after,
-                    actor=actor,
-                ),
+                episode_id=episode_id,
+                task_id=task_id,
+                observation=observation_before,
+                action_name=tool_name,
+                arguments=args,
+                result=trace_result,
+                state_before=state_before,
+                state_after=state_after,
+                actor=actor,
             )
 
     def _call_tool_inner(self, tool_name: str, args: dict[str, object], config: object) -> dict[str, object]:

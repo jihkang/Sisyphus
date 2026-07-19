@@ -7,9 +7,9 @@ import sys
 
 from ....benchmark import BenchmarkFixtureError, default_benchmark_fixture_dir, render_benchmark_markdown, run_benchmark_suite
 from ....config import SisyphusConfig
+from ....composition.episode_trace import check_episode_trace, read_episode_steps
 from ....composition.repository_requests import load_task_record_with_path
 from ....dataset_export import export_dataset
-from ....episode_trace import check_episode_trace, read_episode_steps
 from ....eval.loop import run_task_eval_loop
 from ....composition.observation import render_task_observation
 from ....providers.benchmark import (

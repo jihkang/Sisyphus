@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..episode_trace import (
-    append_episode_step,
-    build_episode_step,
+from .episode_trace import (
     default_episode_id,
     next_episode_step,
+    record_episode_step,
 )
 from ..infra.providers.receipts import persist_local_receipt
 from .observation import build_task_observation
@@ -56,7 +55,8 @@ def record_local_agent_episode(
         if isinstance(test_first_phase, str):
             arguments = {**arguments, "test_first_phase": test_first_phase}
         result = event.get("result") if isinstance(event.get("result"), dict) else {}
-        episode_step = build_episode_step(
+        record_episode_step(
+            task_dir,
             episode_id=episode_id,
             task_id=str(task.get("id") or ""),
             step=step_number,
@@ -72,7 +72,6 @@ def record_local_agent_episode(
             state_after=state,
             actor={"interface": "local_provider", "agent_id": agent_id},
         )
-        append_episode_step(task_dir, episode_step)
         step_number += 1
 
 

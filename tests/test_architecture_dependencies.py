@@ -482,6 +482,37 @@ class ArchitectureDependencyTests(unittest.TestCase):
             "lifecycle guard regained flat lifecycle dependencies",
         )
 
+    def test_episode_interfaces_use_composed_trace_service(self) -> None:
+        source_modules = {
+            "sisyphus.interfaces.cli.handlers.operations",
+            "sisyphus.interfaces.mcp.service",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency == "sisyphus.episode_trace"
+        }
+
+        self.assertFalse(
+            forbidden,
+            "episode interfaces regained the flat trace implementation:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_episode_trace_facade_remains_import_only(self) -> None:
+        module = self.modules["sisyphus.episode_trace"]
+        tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                continue
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                self.assertIsInstance(node.value.value, str, "episode trace facade has executable code")
+                continue
+            self.fail(
+                f"episode trace facade contains {type(node).__name__}; it must remain import-only"
+            )
+
     def test_verification_and_lifecycle_adapters_do_not_import_public_facades(self) -> None:
         source_modules = {
             "sisyphus.infra.persistence.lifecycle_mapper",

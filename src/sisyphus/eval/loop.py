@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from ..config import SisyphusConfig
-from ..episode_trace import read_episode_steps
+from ..composition.episode_trace import read_episode_steps
 from ..composition.observation import build_task_observation
 from ..reward import RewardBreakdown, reward_breakdown_metrics, score_task_outcome
 from ..state import load_task_record
