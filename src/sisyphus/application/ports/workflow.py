@@ -32,6 +32,8 @@ class VerificationResult:
 @dataclass(frozen=True, slots=True)
 class CloseoutResult:
     closed: bool
+    status: str | None = None
+    gates: tuple[Mapping[str, object], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

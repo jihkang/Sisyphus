@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .application import AgentQueryService, LifecycleApplicationService, TaskQueryService
 from .composition.planning import build_planning_service
+from .composition.promotion import build_promotion_service
 from .composition.verification import build_verification_service
 from .composition.workflow import build_workflow_service
 from .infra.persistence.repositories import JsonAgentRepository, JsonTaskRepository
@@ -31,6 +32,7 @@ __all__ = [
     "Application",
     "build_application",
     "build_planning_service",
+    "build_promotion_service",
     "build_verification_service",
     "build_workflow_service",
 ]

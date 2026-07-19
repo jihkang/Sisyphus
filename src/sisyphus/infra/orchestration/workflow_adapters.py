@@ -151,7 +151,11 @@ class CloseoutAdapter:
             task_id=task_id,
             allow_dirty=allow_dirty,
         )
-        return CloseoutResult(closed=outcome.closed)
+        return CloseoutResult(
+            closed=outcome.closed,
+            status=outcome.status,
+            gates=tuple(outcome.gates),
+        )
 
 
 __all__ = [

@@ -29,6 +29,9 @@
 - 2026-07-19: Preserved VerifyOutcome, verify Markdown, evidence graph, event payloads, command result records, and lifecycle behavior through the public audit facade.
 - 2026-07-19: Re-anchored the bounded evolution review-gate target to its new verification-policy owner instead of the audit facade.
 - 2026-07-19: Passed the expanded full suite with 552 tests after the verification application slice.
+- 2026-07-19: Moved promotion execution and merge-receipt orchestration behind application ports for version control, pull requests, artifacts, closeout, conformance, intervention, and reopened-task events.
+- 2026-07-19: Retained the public promotion facade, GitOperationError contract, GitHub CLI patch point, receipt paths, changeset projection, and stacked-child retarget behavior.
+- 2026-07-19: Added direct PromotionService tests and passed the expanded full suite with 556 tests after the promotion application slice.
 
 ## Notes
 
@@ -39,6 +42,6 @@
 
 ## Follow-ups
 
-- Migrate planning and workflow orchestration behind application ports.
-- Separate verification, provider, event, artifact, and promotion effects.
-- Rewire CLI/MCP/evolution consumers, remove the architecture allowlist, then run final package and merged-main verification.
+- Separate workspace/provider execution from Agent policy and process state.
+- Isolate Evolve candidate generation from Control-owned approval, signing, active-policy, and queue authority.
+- Rewire remaining CLI/MCP consumers, validate architecture documentation, then run final package and merged-main verification.
