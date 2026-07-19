@@ -20,7 +20,12 @@ from .promotion import (
     VersionControlPort,
 )
 from .repositories import AgentRepository, TaskRepository
-from .task_creation import TaskFactoryPort
+from .task_creation import (
+    TaskFactoryPort,
+    TaskTemplatePort,
+    TaskWorkspacePort,
+    TaskWorkspaceProvisioningError,
+)
 from .verification import (
     EvidenceGraphPort,
     VerificationCommandPort,
@@ -68,6 +73,9 @@ __all__ = [
     "TaskRecordPort",
     "TaskRepository",
     "TaskFactoryPort",
+    "TaskTemplatePort",
+    "TaskWorkspacePort",
+    "TaskWorkspaceProvisioningError",
     "SpecValidationPort",
     "SUPPORTED_WORKSPACE_ACTIONS",
     "VerificationPort",

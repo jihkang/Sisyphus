@@ -10,6 +10,7 @@ from .obligations import (
 )
 from .planning import PlanReviewOutcome, SpecFreezeOutcome, SubtaskGenerationOutcome
 from .promotion import MergeReceiptResult, PromotionExecutionResult
+from .task_creation import CreateOutcome
 from .verification import VerificationOutcome
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "AgentView",
     "ArtifactRef",
     "CloseOutcome",
+    "CreateOutcome",
     "ObligationConvergenceResult",
     "ObligationExecutionResult",
     "ObligationQueueMaterialization",
