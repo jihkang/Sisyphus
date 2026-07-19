@@ -9,7 +9,7 @@ from ..episode_trace import (
     next_episode_step,
 )
 from ..infra.providers.receipts import persist_local_receipt
-from ..observation import build_task_observation
+from .observation import build_task_observation
 
 
 def persist_local_provider_receipt(

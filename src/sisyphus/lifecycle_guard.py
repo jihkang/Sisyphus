@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from .application.results.lifecycle import TransitionResult
+from .composition.lifecycle import evaluate_transition
+from .domain.lifecycle import LifecycleAction
 from .gates import dedupe_gates
-from .lifecycle_rules import evaluate_transition
-from .lifecycle_state import LifecycleAction, TransitionResult
 
 
 DEFAULT_LIFECYCLE_GATE_SOURCES = frozenset({"lifecycle", "plan", "spec", "conformance", "close", "promotion"})

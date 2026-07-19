@@ -11,7 +11,7 @@ from ....composition.repository_requests import load_task_record_with_path
 from ....dataset_export import export_dataset
 from ....episode_trace import check_episode_trace, read_episode_steps
 from ....eval.loop import run_task_eval_loop
-from ....observation import render_task_observation
+from ....composition.observation import render_task_observation
 from ....providers.benchmark import (
     LocalAgentBenchmarkFixtureError,
     default_local_agent_benchmark_fixture_file,

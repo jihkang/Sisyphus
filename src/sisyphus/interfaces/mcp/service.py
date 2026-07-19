@@ -43,7 +43,7 @@ from ...composition.planning import (
     revise_task_plan,
     validate_task_spec,
 )
-from ...observation import build_task_observation
+from ...composition.observation import build_task_observation
 from ...application.search.retrieval import retrieve_documents
 from ...composition.repository_requests import (
     get_task,

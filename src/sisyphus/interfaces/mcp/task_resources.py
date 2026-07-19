@@ -13,8 +13,8 @@ from ...composition.repository_requests import load_task_record_with_path
 from ...composition.resource_queries import build_spec_validation_resource
 from ...domain.promotion.state import promotion_summary
 from ...domain.task.conformance import ensure_task_conformance_defaults
-from ...evidence_graph import evidence_resource_payload
-from ...observation import build_task_observation
+from ...composition.evidence import evidence_resource_payload
+from ...composition.observation import build_task_observation
 from ..agent_queries import list_agents
 
 

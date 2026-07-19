@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ..config import SisyphusConfig
 from ..episode_trace import read_episode_steps
-from ..observation import build_task_observation
+from ..composition.observation import build_task_observation
 from ..reward import RewardBreakdown, reward_breakdown_metrics, score_task_outcome
 from ..state import load_task_record
 from ..test_first import TEST_FIRST_LOOP_PHASES, TestFirstEvaluation, evaluate_test_first_loop

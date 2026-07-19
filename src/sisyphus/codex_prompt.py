@@ -8,7 +8,7 @@ from .conformance import build_execution_contract
 from .config import SisyphusConfig
 from .context_pack import build_task_execution_context_pack
 from .discipline import build_sisyphus_worker_discipline
-from .observation import build_task_observation
+from .composition.observation import build_task_observation
 from .shared.mappings import project_fields
 from .state import load_task_record
 

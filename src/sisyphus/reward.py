@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .conformance import CONFORMANCE_GREEN, summarize_task_conformance
-from .evidence_graph import summarize_evidence_graph
+from .composition.evidence import summarize_evidence_graph
 from .gates import blocking_gates
 from .promotion_state import PROMOTION_STATUS_NOT_REQUIRED, PROMOTION_STATUS_RECORDED, promotion_summary
 

@@ -422,6 +422,66 @@ class ArchitectureDependencyTests(unittest.TestCase):
                     f"{name} contains {type(node).__name__}; compatibility facades must remain import-only"
                 )
 
+    def test_observation_resource_interfaces_use_composed_queries(self) -> None:
+        source_modules = {
+            "sisyphus.interfaces.cli.handlers.operations",
+            "sisyphus.interfaces.mcp.service",
+            "sisyphus.interfaces.mcp.task_resources",
+        }
+        facade_modules = {
+            "sisyphus.action_space",
+            "sisyphus.evidence_graph",
+            "sisyphus.lifecycle_rules",
+            "sisyphus.lifecycle_state",
+            "sisyphus.observation",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in facade_modules
+        }
+
+        self.assertFalse(
+            forbidden,
+            "observation/resource interfaces regained flat implementation dependencies:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_lifecycle_observation_and_evidence_facades_remain_import_only(self) -> None:
+        for name in (
+            "sisyphus.action_space",
+            "sisyphus.evidence_graph",
+            "sisyphus.lifecycle_rules",
+            "sisyphus.lifecycle_state",
+            "sisyphus.observation",
+        ):
+            module = self.modules[name]
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom):
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    self.assertIsInstance(node.value.value, str, f"{name} has executable code")
+                    continue
+                if isinstance(node, ast.Assign):
+                    self.assertEqual(
+                        [target.id for target in node.targets if isinstance(target, ast.Name)],
+                        ["__all__"],
+                        f"{name} may assign only __all__",
+                    )
+                    continue
+                self.fail(
+                    f"{name} contains {type(node).__name__}; compatibility facades must remain import-only"
+                )
+
+    def test_lifecycle_guard_uses_canonical_composition_and_result_types(self) -> None:
+        dependencies = _declared_imports(self.modules["sisyphus.lifecycle_guard"])
+        self.assertFalse(
+            dependencies.intersection({"sisyphus.lifecycle_rules", "sisyphus.lifecycle_state"}),
+            "lifecycle guard regained flat lifecycle dependencies",
+        )
+
     def test_verification_and_lifecycle_adapters_do_not_import_public_facades(self) -> None:
         source_modules = {
             "sisyphus.infra.persistence.lifecycle_mapper",
