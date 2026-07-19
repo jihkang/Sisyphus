@@ -22,9 +22,9 @@ def build_verification_service(repo_root: Path, config: SisyphusConfig) -> Verif
         planning_documents=PlanningDocumentAdapter(repo_root, config),
         documents=FileVerificationDocumentAdapter(repo_root, config),
         validation=SpecValidationAdapter(repo_root, config),
-        conformance=ConformanceVerificationAdapter(),
+        conformance=ConformanceVerificationAdapter(clock),
         commands=ShellVerificationCommandAdapter(repo_root, config, clock),
-        evidence=EvidenceGraphAdapter(repo_root, config),
+        evidence=EvidenceGraphAdapter(repo_root, config, clock),
         events=EventPublisherAdapter(repo_root, config),
         clock=clock,
     )

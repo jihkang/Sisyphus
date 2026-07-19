@@ -195,6 +195,29 @@ class ArchitectureDependencyTests(unittest.TestCase):
             "infrastructure imports public config/event facades:\n" + _format_pairs(forbidden),
         )
 
+    def test_verification_and_lifecycle_adapters_do_not_import_public_facades(self) -> None:
+        source_modules = {
+            "sisyphus.infra.persistence.lifecycle_mapper",
+            "sisyphus.infra.verification.adapters",
+        }
+        facade_modules = {
+            "sisyphus.conformance",
+            "sisyphus.evidence_graph",
+            "sisyphus.gates",
+            "sisyphus.promotion_state",
+            "sisyphus.state",
+        }
+        forbidden: set[tuple[str, str]] = set()
+        for name in source_modules:
+            for dependency in _declared_imports(self.modules[name]):
+                if dependency in facade_modules:
+                    forbidden.add((name, dependency))
+
+        self.assertFalse(
+            forbidden,
+            "verification/lifecycle adapters import public facades:\n" + _format_pairs(forbidden),
+        )
+
     def test_domain_models_do_not_own_boundary_mapping_methods(self) -> None:
         violations: set[tuple[str, str]] = set()
         for module in self.modules.values():

@@ -24,6 +24,7 @@ from .verification import (
     VerificationCommandPort,
     VerificationConformancePort,
     VerificationDocumentPort,
+    VerificationEvidencePort,
 )
 from .workflow import (
     CloseoutPort,
@@ -69,6 +70,7 @@ __all__ = [
     "VerificationCommandPort",
     "VerificationConformancePort",
     "VerificationDocumentPort",
+    "VerificationEvidencePort",
     "WorkflowPlanningPort",
     "WorkspacePort",
     "VersionControlPort",

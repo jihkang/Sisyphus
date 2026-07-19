@@ -4,6 +4,7 @@ from .adapters import (
     ConformanceVerificationAdapter,
     EvidenceGraphAdapter,
     FileVerificationDocumentAdapter,
+    RepositoryVerificationEvidenceAdapter,
     ShellVerificationCommandAdapter,
 )
 
@@ -11,5 +12,6 @@ __all__ = [
     "ConformanceVerificationAdapter",
     "EvidenceGraphAdapter",
     "FileVerificationDocumentAdapter",
+    "RepositoryVerificationEvidenceAdapter",
     "ShellVerificationCommandAdapter",
 ]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from ...conformance import summarize_task_conformance
+from ...application.planning_records import gate_spec_to_record
 from ...domain.lifecycle.models import (
     ConformanceState,
     GateSpec,
@@ -12,8 +12,16 @@ from ...domain.lifecycle.models import (
     SubtaskConformance,
 )
 from ...domain.planning.models import normalize_plan_status, normalize_spec_status
-from ...gates import make_gate
-from ...promotion_state import promotion_summary
+from ...domain.promotion.state import promotion_summary
+from ...domain.task.conformance import (
+    CONFORMANCE_GREEN,
+    CONFORMANCE_RED,
+    CONFORMANCE_YELLOW,
+    ensure_task_conformance_defaults,
+    normalize_conformance_status,
+)
+from ...domain.task.design import ensure_task_design_defaults
+from ...shared.clock import utc_now
 
 
 _CONFORMANCE_ACTIONS = frozenset(
@@ -37,7 +45,7 @@ class LifecycleRecordMapper:
         promotion = PromotionState()
 
         if inspect_transition_data and action in _CONFORMANCE_ACTIONS:
-            conformance = _map_conformance(summarize_task_conformance(task))
+            conformance = _map_conformance(task)
         if inspect_transition_data and action == LifecycleAction.CLOSE:
             promotion = _map_promotion(promotion_summary(task))
 
@@ -55,38 +63,47 @@ class LifecycleRecordMapper:
 
     @staticmethod
     def gate_to_record(gate: GateSpec) -> dict:
-        return make_gate(
-            gate.code,
-            gate.message,
-            gate.source,
-            blocking=gate.blocking,
-            severity=gate.severity,
-            checkpoint_type=gate.checkpoint_type,
-            subtask_id=gate.subtask_id,
-        )
+        return gate_spec_to_record(gate, created_at=utc_now())
 
 
-def _map_conformance(summary: Mapping[str, object]) -> ConformanceState:
-    subtasks = summary.get("subtasks")
+def _map_conformance(task: dict) -> ConformanceState:
+    ensure_task_conformance_defaults(task)
+    ensure_task_design_defaults(task)
+    record = task["conformance"]
     mapped_subtasks: list[SubtaskConformance] = []
-    if isinstance(subtasks, list):
-        for item in subtasks:
-            if not isinstance(item, Mapping):
-                continue
-            mapped_subtasks.append(
-                SubtaskConformance(
-                    subtask_id=_optional_text(item.get("id")),
-                    status=str(item.get("status") or "green"),
-                    unresolved_warning_count=int(item.get("unresolved_warning_count", 0)),
-                    last_checkpoint_type=_optional_text(item.get("last_checkpoint_type")),
-                )
+    for subtask in task.get("subtasks", []):
+        if not isinstance(subtask, Mapping):
+            continue
+        subtask_record = subtask.get("conformance")
+        if not isinstance(subtask_record, Mapping):
+            continue
+        mapped_subtasks.append(
+            SubtaskConformance(
+                subtask_id=_optional_text(subtask.get("id")),
+                status=normalize_conformance_status(subtask_record.get("status")),
+                unresolved_warning_count=int(subtask_record.get("unresolved_warning_count", 0)),
+                last_checkpoint_type=_optional_text(subtask_record.get("last_checkpoint_type")),
             )
+        )
+    status = _aggregate_conformance_status(
+        normalize_conformance_status(record.get("status")),
+        tuple(item.status for item in mapped_subtasks),
+    )
     return ConformanceState(
-        status=str(summary.get("status") or "green"),
-        unresolved_warning_count=int(summary.get("unresolved_warning_count", 0)),
-        last_checkpoint_type=_optional_text(summary.get("last_checkpoint_type")),
+        status=status,
+        unresolved_warning_count=int(record.get("unresolved_warning_count", 0)),
+        last_checkpoint_type=_optional_text(record.get("last_checkpoint_type")),
         subtasks=tuple(mapped_subtasks),
     )
+
+
+def _aggregate_conformance_status(task_status: str, subtask_statuses: tuple[str, ...]) -> str:
+    statuses = (task_status, *subtask_statuses)
+    if CONFORMANCE_RED in statuses:
+        return CONFORMANCE_RED
+    if CONFORMANCE_YELLOW in statuses:
+        return CONFORMANCE_YELLOW
+    return CONFORMANCE_GREEN
 
 
 def _map_promotion(summary: Mapping[str, object]) -> PromotionState:

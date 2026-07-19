@@ -39,6 +39,7 @@ separation, and real 30.5B model evidence, is not part of this repository migrat
 | Verification/artifact document writes | Completed | Verification documents delegate to the canonical atomic `RepositoryArtifactStore`; infra imports the canonical config loader instead of the public config facade |
 | Task-record creation boundary | Completed | `CreateTaskRecordCommand`, `TaskRecordCreationService`, and the composition root own construction and persistence ordering; `state.py` delegates creation and preserves identity-compatible repository exports |
 | Workspace patch containment | Completed | Descriptor-relative tree snapshots hash regular files, modes, symlink targets, and special-file identity before and after `git apply`; only declared non-protected regular-file transitions are accepted, and partial-failure mutations are quarantined |
+| Verifier, conformance, and evidence effects | Completed | Verification commands use a strict single-line parser, process-group timeout, bounded output tail, and typed receipts; conformance mutation is domain-owned; evidence construction is application-owned and atomically persisted through `VerificationEvidencePort` |
 
 ## Accepted Domain Dependency Exceptions
 
@@ -64,7 +65,7 @@ change.
 | --- | --- | --- | --- | --- |
 | CA-04 | High | `daemon.py` is 902 lines and `creation.py`/`closeout.py` still coordinate queue, task state, worktrees, providers, verification, events, and promotion through root modules | Introduce application use cases for creation, daemon event handling, and closeout with narrow repository/effect ports; keep side-effect order explicit | Event replay, retry, gate, partial-failure, close, and end-to-end workflow characterization tests pass |
 | CA-05 | High | CLI and MCP handlers still import root implementations such as `state`, `planning`, `audit`, `closeout`, `creation`, and `daemon` | Route handlers through application command/query services assembled by composition roots; interfaces retain only adaptation, dispatch, trace, and rendering | CLI help/exit/output and MCP tools/resources/schema/trace fixtures remain identical; interfaces have no implementation imports |
-| CA-06 | High | Infrastructure workflow, verification evidence/conformance, task factory, spec validation, provider launch, and provider receipts still call root facades such as `closeout`, `conformance`, `evidence_graph`, `state`, and `codex_prompt` | Make adapters depend on inward policy/record functions and existing repository/effect ports; complete verifier, prompt, receipt, Git, and worktree boundaries without public-facade calls | Architecture test rejects adapter-to-facade edges; adapter contract and failure-injection suites pass |
+| CA-06 | High | Infrastructure workflow/planning adapters, spec validation, provider launch, and provider receipts still call root facades such as `closeout`, `conformance`, `state`, and `codex_prompt`; verifier/evidence/conformance and task-factory default imports are now inward | Make the remaining adapters depend on inward policy/record functions and existing repository/effect ports; complete prompt, receipt, Git, and worktree boundaries without public-facade calls | Architecture test rejects adapter-to-facade edges; adapter contract and failure-injection suites pass |
 | CA-07 | High | Evolution dataset, operator, receipts, and verification modules read canonical state directly; `evolution/harness.py` is 1,072 lines | Expose read/query, evaluation, and append-only artifact ports. Evolve may recommend/request work but cannot approve, freeze, verify, activate, promote, or mutate canonical authority | Authority tests prove forbidden actions are unreachable; baseline/candidate artifacts and existing MCP/CLI projections remain compatible |
 | CA-08 | Medium | There are 58 model-owned `to_dict`/`from_dict` methods across 15 non-domain modules | Group only wire-shape-equivalent records under explicit codecs/mappers; retain custom mappers where schemas, omission rules, digests, or compatibility differ | Golden wire fixtures, unknown-field behavior, digest fixtures, and round-trip tests pass before each method is removed |
 | CA-09 | Medium | Several modules mix multiple change reasons: `artifacts.py` (767), `providers/benchmark.py` (729), `dsl.py` (674), and large planning/verification/promotion use cases | Split only along demonstrated ownership or side-effect boundaries; do not create one-method ports or generic manager classes | Each extracted boundary has multiple meaningful consumers or a replaceable side effect and its own contract tests |
@@ -73,7 +74,7 @@ change.
 
 ## Execution Order
 
-1. Complete Verifier, prompt, receipt, evidence, and conformance adapter dependencies.
+1. Complete prompt, receipt, workflow/planning, and spec-validation adapter dependencies.
 2. Move full worktree creation, daemon processing, and closeout orchestration into application use cases.
 3. Rewire CLI and MCP to application commands and queries.
 4. Restrict Evolve to read/evaluation/append-only ports and add authority tests.

@@ -4,13 +4,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ...application.commands.task import CreateTaskRecordCommand
-from ...conformance import default_task_conformance
-from ...design import default_task_design
+from ...domain.promotion.state import default_task_promotion
+from ...domain.task.conformance import default_task_conformance
+from ...domain.task.design import default_task_design
+from ...domain.task.models import default_task_docs
 from ...gitops import branch_name, worktree_path
-from ...promotion_state import default_task_promotion
 from ...shared.clock import utc_now
 from ...shared.paths import task_dir
-from ...domain.task.models import default_task_docs
 from ..config.loader import SisyphusConfig
 
 

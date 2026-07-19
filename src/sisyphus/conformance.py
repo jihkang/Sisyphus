@@ -6,10 +6,17 @@ import uuid
 
 from .design import ensure_task_design_defaults, summarize_design_anchor
 from .domain.task.conformance import (
+    CONFORMANCE_CHECKPOINT_DESIGN_ANCHOR,
+    CONFORMANCE_CHECKPOINT_DESIGN_ASSESSMENT,
+    CONFORMANCE_CHECKPOINT_POST_EXEC,
+    CONFORMANCE_CHECKPOINT_PRE_EXEC,
+    CONFORMANCE_CHECKPOINT_PRE_VERIFY,
+    CONFORMANCE_CHECKPOINT_SPEC_ANCHOR,
     CONFORMANCE_GREEN,
     CONFORMANCE_RED,
     CONFORMANCE_STATUSES,
     CONFORMANCE_YELLOW,
+    append_conformance_entry,
     default_subtask_conformance,
     default_task_conformance,
     ensure_subtask_conformance_defaults,
@@ -18,13 +25,6 @@ from .domain.task.conformance import (
 )
 from .gates import dedupe_gates as _dedupe_gates, make_gate as _gate
 
-
-CONFORMANCE_CHECKPOINT_SPEC_ANCHOR = "spec_anchor"
-CONFORMANCE_CHECKPOINT_DESIGN_ANCHOR = "design_anchor"
-CONFORMANCE_CHECKPOINT_DESIGN_ASSESSMENT = "design_assessment"
-CONFORMANCE_CHECKPOINT_PRE_EXEC = "pre_exec"
-CONFORMANCE_CHECKPOINT_POST_EXEC = "post_exec"
-CONFORMANCE_CHECKPOINT_PRE_VERIFY = "pre_verify"
 
 CONFORMANCE_WARNING_UNRESOLVED = "CONFORMANCE_WARNING_UNRESOLVED"
 CONFORMANCE_BLOCKED = "CONFORMANCE_BLOCKED"
@@ -350,35 +350,21 @@ def append_conformance_log(
     resolved: bool = False,
     drift: int = 0,
 ) -> dict:
-    ensure_task_conformance_defaults(task)
     timestamp = utc_now()
-    _record_conformance_event(
-        task["conformance"],
+    subtask_exists = subtask_id is not None and _find_subtask(task, subtask_id) is not None
+    return append_conformance_entry(
+        task,
         checkpoint_type=checkpoint_type,
         status=status,
         summary=summary,
         source=source,
         timestamp=timestamp,
+        task_event_id=uuid.uuid4().hex,
+        subtask_event_id=uuid.uuid4().hex if subtask_exists else None,
         resolved=resolved,
         drift=drift,
         subtask_id=subtask_id,
     )
-    if subtask_id is not None:
-        subtask = _find_subtask(task, subtask_id)
-        if subtask is not None:
-            ensure_subtask_conformance_defaults(subtask)
-            _record_conformance_event(
-                subtask["conformance"],
-                checkpoint_type=checkpoint_type,
-                status=status,
-                summary=summary,
-                source=source,
-                timestamp=timestamp,
-                resolved=resolved,
-                drift=drift,
-                subtask_id=subtask_id,
-            )
-    return task
 
 
 def collect_conformance_gates(task: dict, *, action: str) -> list[dict]:
@@ -431,73 +417,6 @@ def collect_conformance_gates(task: dict, *, action: str) -> list[dict]:
     return _dedupe_gates(gates)
 
 
-def _record_conformance_event(
-    record: dict,
-    *,
-    checkpoint_type: str,
-    status: str,
-    summary: str | None,
-    source: str | None,
-    timestamp: str,
-    resolved: bool,
-    drift: int,
-    subtask_id: str | None,
-) -> None:
-    status = normalize_conformance_status(status)
-    entry = {
-        "id": uuid.uuid4().hex,
-        "checkpoint_type": checkpoint_type,
-        "status": status,
-        "summary": summary,
-        "source": source,
-        "timestamp": timestamp,
-        "resolved": resolved,
-        "drift": int(drift),
-        "subtask_id": subtask_id,
-    }
-    history = list(record.get("history", []))
-    history.append(entry)
-    record["history"] = history
-    record["last_checkpoint_type"] = checkpoint_type
-    record["last_checkpoint_source"] = source
-    record["last_checkpoint_at"] = timestamp
-    record["summary"] = summary
-
-    if checkpoint_type == CONFORMANCE_CHECKPOINT_SPEC_ANCHOR:
-        record["last_spec_anchor_at"] = timestamp
-        record["last_spec_anchor_source"] = source
-    if checkpoint_type == CONFORMANCE_CHECKPOINT_DESIGN_ANCHOR:
-        record["last_design_anchor_at"] = timestamp
-        record["last_design_anchor_source"] = source
-
-    if status == CONFORMANCE_RED:
-        record["drift_count"] = int(record.get("drift_count", 0)) + max(int(drift), 1)
-        record["last_failure"] = _compact_event(entry)
-    elif status == CONFORMANCE_YELLOW:
-        record["warning_count"] = int(record.get("warning_count", 0)) + 1
-        if resolved:
-            if int(record.get("unresolved_warning_count", 0)) > 0:
-                record["unresolved_warning_count"] = int(record.get("unresolved_warning_count", 0)) - 1
-            record["resolved_warning_count"] = int(record.get("resolved_warning_count", 0)) + 1
-        else:
-            record["unresolved_warning_count"] = int(record.get("unresolved_warning_count", 0)) + 1
-        record["last_warning"] = _compact_event(entry)
-    elif resolved:
-        if int(record.get("unresolved_warning_count", 0)) > 0:
-            record["unresolved_warning_count"] = int(record.get("unresolved_warning_count", 0)) - 1
-        record["resolved_warning_count"] = int(record.get("resolved_warning_count", 0)) + 1
-
-    record["status"] = _derive_status(record)
-
-
-def _derive_status(record: dict) -> str:
-    if record.get("last_failure") and int(record.get("drift_count", 0)) > 0:
-        return CONFORMANCE_RED
-    if int(record.get("unresolved_warning_count", 0)) > 0:
-        return CONFORMANCE_YELLOW
-    return CONFORMANCE_GREEN
-
-
 def _aggregate_status(task_status: str | None, subtask_statuses: list[str]) -> str:
     statuses = [normalize_conformance_status(task_status), *[normalize_conformance_status(status) for status in subtask_statuses]]
     if CONFORMANCE_RED in statuses:
@@ -519,19 +438,6 @@ def _compose_summary(record: dict, subtask_summaries: list[dict] | None = None) 
     if subtask_summaries:
         parts.append(f"subtasks={len(subtask_summaries)}")
     return ", ".join(parts)
-
-
-def _compact_event(entry: dict) -> dict:
-    return {
-        "id": entry["id"],
-        "checkpoint_type": entry["checkpoint_type"],
-        "status": entry["status"],
-        "summary": entry["summary"],
-        "source": entry["source"],
-        "timestamp": entry["timestamp"],
-        "resolved": entry["resolved"],
-        "subtask_id": entry["subtask_id"],
-    }
 
 
 def _format_anchor(at: str | None, source: str | None) -> str:

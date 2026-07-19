@@ -20,10 +20,10 @@ from ..planning_records import (
 from ..ports.clock import ClockPort
 from ..ports.planning import PlanningDocumentPort, SpecValidationPort
 from ..ports.verification import (
-    EvidenceGraphPort,
     VerificationCommandPort,
     VerificationConformancePort,
     VerificationDocumentPort,
+    VerificationEvidencePort,
 )
 from ..ports.workflow import EventPublisherPort, TaskRecord, TaskRecordPort, WorkflowEvent
 from ..results.verification import VerificationOutcome
@@ -78,7 +78,7 @@ class VerificationService:
     validation: SpecValidationPort
     conformance: VerificationConformancePort
     commands: VerificationCommandPort
-    evidence: EvidenceGraphPort
+    evidence: VerificationEvidencePort
     events: EventPublisherPort
     clock: ClockPort
 

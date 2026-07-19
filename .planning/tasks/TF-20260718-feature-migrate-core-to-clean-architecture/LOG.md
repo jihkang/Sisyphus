@@ -64,6 +64,9 @@
 - 2026-07-19: Relocated the file task-record adapter to canonical persistence ownership, added application/facade/identity contracts, and passed the expanded full suite with 600 tests.
 - 2026-07-19: Added descriptor-relative Workspace tree fingerprints and a tree-hash mutation guard around patch execution; undeclared, protected, symlink/special-file, no-op, and partial-failure mutations cannot be recorded as successful Agent work.
 - 2026-07-19: Added real and injected patch postcondition regressions and passed the expanded full suite with 603 tests.
+- 2026-07-19: Replaced unbounded verification subprocess calls with a strict single-line command parser, process-group timeout, bounded output tail, and typed duration/timeout receipts while retaining shell command compatibility.
+- 2026-07-19: Moved conformance entry mutation into the task domain and evidence graph construction behind `VerificationEvidencePort`; verification/lifecycle adapters no longer import public conformance, evidence, gate, promotion-state, or state facades.
+- 2026-07-19: Added timeout, output-bound, early-EOF, evidence parity, clock injection, and architecture regressions and passed the expanded full suite with 611 tests.
 
 ## Notes
 
@@ -74,6 +77,6 @@
 
 ## Follow-ups
 
-- Execute the ordered debt ledger in `docs/clean-architecture-implementation-debt.md`, beginning with the remaining verifier/prompt/receipt/evidence adapters.
+- Execute the ordered debt ledger in `docs/clean-architecture-implementation-debt.md`, beginning with the remaining prompt/receipt/workflow/spec-validation adapters.
 - Isolate Evolve candidate generation from Control-owned approval, signing, active-policy, and queue authority.
 - Rewire remaining CLI/MCP consumers, validate architecture documentation, then run final package and merged-main verification.

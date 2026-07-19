@@ -22,16 +22,17 @@ def build_promotion_service(
     *,
     gh_runner: GhRunner,
 ) -> PromotionService:
+    clock = SystemClock()
     return PromotionService(
         tasks=FileTaskRecordAdapter(repo_root, config),
         version_control=GitVersionControlAdapter(),
         pull_requests=GithubCliPullRequestAdapter(gh_runner),
         artifacts=RepositoryArtifactStore(repo_root, config),
-        conformance=ConformanceVerificationAdapter(),
+        conformance=ConformanceVerificationAdapter(clock),
         closeout=CloseoutAdapter(repo_root, config),
         interventions=ManualInterventionAdapter(repo_root, config),
         reopened_tasks=ReopenedTaskAdapter(repo_root, config),
-        clock=SystemClock(),
+        clock=clock,
     )
 
 

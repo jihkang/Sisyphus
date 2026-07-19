@@ -18,13 +18,16 @@ class VerificationDocumentPort(Protocol):
     def write(self, task_id: str, relative_path: str, content: str) -> ArtifactRef: ...
 
 
-class EvidenceGraphPort(Protocol):
+class VerificationEvidencePort(Protocol):
     def write(
         self,
         task_id: str,
         task: TaskRecord,
         command_results: tuple[CommandExecution, ...],
     ) -> None: ...
+
+
+EvidenceGraphPort = VerificationEvidencePort
 
 
 class VerificationConformancePort(Protocol):
@@ -48,4 +51,5 @@ __all__ = [
     "VerificationCommandPort",
     "VerificationConformancePort",
     "VerificationDocumentPort",
+    "VerificationEvidencePort",
 ]
