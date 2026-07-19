@@ -28,6 +28,7 @@ from .promotion import (
     VersionControlPort,
 )
 from .repositories import AgentRepository, TaskRepository
+from .search import ContextPackStorePort, SearchIndexPort
 from .task_creation import (
     TaskCreationPort,
     TaskFactoryPort,
@@ -64,6 +65,7 @@ __all__ = [
     "CloseoutEvidencePort",
     "CloseoutPort",
     "ConformancePort",
+    "ContextPackStorePort",
     "ChangeAdoptionPort",
     "ConversationAgentPort",
     "ConversationDocumentPort",
@@ -87,6 +89,7 @@ __all__ = [
     "PromotionMergePort",
     "PullRequestPort",
     "ReopenedTaskPort",
+    "SearchIndexPort",
     "TaskCreationPort",
     "TaskExecutionGatePort",
     "TaskRecordPort",

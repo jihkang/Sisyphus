@@ -3,10 +3,13 @@ from __future__ import annotations
 from types import MappingProxyType
 from pathlib import Path
 
+from ...application.search.retrieval import retrieve_documents
+from ...composition.search import (
+    build_and_persist_context_pack,
+    read_search_index,
+    rebuild_search_index,
+)
 from ...config import SisyphusConfig
-from ...context_pack import build_and_persist_context_pack
-from ...retrieval import retrieve_documents
-from ...search_index import read_search_index, rebuild_search_index
 
 
 def _search_index_rebuild(

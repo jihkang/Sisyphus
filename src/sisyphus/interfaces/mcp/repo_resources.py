@@ -5,10 +5,10 @@ from pathlib import Path
 from ...application.conformance_records import summarize_task_conformance
 from ...bus_jsonl import read_jsonl_events, resolve_event_bus_path
 from ...composition.repository_requests import list_tasks
+from ...composition.search import search_index_status
 from ...config import SisyphusConfig
 from ...domain.promotion.state import promotion_summary
 from ...metrics import build_value_metrics_report
-from ...search_index import search_index_status
 from .schemas import _mcp_schema_markdown
 
 

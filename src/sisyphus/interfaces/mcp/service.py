@@ -7,8 +7,14 @@ from ...artifact_resources import is_feature_task_artifact_resource, read_featur
 from ...bus_jsonl import read_jsonl_events, resolve_event_bus_path
 from ...composition.closeout import close_task as run_close
 from ...composition.runtime import run_daemon
+from ...composition.search import (
+    build_and_persist_context_pack,
+    read_context_pack,
+    read_search_index,
+    rebuild_search_index,
+    search_index_status,
+)
 from ...config import load_config
-from ...context_pack import build_and_persist_context_pack, read_context_pack
 from ...episode_trace import append_episode_step, build_episode_step, default_episode_id, next_episode_step
 from ...evolution.operator import (
     evaluate_evolution_followup_decision,
@@ -33,8 +39,7 @@ from ...composition.planning import (
 )
 from ...metrics import build_value_metrics_report
 from ...observation import build_task_observation
-from ...retrieval import retrieve_documents
-from ...search_index import read_search_index, rebuild_search_index, search_index_status
+from ...application.search.retrieval import retrieve_documents
 from ...composition.repository_requests import (
     get_task,
     list_tasks,

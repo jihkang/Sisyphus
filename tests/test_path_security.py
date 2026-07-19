@@ -15,6 +15,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from sisyphus.discord_bot import _build_discord_client_class, run_discord_bot
 from sisyphus.gitops import copy_relative_path, remove_relative_path
+from sisyphus.infra.search import RepositoryContextPackStore
 from sisyphus.search_index import resolve_search_index_path
 from sisyphus.shared.paths import PathBoundaryError, contained_path
 
@@ -75,6 +76,17 @@ class PathSecurityTests(unittest.TestCase):
             resolve_search_index_path(self.repo_root, "../outside/index.jsonl")
         with self.assertRaisesRegex(PathBoundaryError, "escapes root"):
             resolve_search_index_path(self.repo_root, self.outside_root / "index.jsonl")
+
+    def test_context_pack_store_rejects_invalid_ids_and_symlink_escape(self) -> None:
+        store = RepositoryContextPackStore(self.repo_root)
+        with self.assertRaisesRegex(ValueError, "invalid context pack id"):
+            store.write({"pack_id": "../escape"})
+
+        pack_dir = self.repo_root / ".planning" / "context-packs"
+        pack_dir.parent.mkdir(parents=True)
+        self._symlink_directory(pack_dir, self.outside_root)
+        with self.assertRaisesRegex(PathBoundaryError, "escapes root"):
+            store.write({"pack_id": "context-pack-safe-name"})
 
     def test_copy_and_remove_relative_path_preserve_normal_behavior(self) -> None:
         source = self.source_root / "nested" / "file.txt"

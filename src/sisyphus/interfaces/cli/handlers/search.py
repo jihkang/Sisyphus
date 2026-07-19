@@ -4,10 +4,13 @@ from pathlib import Path
 import json
 import sys
 
+from ....application.search.models import SearchIndexError
+from ....composition.search import (
+    build_and_persist_context_pack,
+    rebuild_search_index,
+    search_documents,
+)
 from ....config import SisyphusConfig
-from ....context_pack import build_and_persist_context_pack
-from ....retrieval import retrieve_documents
-from ....search_index import SearchIndexError, read_search_index, rebuild_search_index
 
 
 def handle_index_rebuild(*, repo_root: Path, config: SisyphusConfig, as_json: bool) -> int:
@@ -24,7 +27,7 @@ def handle_index_rebuild(*, repo_root: Path, config: SisyphusConfig, as_json: bo
 
 def handle_search(*, repo_root: Path, query: str, limit: int, as_json: bool) -> int:
     try:
-        documents = read_search_index(repo_root)
+        results = search_documents(repo_root, query=query, limit=limit)
     except FileNotFoundError as exc:
         print(f"error: {exc}; run `sisyphus index rebuild` first", file=sys.stderr)
         return 1
@@ -32,7 +35,6 @@ def handle_search(*, repo_root: Path, query: str, limit: int, as_json: bool) -> 
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
-    results = retrieve_documents(query, documents, limit=limit)
     payload = {
         "query": query,
         "result_count": len(results),

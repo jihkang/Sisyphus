@@ -296,6 +296,58 @@ class ArchitectureDependencyTests(unittest.TestCase):
             + _format_pairs(forbidden),
         )
 
+    def test_search_interfaces_do_not_reabsorb_flat_implementation_facades(self) -> None:
+        source_modules = {
+            "sisyphus.interfaces.cli.handlers.search",
+            "sisyphus.interfaces.mcp.repo_resources",
+            "sisyphus.interfaces.mcp.search_tools",
+            "sisyphus.interfaces.mcp.service",
+        }
+        facade_modules = {
+            "sisyphus.context_pack",
+            "sisyphus.retrieval",
+            "sisyphus.search_document",
+            "sisyphus.search_index",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in facade_modules
+        }
+
+        self.assertFalse(
+            forbidden,
+            "search interfaces regained flat implementation dependencies:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_search_compatibility_facades_remain_import_only(self) -> None:
+        for name in (
+            "sisyphus.context_pack",
+            "sisyphus.retrieval",
+            "sisyphus.search_document",
+            "sisyphus.search_index",
+        ):
+            module = self.modules[name]
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom):
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    self.assertIsInstance(node.value.value, str, f"{name} has executable code")
+                    continue
+                if isinstance(node, ast.Assign):
+                    self.assertEqual(
+                        [target.id for target in node.targets if isinstance(target, ast.Name)],
+                        ["__all__"],
+                        f"{name} may assign only __all__",
+                    )
+                    continue
+                self.fail(
+                    f"{name} contains {type(node).__name__}; compatibility facades must remain import-only"
+                )
+
     def test_service_facade_does_not_reabsorb_daemon_or_task_persistence(self) -> None:
         dependencies = _declared_imports(self.modules["sisyphus.service"])
         forbidden = dependencies.intersection({"sisyphus.daemon", "sisyphus.state"})
