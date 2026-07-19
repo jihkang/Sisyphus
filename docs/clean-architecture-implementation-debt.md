@@ -1,6 +1,6 @@
 # Clean Architecture Implementation Debt
 
-Updated: 2026-07-19
+Updated: 2026-07-20
 Scope: `TF-20260718-feature-migrate-core-to-clean-architecture`
 
 This ledger records the remaining implementation debt on the Clean Architecture
@@ -59,6 +59,8 @@ separation, and real 30.5B model evidence, is not part of this repository migrat
 | Evolution evaluation authority and worktree effects | Completed | `evolution/harness.py` now owns only plans, metrics, requests, and command projections. Control-owned composition performs task request, plan approval, spec freeze, and provider ordering; infrastructure owns bounded mutation materialization, process execution, atomic output/receipt persistence, containment, and symlink rejection. Authority and path-security guards pass, and the full 711-test suite is green |
 | Artifact, DSL, snapshot, and execution-policy ownership | Completed | Artifact and DSL value models are domain-owned without boundary mapping methods; pure projection, evaluation, obligation, snapshot, and execution-policy decisions are application-owned; explicit codecs own wire shapes; package declaration reads and secure document/snapshot IO are infrastructure-owned; default declaration selection is composed outside the inner layers. The seven stable root modules are import-only facades, infrastructure imports only canonical owners, symlink regressions are covered, and the full 716-test suite is green |
 | Boundary serialization ownership | Completed | Model-owned `to_dict`/`from_dict` and `to_json` methods were reduced from 14 methods across 10 modules to zero. Artifact, event, episode, search, evaluation, benchmark, and provider receipt wire shapes now live in explicit context codecs; the unused `ActionSpec.to_dict` path was deleted instead of replaced by an unused abstraction. Architecture guards reject mapping methods returning to any model, optional-field and JSONL framing regressions are covered, and the full 720-test suite is green |
+| Hotspot responsibility review | Completed | Promotion execution and merge recording are separate command services behind the stable `PromotionService`; receipt and changeset projection is pure application code. Spec-validation IO delegates to filesystem-free application rules. Local-agent benchmark models, fixture parsing, execution, and rendering are separate modules while the legacy import and `_materialize_fixture` patch point remain stable. Verification Markdown/template projection is separate from the verify transaction. Focused boundary contracts, architecture reabsorption guards, and the full 730-test suite pass |
+| Architecture and data-pipeline documentation | Completed | The architecture overview, implemented data pipeline, runtime relationship diagrams, and ADR 0001 now record dependency direction, mapping ownership, exact shim lifetime, lifecycle authority, canonical conformance colors, and the bounded Evolution role. Repository-hygiene tests resolve all local links, require current implementation anchors, and reject superseded ownership claims; the focused 46-test documentation and architecture set passes |
 
 ## Accepted Domain Dependency Exceptions
 
@@ -78,27 +80,41 @@ edges to equal these two entries exactly and separately verifies that both files
 remain import-only. Removing a shim requires shrinking the allowlist in the same
 change.
 
+## Hotspot Review Decisions
+
+Large files were evaluated by independent change reasons, side effects, callers,
+and patch compatibility rather than by line count alone.
+
+| Reviewed module | Decision | Current boundary and reason |
+| --- | --- | --- |
+| `application/use_cases/promotion.py` | Split | The 798-line service became a 91-line stable facade over `promotion_execution.py` and `promotion_merge.py`; `promotion_projection.py` owns receipt, changed-file, URL, and changeset projections. PR execution and merge/retarget now have separate command tests without changing construction or result identity |
+| `providers/benchmark.py` | Split | The runner is 297 lines; fixture models, untrusted manifest parsing, and Markdown rendering moved to `benchmark_models.py`, `benchmark_fixtures.py`, and `benchmark_rendering.py`. Root imports preserve canonical identity and the private materialization patch point remains in the runner |
+| `infra/validation/spec_validation.py` | Split | The 382-line adapter owns contained document reads, prerequisite record reads, fingerprints, report persistence, and task-state updates. `application/spec_validation_rules.py` owns deterministic policy and has direct no-filesystem tests |
+| `application/use_cases/verification.py` | Split | The verify transaction remains 425 lines; `application/verification_projection.py` owns VERIFY Markdown and template-marker detection. The service still owns one ordered gate/command/evidence/save/event transaction |
+| `interfaces/cli/app.py` | Retain | The 784-line file is an intentionally stable compatibility surface made of delegating handler wrappers plus one dynamic handler registry. Command grammar, implementation handlers, and renderers are already split; another wrapper split would break supported monkeypatch lookup without isolating policy |
+| `application/use_cases/planning.py` | Retain | Its approve, request-changes, revise, freeze, and subtask operations form one planning review/spec state machine over the same ports and gate invariants. There is no persistence, subprocess, or transport effect to extract |
+| `interfaces/inbox/parser.py` | Retain | All public entry points share one strict inbound JSON budget, exact-type rules, size limits, and repository-relative path policy. Splitting primitive validators would duplicate security invariants across payload parsers |
+| `evolution/harness.py` | Retain | The harness is now effect-free and owns only evaluation plans, metrics, evidence requests, and worktree command projections. Task authority and worktree/process effects already live in control-owned composition and infrastructure |
+
+Retained modules must be reconsidered only when they gain a second authority,
+an external effect, or a change reason that can be tested independently. Line
+growth by itself is not a trigger.
+
 ## Remaining Implementation Debt
 
 Current accounting: `0` High implementation items, exactly `2` accepted import
-compatibility shims, `2` Medium implementation items, and `1` release gate. The
+compatibility shims, `0` Medium implementation items, and `1` release gate. The
 two shims are intentionally excluded from implementation debt because they own
 no behavior; they remain tracked compatibility debt until their retirement
 conditions are met.
 
 | ID | Priority | Boundary and current evidence | Required end state | Verification gate |
 | --- | --- | --- | --- | --- |
-| CA-09 | Medium | The current review hotspots are `application/use_cases/promotion.py` (798), `interfaces/cli/app.py` (784), `providers/benchmark.py` (729), `infra/validation/spec_validation.py` (701), `application/use_cases/planning.py` (600), `interfaces/inbox/parser.py` (572), `evolution/harness.py` (557), and `application/use_cases/verification.py` (523). Size alone is not a violation, but each is a candidate for mixed change reasons | Split only along demonstrated policy, orchestration, parsing, presentation, or replaceable-effect boundaries; do not create one-method ports or generic manager classes | Every extracted boundary has a distinct change axis and focused contract tests; modules found cohesive are documented and intentionally retained |
-| CA-10 | Medium | `docs/architecture.md` describes the pre-migration staged layout and lacks the implemented application/composition dependency flow | Update architecture and data-pipeline diagrams only after runtime boundaries are final; add an ADR for dependency direction, mapper ownership, shim lifetime, and Evolve authority | Documentation path checks and an implementation-to-document conformance review pass |
 | CA-11 | Release gate | Final coverage, wheel/offline build, independent review, PR/CI/merge, merge receipt, and merged-main validation are not complete | Run the frozen verification matrix after integrating latest `main`, then promote and verify the merged commit | Coverage >=80%, wheel install smoke, Sisyphus verify green, CI green, merge recorded, and tests green on updated `main` |
 
 ## Execution Order
 
-1. Review the CA-09 hotspots for independent change axes and split only the
-   boundaries that have focused contract evidence.
-2. Synchronize architecture/data-pipeline documentation and record the dependency,
-   mapper, shim-lifetime, and Evolve-authority ADR.
-3. Run the full verification and promotion sequence on the latest `main`.
+1. Run the full verification and promotion sequence on the latest `main`.
 
 This order follows dependency direction: outer effects must be injectable before
 orchestrators and interfaces can stop importing their implementations.

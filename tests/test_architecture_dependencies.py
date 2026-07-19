@@ -790,6 +790,76 @@ class ArchitectureDependencyTests(unittest.TestCase):
             "spec-validation adapters import public facades:\n" + _format_pairs(forbidden),
         )
 
+    def test_reviewed_hotspots_keep_their_extracted_responsibilities(self) -> None:
+        promotion_facade = _declared_imports(
+            self.modules["sisyphus.application.use_cases.promotion"]
+        )
+        self.assertTrue(
+            {
+                "sisyphus.application.use_cases.promotion_execution",
+                "sisyphus.application.use_cases.promotion_merge",
+            }
+            <= promotion_facade
+        )
+        self.assertNotIn("sisyphus.domain.lifecycle", promotion_facade)
+        self.assertNotIn("sisyphus.application.promotion_records", promotion_facade)
+
+        spec_adapter = self.modules["sisyphus.infra.validation.spec_validation"]
+        spec_tree = ast.parse(
+            spec_adapter.path.read_text(encoding="utf-8"),
+            filename=str(spec_adapter.path),
+        )
+        self.assertFalse(
+            {
+                node.name
+                for node in spec_tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name.startswith("_validate_")
+            },
+            "spec-validation IO adapter reabsorbed pure validation rules",
+        )
+
+        fixture_dependencies = _declared_imports(
+            self.modules["sisyphus.providers.benchmark_fixtures"]
+        )
+        rendering_dependencies = _declared_imports(
+            self.modules["sisyphus.providers.benchmark_rendering"]
+        )
+        self.assertFalse(
+            fixture_dependencies.intersection(
+                {
+                    "sisyphus.providers.local_agent",
+                    "sisyphus.providers.local_openai",
+                }
+            ),
+            "benchmark fixture parsing regained agent execution dependencies",
+        )
+        self.assertFalse(
+            any(
+                dependency.startswith("sisyphus.infra")
+                or dependency == "sisyphus.providers.local_agent"
+                for dependency in rendering_dependencies
+            ),
+            "benchmark rendering regained execution or infrastructure dependencies",
+        )
+
+        verification_use_case = self.modules[
+            "sisyphus.application.use_cases.verification"
+        ]
+        verification_tree = ast.parse(
+            verification_use_case.path.read_text(encoding="utf-8"),
+            filename=str(verification_use_case.path),
+        )
+        self.assertFalse(
+            {
+                node.name
+                for node in verification_tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name in {"_render_verify_markdown", "_looks_like_unfilled_template"}
+            },
+            "verification use case reabsorbed document projection",
+        )
+
     def test_provider_launch_and_receipt_adapters_do_not_import_public_facades(self) -> None:
         source_modules = {
             "sisyphus.infra.providers.launch",
