@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import NoReturn
 
 from ...domain.lifecycle import LifecycleAction
@@ -95,6 +96,7 @@ class PromotionExecutionService:
             raise ValueError(f"promotion blocked by lifecycle gates: {codes}")
 
         current_status = str(promotion.get("status") or "").strip()
+        persisted_head_sha = str(promotion.get("head_sha") or "").strip()
         if current_status in {PROMOTION_STATUS_MERGED, PROMOTION_STATUS_RECORDED}:
             raise ValueError(f"task `{command.task_id}` is already merged or promotion-recorded")
 
@@ -180,17 +182,31 @@ class PromotionExecutionService:
             str(command.commit_message or "").strip()
             or default_commit_message(task, title=title)
         )
-        repo_full_name = (
-            str(command.repo_full_name or "").strip()
-            or str(promotion.get("repo_full_name") or "").strip()
-            or str(
-                repo_full_name_from_remote_url(
-                    self.version_control.remote_url(workspace, remote)
-                )
-                or ""
+        configured_repo_full_name = str(promotion.get("repo_full_name") or "").strip()
+        remote_repo_full_name = str(
+            repo_full_name_from_remote_url(
+                self.version_control.remote_url(workspace, remote)
             )
+            or ""
+        )
+        requested_repo_full_name = str(command.repo_full_name or "").strip()
+        repo_full_name = (
+            requested_repo_full_name
+            or configured_repo_full_name
+            or remote_repo_full_name
         )
         if review is not None:
+            reviewed_repo_full_name = configured_repo_full_name or remote_repo_full_name
+            if requested_repo_full_name and (
+                not reviewed_repo_full_name
+                or requested_repo_full_name.casefold()
+                != reviewed_repo_full_name.casefold()
+            ):
+                self._block_for_stale_review(
+                    task,
+                    promotion,
+                    message="promotion repository differs from the externally reviewed target",
+                )
             recorded_receipt_paths = external_review_recorded_output_paths(
                 review,
                 field=PROMOTION_OUTPUT_PATHS_FIELD,
@@ -225,17 +241,39 @@ class PromotionExecutionService:
         if repo_full_name:
             promotion["repo_full_name"] = repo_full_name
 
-        created_commit = False
+        head_requires_push = False
         if reviewed_commit_sha is not None:
             commit_sha = reviewed_commit_sha
             promotion["head_sha"] = commit_sha
         else:
-            self.version_control.stage_all(workspace)
-            staged_changes = self.version_control.has_staged_changes(workspace)
             commit_sha = str(promotion.get("head_sha") or "").strip()
+            resume_existing_head = False
+            if (
+                current_status
+                in {
+                    PROMOTION_STATUS_COMMITTED,
+                    PROMOTION_STATUS_PUSHED,
+                    PROMOTION_STATUS_PR_OPEN,
+                }
+                and persisted_head_sha
+            ):
+                workspace_head_sha = self.version_control.current_head(workspace).strip()
+                dirty_paths = set(self.version_control.dirty_paths(workspace))
+                generated_paths = _promotion_retry_generated_paths(task, receipt_path)
+                resume_existing_head = (
+                    workspace_head_sha == persisted_head_sha
+                    and dirty_paths.issubset(generated_paths)
+                )
+            if not resume_existing_head:
+                self.version_control.stage_all(workspace)
+            staged_changes = (
+                False
+                if resume_existing_head
+                else self.version_control.has_staged_changes(workspace)
+            )
             if staged_changes:
                 commit_sha = self.version_control.commit(workspace, commit_message)
-                created_commit = True
+                head_requires_push = True
                 promotion.update(
                     {
                         "required": True,
@@ -245,15 +283,34 @@ class PromotionExecutionService:
                         "committed_at": self.clock.now(),
                     }
                 )
-                self.tasks.save(task)
+                self.tasks.save_promotion_state(task)
                 self._write_execution_receipt(task, receipt_path, draft=command.draft)
-            elif not commit_sha:
+            elif persisted_head_sha:
+                workspace_head_sha = self.version_control.current_head(workspace).strip()
+                if not workspace_head_sha:
+                    raise PromotionExecutionError("working tree HEAD could not be resolved")
+                commit_sha = workspace_head_sha
+                if commit_sha != persisted_head_sha:
+                    head_requires_push = True
+                    promotion.update(
+                        {
+                            "required": True,
+                            "status": PROMOTION_STATUS_COMMITTED,
+                            "head_sha": commit_sha,
+                            "commit_message": commit_message,
+                            "committed_at": self.clock.now(),
+                            "pushed_at": None,
+                        }
+                    )
+                    self.tasks.save_promotion_state(task)
+                    self._write_execution_receipt(task, receipt_path, draft=command.draft)
+            else:
                 raise PromotionExecutionError("no staged changes available for promotion")
 
         already_pushed = (
-            not created_commit
+            not head_requires_push
             and current_status in {PROMOTION_STATUS_PUSHED, PROMOTION_STATUS_PR_OPEN}
-            and str(promotion.get("head_sha") or "").strip() == commit_sha
+            and persisted_head_sha == commit_sha
             and bool(promotion.get("pushed_at"))
         )
         if not already_pushed:
@@ -271,7 +328,7 @@ class PromotionExecutionService:
             )
             promotion["head_sha"] = commit_sha
             promotion["pushed_at"] = self.clock.now()
-            self.tasks.save(task)
+            self.tasks.save_promotion_state(task)
             self._write_execution_receipt(task, receipt_path, draft=command.draft)
 
         if not task_has_open_pr(task):
@@ -293,7 +350,7 @@ class PromotionExecutionService:
             promotion["pr_url"] = pr_url
             promotion["pr_number"] = pull_request_number_from_url(pr_url)
             promotion["pr_opened_at"] = self.clock.now()
-            self.tasks.save(task)
+            self.tasks.save_promotion_state(task)
             self._write_execution_receipt(task, receipt_path, draft=command.draft)
         else:
             self._write_execution_receipt(task, receipt_path, draft=command.draft)
@@ -483,6 +540,22 @@ def _required_external_review(task: TaskRecord) -> dict | None:
     if not isinstance(review, dict) or not review.get("required"):
         return None
     return review
+
+
+def _promotion_retry_generated_paths(task: TaskRecord, receipt_path: str) -> set[str]:
+    raw_task_dir = str(task.get("task_dir") or "").strip()
+    task_dir = PurePosixPath(raw_task_dir)
+    if (
+        not raw_task_dir
+        or task_dir.is_absolute()
+        or ".." in task_dir.parts
+        or raw_task_dir != task_dir.as_posix()
+    ):
+        return set()
+    return {
+        (task_dir / "task.json").as_posix(),
+        (task_dir / receipt_path).as_posix(),
+    }
 
 
 __all__ = ["PromotionExecutionError", "PromotionExecutionService"]

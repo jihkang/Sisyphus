@@ -23,13 +23,15 @@ The result contains:
 - `scope_digest`: SHA-256 over the task identity, branch and base, frozen plan
   and design policy, complete task-document mapping, verification profile and
   commands, test strategy, promotion policy, exact service-generated output
-  paths, owned paths, authority-document digests, and the immutable base commit
-  resolved from the configured remote before the local branch
+  paths, owned paths, authority-document digests, the immutable live-remote base
+  commit, and a digest of the exact configured remote URL
 - `document_digests`: the BRIEF, PLAN or issue documents, frozen design
   artifacts, and spec-validation report used by the scope digest
 
-Any change to the reviewed Git HEAD, integration-base revision, or canonical
-scope makes the review stale.
+When a remote is configured, base resolution uses a bounded, non-interactive
+live query and fails closed instead of accepting a stale local tracking ref.
+Any change to the reviewed Git HEAD, remote identity, integration-base revision,
+or canonical scope makes the review stale.
 
 ## Artifact Location
 
@@ -117,11 +119,16 @@ and exact dirty paths; `allow_dirty` never bypasses this review check. For a
 review-gated task promotion never stages new work. Only the two review files,
 `task.json`, the recorded verification outputs, and the recorded promotion
 receipt may remain as service-generated artifacts. Promotion pushes the exact
-reviewed commit SHA. If PR creation fails after that push, the durable pushed
+reviewed commit SHA and rejects caller redirection to a different repository.
+If PR creation fails after that push, the durable pushed
 state allows a retry to discover the already-open head/base PR without creating
 a duplicate. A failed final receipt write is repaired from durable PR state on
-the next attempt. A newly created commit is always pushed even when the attempt
-started from a previously pushed state.
+the next attempt. Promotion-state saves after external effects remain in the
+control repository and do not mirror into the source worktree. Retry recovery
+uses the actual workspace HEAD after a commit-state save failure and excludes
+only exact task-state and receipt outputs from new source work. A newly created
+commit is always pushed even when the attempt started from a previously pushed
+state.
 Any other workspace change requires a new review and verification cycle.
 
 Closeout distinguishes a dirty worktree from an unavailable Git inspection.

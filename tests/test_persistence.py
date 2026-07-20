@@ -91,6 +91,32 @@ class PersistenceSafetyTests(unittest.TestCase):
             save_task_record(task_file, task)
             self.assertTrue(mirrored_task.exists())
 
+    def test_promotion_state_save_does_not_dirty_the_task_worktree(self) -> None:
+        from sisyphus.infra.config.loader import load_config
+        from sisyphus.infra.persistence.task_records import FileTaskRecordAdapter
+        from sisyphus.infra.persistence.task_repository import save_task_record
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir) / "repo"
+            worktree_root = Path(tempdir) / "worktree"
+            task_file = repo_root / ".planning" / "tasks" / "TF-1" / "task.json"
+            task_file.parent.mkdir(parents=True)
+            worktree_root.mkdir(parents=True)
+            task = _task_record(repo_root, "TF-1")
+            task["worktree_path"] = str(worktree_root)
+            save_task_record(task_file, task)
+            mirrored_task = worktree_root / ".planning" / "tasks" / "TF-1" / "task.json"
+            original_mirror = mirrored_task.read_bytes()
+
+            adapter = FileTaskRecordAdapter(repo_root, load_config(repo_root))
+            loaded = adapter.load("TF-1")
+            loaded["promotion"]["required"] = True
+            loaded["promotion"]["status"] = "pushed"
+            adapter.save_promotion_state(loaded)
+
+            self.assertEqual(mirrored_task.read_bytes(), original_mirror)
+            self.assertEqual(adapter.load("TF-1")["promotion"]["status"], "pushed")
+
     def test_task_support_sync_rejects_document_path_traversal(self) -> None:
         from sisyphus.infra.persistence.task_repository import sync_task_support_files
         from sisyphus.shared.paths import PathBoundaryError

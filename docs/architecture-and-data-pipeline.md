@@ -310,8 +310,10 @@ only a task ID and a JSON envelope path under that task's
 derives reviewer, findings, and pass/fail status from its contents, verifies the
 bounded no-follow Markdown report and both SHA-256 digests, and binds it to the
 exact Git HEAD plus a normalized task/spec/verification-policy scope digest.
-That digest includes the immutable integration-base commit, resolving the
-configured remote-tracking branch before a local branch of the same name.
+That digest includes the immutable integration-base commit and a digest of the
+configured remote URL. When a remote exists, the adapter performs a bounded,
+non-interactive live remote query and does not trust a stale tracking ref. A
+configured remote that cannot be queried blocks review evidence collection.
 Only the two review artifacts may be dirty when a review is recorded.
 
 Recording any new review atomically invalidates prior verification and marks
@@ -368,13 +370,18 @@ the review-evidence adapter used by execution. Receipt and changeset shapes are
 pure projections in `application/promotion_projection.py`.
 
 For ordinary tasks, durable phases are saved after commit, push, and PR creation.
+Those control-state saves do not mirror task support files into the worktree
+being promoted, so retry metadata cannot become a second source commit.
 For externally reviewed tasks, execution refuses to stage workspace changes and
 pushes the already-reviewed HEAD before PR creation. Merge recording writes the
 receipt and changeset, persists promotion state, optionally attempts close, then
 marks open stacked children for retarget and reverify.
 
 Promotion retries distinguish an old pushed phase from a commit created in the
-current attempt. A new commit is always pushed. After a durable push, the pull
+current attempt. A new commit is always pushed, and a commit completed before a
+failed state save is recovered from the actual workspace HEAD. Exact task-state
+and receipt changes are classified as control output rather than source work.
+After a durable push, the pull
 request adapter searches for an existing open PR for the exact head/base pair;
 this makes an ambiguous create response or a later task-save failure retryable
 without duplicate PRs. Durable open-PR state also regenerates a missing final
@@ -471,7 +478,7 @@ close, or promote canonical state.
 - task support-file mirrors reject unsafe document paths and use bounded,
   descriptor-relative no-follow reads plus atomic target replacement
 - Git patch application compares tree hashes before and after execution
-- review scope binds both HEAD and the remote-first integration-base commit
+- review scope binds HEAD, the live-remote integration-base commit, and remote identity
 - generated verification/promotion outputs cannot overlap task authority inputs
 - closeout treats unavailable Git status as a non-overridable blocking gate
 - artifact and evolution stores reject unsafe IDs and symlinked targets

@@ -93,6 +93,9 @@
 - 2026-07-20: Preserved latest-record gates across verification races, protected all authority/frozen/review paths, made Git inspection failure non-overridable, made commit/push and PR/receipt retries idempotent, and bound review scope to the remote-first base commit plus promotion target.
 - 2026-07-20: Passed 805 tests on each supported Python 3.11-3.14, 85.2% branch coverage, 186 focused review/security/architecture tests, lock validation, and standard/offline sdist and wheel builds after round-4 remediation.
 - 2026-07-20: Installed the built wheel into an isolated Python 3.11 environment and passed CLI/review help, all eight inbox compatibility methods, 26 MCP tools, and 32 MCP resources outside the source tree.
+- 2026-07-20: The fifth independent review rejected persisted-head comparison after mutation, reviewed repository redirection, stale remote-tracking base resolution, and promotion-state mirroring that could create a second retry commit.
+- 2026-07-20: Bound review scope to a bounded live-remote base query and remote URL digest, rejected reviewed repository overrides, recovered commit-save failures from workspace HEAD, and separated promotion control-state persistence from worktree support mirroring.
+- 2026-07-20: Added retry classification for exact task-state and receipt outputs; 813 full tests, 194 focused review/security/architecture tests, and 85.2% branch coverage pass after round-5 remediation.
 
 ## Notes
 
@@ -103,6 +106,6 @@
 
 ## Follow-ups
 
-- Commit the round-4 remediation and obtain an independent review against that immutable commit.
+- Commit the round-5 remediation and obtain an independent review against that immutable commit.
 - Record the resulting strict review envelope and run Sisyphus verification.
 - Push the branch, open the PR, wait for CI, merge, record the merge receipt, and revalidate the updated `main` worktree.

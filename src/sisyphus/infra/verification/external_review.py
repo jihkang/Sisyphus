@@ -17,7 +17,14 @@ from ...application.review_scope import (
     external_review_scope_digest,
     external_review_scope_document_paths,
 )
-from ...gitops import GitOperationError, current_head_sha, list_dirty_paths, revision_sha
+from ...gitops import (
+    GitOperationError,
+    current_head_sha,
+    list_dirty_paths,
+    remote_branch_sha,
+    remote_url,
+    revision_sha,
+)
 from ..workspace import SecureWorkspaceFiles
 from ..workspace.errors import WorkspaceFileSafetyError
 
@@ -63,12 +70,26 @@ class GitExternalReviewEvidenceAdapter:
                     document_digests[relative_path] = None
                 else:
                     document_digests[relative_path] = _digest(content.encode("utf-8"))
+            promotion = task.get("promotion")
+            promotion_mapping = promotion if isinstance(promotion, Mapping) else {}
+            remote_name = str(promotion_mapping.get("remote_name") or "origin").strip()
+            configured_remote_url = remote_url(root, remote_name)
             return ExternalReviewScopeEvidence(
                 current_head_sha=current_head_sha(root).lower(),
                 scope_digest=external_review_scope_digest(
                     task,
                     document_digests,
-                    base_revision_sha=_base_revision_sha(root, task),
+                    base_revision_sha=_base_revision_sha(
+                        root,
+                        task,
+                        remote_name=remote_name,
+                        remote_configured=configured_remote_url is not None,
+                    ),
+                    remote_url_digest=(
+                        _digest(configured_remote_url.encode("utf-8"))
+                        if configured_remote_url is not None
+                        else None
+                    ),
                 ),
                 document_digests=tuple(sorted(document_digests.items())),
             )
@@ -321,7 +342,13 @@ def _workspace_root(workspace: str) -> Path:
     return root
 
 
-def _base_revision_sha(root: Path, task: Mapping[str, object]) -> str:
+def _base_revision_sha(
+    root: Path,
+    task: Mapping[str, object],
+    *,
+    remote_name: str,
+    remote_configured: bool,
+) -> str:
     promotion = task.get("promotion")
     promotion_mapping = promotion if isinstance(promotion, Mapping) else {}
     base_branch = str(
@@ -333,12 +360,9 @@ def _base_revision_sha(root: Path, task: Mapping[str, object]) -> str:
     ).strip()
     if not base_branch:
         raise ValueError("external review scope requires a promotion base branch")
-    remote_name = str(promotion_mapping.get("remote_name") or "origin").strip()
-    candidates = (
-        f"refs/remotes/{remote_name}/{base_branch}",
-        f"refs/heads/{base_branch}",
-        base_branch,
-    )
+    if remote_configured:
+        return remote_branch_sha(root, remote_name, base_branch)
+    candidates = (f"refs/heads/{base_branch}", base_branch)
     for candidate in candidates:
         try:
             return revision_sha(root, candidate).lower()

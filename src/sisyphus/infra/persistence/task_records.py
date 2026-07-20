@@ -23,6 +23,12 @@ class FileTaskRecordAdapter:
         return task
 
     def save(self, task: TaskRecord) -> None:
+        self._save(task, mirror_support=True)
+
+    def save_promotion_state(self, task: TaskRecord) -> None:
+        self._save(task, mirror_support=False)
+
+    def _save(self, task: TaskRecord, *, mirror_support: bool) -> None:
         task_id = str(task.get("id") or "")
         if not task_id:
             raise ValueError("task record requires an id")
@@ -31,7 +37,11 @@ class FileTaskRecordAdapter:
             self._config.task_dir,
             task_id,
         ) / "task.json"
-        save_task_record(task_file=task_file, task=task)
+        save_task_record(
+            task_file=task_file,
+            task=task,
+            mirror_support=mirror_support,
+        )
 
     def update(self, task_id: str, mutator: TaskMutator) -> TaskRecord:
         task, _ = update_task_record(

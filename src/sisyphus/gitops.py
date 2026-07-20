@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+import re
 import subprocess
 
 from .shared.paths import contained_path
@@ -9,6 +10,10 @@ from .shared.paths import contained_path
 
 class GitOperationError(RuntimeError):
     """Raised when Sisyphus git workspace provisioning fails."""
+
+
+_GIT_OBJECT_ID = re.compile(r"^[0-9a-fA-F]{40,64}$")
+_REMOTE_QUERY_TIMEOUT_SECONDS = 30.0
 
 
 def repo_name(repo_root: Path) -> str:
@@ -136,6 +141,63 @@ def revision_sha(repo_root: Path, revision: str) -> str:
         error_prefix=f"failed to resolve revision `{normalized_revision}`",
     )
     return completed.stdout.strip()
+
+
+def remote_branch_sha(repo_root: Path, remote_name: str, branch: str) -> str:
+    normalized_remote = remote_name.strip()
+    normalized_branch = branch.strip()
+    if not normalized_remote:
+        raise GitOperationError("remote name must be non-empty")
+    if not normalized_branch:
+        raise GitOperationError("branch name must be non-empty")
+    expected_ref = f"refs/heads/{normalized_branch}"
+    env = dict(os.environ)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    try:
+        completed = subprocess.run(
+            [
+                "git",
+                "ls-remote",
+                "--exit-code",
+                "--heads",
+                "--",
+                normalized_remote,
+                expected_ref,
+            ],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_REMOTE_QUERY_TIMEOUT_SECONDS,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise GitOperationError(
+            f"failed to resolve remote branch `{normalized_remote}/{normalized_branch}`: timed out"
+        ) from exc
+    except OSError as exc:
+        raise GitOperationError(
+            f"failed to resolve remote branch `{normalized_remote}/{normalized_branch}`: {exc}"
+        ) from exc
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip() or "git ls-remote failed"
+        raise GitOperationError(
+            f"failed to resolve remote branch `{normalized_remote}/{normalized_branch}`: {detail}"
+        )
+    matches: list[str] = []
+    for line in completed.stdout.splitlines():
+        fields = line.split("\t", 1)
+        if len(fields) != 2 or fields[1] != expected_ref:
+            continue
+        object_id = fields[0].strip()
+        if not _GIT_OBJECT_ID.fullmatch(object_id):
+            raise GitOperationError("git ls-remote returned an invalid object ID")
+        matches.append(object_id.lower())
+    if len(matches) != 1:
+        raise GitOperationError(
+            f"remote branch `{normalized_remote}/{normalized_branch}` did not resolve uniquely"
+        )
+    return matches[0]
 
 
 def commit_staged_changes(repo_root: Path, message: str) -> str:

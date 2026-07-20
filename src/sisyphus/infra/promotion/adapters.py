@@ -10,7 +10,9 @@ from ...application.ports.promotion import PullRequestSpec
 from ...gitops import (
     GitOperationError,
     commit_staged_changes,
+    current_head_sha,
     has_staged_changes,
+    list_dirty_paths,
     push_branch,
     push_revision,
     remote_url,
@@ -40,6 +42,13 @@ class GitVersionControlAdapter:
 
     def commit(self, workspace: str, message: str) -> str:
         return commit_staged_changes(Path(workspace), message)
+
+    def current_head(self, workspace: str) -> str:
+        return current_head_sha(Path(workspace))
+
+    def dirty_paths(self, workspace: str) -> tuple[str, ...]:
+        changed, deleted = list_dirty_paths(Path(workspace))
+        return tuple(sorted({*changed, *deleted}))
 
     def push(self, workspace: str, remote: str, branch: str) -> None:
         push_branch(Path(workspace), remote, branch, set_upstream=True)

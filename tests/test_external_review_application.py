@@ -389,6 +389,81 @@ class GitExternalReviewEvidenceAdapterTests(unittest.TestCase):
             remote_moved = adapter.scope(str(root), task)
             self.assertNotEqual(remote_moved.scope_digest, original.scope_digest)
 
+    def test_scope_observes_live_remote_base_without_fetching_tracking_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            root = directory / "reviewer"
+            updater = directory / "updater"
+            remote = directory / "remote.git"
+            root.mkdir()
+            remote.mkdir()
+            task = _initialize_review_repo(root)
+            _git(remote, "init", "--bare")
+            _git(remote, "symbolic-ref", "HEAD", "refs/heads/main")
+            _git(root, "remote", "add", "origin", str(remote))
+            _git(root, "push", "origin", "main")
+            adapter = GitExternalReviewEvidenceAdapter()
+            original = adapter.scope(str(root), task)
+            stale_tracking_sha = _git(root, "rev-parse", "refs/remotes/origin/main")
+
+            _git(directory, "clone", str(remote), str(updater))
+            _git(updater, "config", "user.email", "test@example.com")
+            _git(updater, "config", "user.name", "Test")
+            (updater / "REMOTE.txt").write_text("advanced remotely\n", encoding="utf-8")
+            _git(updater, "add", "REMOTE.txt")
+            _git(updater, "commit", "-m", "advance remote base")
+            _git(updater, "push", "origin", "main")
+
+            moved = adapter.scope(str(root), task)
+
+            self.assertEqual(
+                _git(root, "rev-parse", "refs/remotes/origin/main"),
+                stale_tracking_sha,
+            )
+            self.assertNotEqual(moved.scope_digest, original.scope_digest)
+
+    def test_scope_binds_remote_url_even_when_base_sha_is_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            root = directory / "worktree"
+            first_remote = directory / "first.git"
+            second_remote = directory / "second.git"
+            root.mkdir()
+            first_remote.mkdir()
+            second_remote.mkdir()
+            task = _initialize_review_repo(root)
+            _git(first_remote, "init", "--bare")
+            _git(second_remote, "init", "--bare")
+            _git(root, "remote", "add", "origin", str(first_remote))
+            _git(root, "push", "origin", "main")
+            _git(root, "push", str(second_remote), "main")
+            adapter = GitExternalReviewEvidenceAdapter()
+            original = adapter.scope(str(root), task)
+
+            _git(root, "remote", "set-url", "origin", str(second_remote))
+            changed = adapter.scope(str(root), task)
+
+            self.assertNotEqual(changed.scope_digest, original.scope_digest)
+
+    def test_scope_fails_closed_when_configured_remote_cannot_be_queried(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            root = directory / "worktree"
+            remote = directory / "remote.git"
+            root.mkdir()
+            remote.mkdir()
+            task = _initialize_review_repo(root)
+            _git(remote, "init", "--bare")
+            _git(root, "remote", "add", "origin", str(remote))
+            _git(root, "push", "origin", "main")
+            _git(root, "remote", "set-url", "origin", str(directory / "missing.git"))
+
+            with self.assertRaisesRegex(
+                ExternalReviewEvidenceError,
+                "failed to resolve remote branch",
+            ):
+                GitExternalReviewEvidenceAdapter().scope(str(root), task)
+
     def test_rejects_arbitrary_repository_file_instead_of_review_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

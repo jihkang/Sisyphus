@@ -41,6 +41,9 @@ class MemoryTasks:
         self.records[task_id] = task
         self.saved.append(task_id)
 
+    def save_promotion_state(self, task: dict) -> None:
+        self.save(task)
+
     def update(self, task_id: str, mutator) -> dict:
         task = self.load(task_id)
         replacement = mutator(task)
@@ -69,9 +72,32 @@ class FailingPrStateTasks(MemoryTasks):
         super().save(deepcopy(task))
 
 
+class FailingCommitStateTasks(MemoryTasks):
+    def __init__(self, *tasks: dict) -> None:
+        super().__init__(*tasks)
+        self.fail_commit_state_save = True
+
+    def load(self, task_id: str) -> dict:
+        return deepcopy(super().load(task_id))
+
+    def save_promotion_state(self, task: dict) -> None:
+        promotion = task.get("promotion", {})
+        if self.fail_commit_state_save and promotion.get("status") == "committed":
+            self.fail_commit_state_save = False
+            raise RuntimeError("task repository unavailable after commit")
+        super().save_promotion_state(deepcopy(task))
+
+
 class VersionControlFake:
-    def __init__(self, *, staged_changes: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        staged_changes: bool = True,
+        current_head_sha: str = "workspace-head-sha",
+    ) -> None:
         self.staged_changes = staged_changes
+        self.current_head_sha = current_head_sha
+        self.dirty_path_values = ("src/change.py",) if staged_changes else ()
         self.calls: list[tuple[str, ...]] = []
 
     def workspace_exists(self, workspace: str) -> bool:
@@ -88,7 +114,17 @@ class VersionControlFake:
     def commit(self, workspace: str, message: str) -> str:
         self.calls.append(("commit", workspace, message))
         self.staged_changes = False
+        self.dirty_path_values = ()
+        self.current_head_sha = "commit-sha"
         return "commit-sha"
+
+    def current_head(self, workspace: str) -> str:
+        self.calls.append(("current_head", workspace))
+        return self.current_head_sha
+
+    def dirty_paths(self, workspace: str) -> tuple[str, ...]:
+        self.calls.append(("dirty_paths", workspace))
+        return self.dirty_path_values
 
     def push(self, workspace: str, remote: str, branch: str) -> None:
         self.calls.append(("push", workspace, remote, branch))
@@ -296,6 +332,30 @@ class PromotionApplicationTests(unittest.TestCase):
         self.assertNotIn("commit", [call[0] for call in dependencies["version_control"].calls])
         self.assertEqual(result.status, "pr_open")
 
+    def test_retry_does_not_commit_control_state_or_receipt_changes(self) -> None:
+        task = _task()
+        task["task_dir"] = ".planning/tasks/TF-1"
+        task["promotion"].update(
+            {
+                "status": "pushed",
+                "head_sha": "existing-sha",
+                "pushed_at": "2026-07-19T11:00:00Z",
+            }
+        )
+        service, dependencies = _service(task, staged_changes=True)
+        dependencies["version_control"].dirty_path_values = (
+            ".planning/tasks/TF-1/task.json",
+            ".planning/tasks/TF-1/artifacts/promotion/open_pr_receipt.json",
+        )
+
+        result = service.execute(ExecutePromotionCommand(task_id="TF-1"))
+
+        self.assertEqual(result.commit_sha, "existing-sha")
+        calls = [call[0] for call in dependencies["version_control"].calls]
+        self.assertNotIn("stage", calls)
+        self.assertNotIn("commit", calls)
+        self.assertNotIn("push", calls)
+
     def test_new_commit_from_pushed_state_is_pushed_before_pr_reuse(self) -> None:
         task = _task()
         task["promotion"].update(
@@ -350,6 +410,33 @@ class PromotionApplicationTests(unittest.TestCase):
         self.assertEqual(result.status, "pr_open")
         self.assertEqual(len(dependencies["pull_requests"].specs), 1)
         self.assertEqual(dependencies["artifacts"].json_writes[-1][2]["status"], "pr_open")
+        calls = [call[0] for call in dependencies["version_control"].calls]
+        self.assertEqual(calls.count("commit"), 1)
+        self.assertEqual(calls.count("push"), 1)
+
+    def test_retry_recovers_commit_when_commit_state_save_failed(self) -> None:
+        task = _task()
+        task["promotion"].update(
+            {
+                "status": "pushed",
+                "head_sha": "old-sha",
+                "pushed_at": "2026-07-19T11:00:00Z",
+            }
+        )
+        service, dependencies = _service(
+            task,
+            fail_commit_state_save=True,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "after commit"):
+            service.execute(ExecutePromotionCommand(task_id="TF-1"))
+        dependencies["version_control"].staged_changes = False
+        result = service.execute(ExecutePromotionCommand(task_id="TF-1"))
+
+        self.assertEqual(result.commit_sha, "commit-sha")
+        calls = [call[0] for call in dependencies["version_control"].calls]
+        self.assertEqual(calls.count("commit"), 1)
+        self.assertEqual(calls.count("push"), 1)
 
     def test_reviewed_promotion_pushes_exact_reviewed_head_without_staging(self) -> None:
         task = _reviewed_task()
@@ -428,6 +515,44 @@ class PromotionApplicationTests(unittest.TestCase):
         persisted = dependencies["tasks"].load("TF-1")
         self.assertEqual(persisted["verify_status"], "not_run")
         self.assertTrue(persisted["promotion"]["reverify_required"])
+
+    def test_reviewed_promotion_rejects_unreviewed_repository_override(self) -> None:
+        service, dependencies = _service(_reviewed_task())
+
+        with self.assertRaisesRegex(ValueError, "repository differs"):
+            service.execute(
+                ExecutePromotionCommand(
+                    task_id="TF-1",
+                    repo_full_name="other-owner/other-repo",
+                )
+            )
+
+        persisted = dependencies["tasks"].load("TF-1")
+        self.assertEqual(persisted["verify_status"], "not_run")
+        self.assertTrue(persisted["promotion"]["reverify_required"])
+
+    def test_reviewed_promotion_pushes_new_reviewed_sha_from_old_pushed_state(self) -> None:
+        task = _reviewed_task()
+        task["promotion"].update(
+            {
+                "status": "pushed",
+                "head_sha": "old-reviewed-sha",
+                "pushed_at": "2026-07-19T11:00:00Z",
+            }
+        )
+        service, dependencies = _service(task)
+
+        result = service.execute(ExecutePromotionCommand(task_id="TF-1"))
+
+        self.assertEqual(result.commit_sha, "a" * 40)
+        push_calls = [
+            call for call in dependencies["version_control"].calls
+            if call[0] == "push_revision"
+        ]
+        self.assertEqual(
+            push_calls,
+            [("push_revision", "/workspace", "origin", "a" * 40, "codex/clean")],
+        )
 
     def test_reviewed_promotion_resumes_after_pr_failure_without_repush(self) -> None:
         task = _reviewed_task()
@@ -550,15 +675,23 @@ def _service(
     ambiguous_pr_failures: int = 0,
     artifact_fail_status: str | None = None,
     fail_pr_state_save: bool = False,
+    fail_commit_state_save: bool = False,
 ) -> tuple[PromotionService, dict[str, object]]:
-    tasks = (
-        FailingPrStateTasks(*tasks)
-        if fail_pr_state_save
-        else MemoryTasks(*tasks)
+    initial_head_sha = str(
+        tasks[0].get("promotion", {}).get("head_sha") or "workspace-head-sha"
     )
+    if fail_commit_state_save:
+        tasks = FailingCommitStateTasks(*tasks)
+    elif fail_pr_state_save:
+        tasks = FailingPrStateTasks(*tasks)
+    else:
+        tasks = MemoryTasks(*tasks)
     dependencies = {
         "tasks": tasks,
-        "version_control": VersionControlFake(staged_changes=staged_changes),
+        "version_control": VersionControlFake(
+            staged_changes=staged_changes,
+            current_head_sha=initial_head_sha,
+        ),
         "pull_requests": PullRequestsFake(
             failures=pr_failures,
             ambiguous_failures=ambiguous_pr_failures,
