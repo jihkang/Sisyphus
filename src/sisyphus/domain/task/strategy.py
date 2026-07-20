@@ -50,12 +50,18 @@ _EXTERNAL_REVIEW_EVIDENCE_FIELDS = (
     "reviewer",
     "reviewed_at",
     "reviewed_head_sha",
+    "scope_digest",
+    "envelope_path",
+    "envelope_digest",
+    "envelope_size_bytes",
     "report_path",
     "report_digest",
     "report_size_bytes",
     "finding_count",
     "blocking_finding_count",
+    "findings",
     "summary",
+    "verification_binding",
 )
 
 

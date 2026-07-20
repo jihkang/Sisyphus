@@ -13,6 +13,7 @@ from ..ports.workflow import (
     WorkflowEvent,
 )
 from ..results.closeout import CloseOutcome
+from ..review_scope import external_review_binding_is_current
 
 
 @dataclass(slots=True)
@@ -38,6 +39,15 @@ class CloseoutService:
         )
         gates.extend(lifecycle_gates)
         gates.extend(self.evidence.collect_gates(task_id, task))
+        if not external_review_binding_is_current(task):
+            gates.append(
+                make_gate_record(
+                    "EXTERNAL_LLM_REVIEW_STALE",
+                    "task verification is not bound to the current external review",
+                    "close",
+                    created_at=self.clock.now(),
+                )
+            )
 
         dirty = self.worktree.is_dirty(task)
         if dirty and not allow_dirty:

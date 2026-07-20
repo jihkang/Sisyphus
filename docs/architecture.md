@@ -153,10 +153,13 @@ application abstractions and concrete infrastructure. For example:
   obligation, provider, verification, closeout, event, and intervention adapters.
 - `composition/verification.py` wires command execution, documents, spec
   validation, conformance, evidence, events, and clock.
-- `composition/external_review.py` wires task persistence to bounded review
-  report inspection, Git HEAD binding, digesting, and time.
+- `composition/external_review.py` wires task persistence to strict review
+  envelope/report inspection, Git HEAD and frozen-scope binding, digesting, and
+  time. Review metadata is content-derived; recording invalidates older verify
+  state, and successful verification stores an exact review binding.
 - `composition/promotion.py` wires Git, GitHub CLI, task records, artifacts,
-  closeout, interventions, and time.
+  external-review evidence, closeout, interventions, and time. Review-gated
+  promotion pushes the inspected reviewed commit without staging later changes.
 - `composition/repository_requests.py` wires inbox queue/processing to workflow
   advancement and task queries.
 
@@ -241,6 +244,9 @@ The remaining implementation and release work is tracked in
 [clean-architecture-implementation-debt.md](./clean-architecture-implementation-debt.md).
 The migration review is recorded in
 [clean-architecture-final-review-2026-07-20.md](./reviews/clean-architecture-final-review-2026-07-20.md).
+The immutable evidence schema, scope digest, and verification binding for
+required external reviews are defined in
+[external-review-evidence.md](./external-review-evidence.md).
 
 ## Scope Boundary
 

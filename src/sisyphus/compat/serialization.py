@@ -4,7 +4,7 @@ from collections.abc import Callable, Mapping
 
 
 MappingEncoder = Callable[[object], dict[str, object]]
-MappingDecoder = Callable[[Mapping[str, object]], object]
+MappingDecoder = Callable[..., object]
 JsonEncoder = Callable[[object], str]
 
 
@@ -31,8 +31,10 @@ def install_serialization_compat(
         def from_dict(
             _model: type[object],
             raw: Mapping[str, object],
+            *args: object,
+            **kwargs: object,
         ) -> object:
-            return decode_mapping(raw)
+            return decode_mapping(raw, *args, **kwargs)
 
         from_dict.__name__ = "from_dict"
         from_dict.__qualname__ = f"{model.__qualname__}.from_dict"

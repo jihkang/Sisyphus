@@ -10,6 +10,9 @@ class ExternalReviewRecordResult:
     provider: str
     reviewer: str
     reviewed_head_sha: str
+    scope_digest: str
+    envelope_path: str
+    envelope_digest: str
     report_path: str
     report_digest: str
     finding_count: int
@@ -17,4 +20,12 @@ class ExternalReviewRecordResult:
     completed_at: str
 
 
-__all__ = ["ExternalReviewRecordResult"]
+@dataclass(frozen=True, slots=True)
+class ExternalReviewScopeResult:
+    task_id: str
+    current_head_sha: str
+    scope_digest: str
+    document_digests: tuple[tuple[str, str | None], ...]
+
+
+__all__ = ["ExternalReviewRecordResult", "ExternalReviewScopeResult"]

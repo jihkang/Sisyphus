@@ -40,6 +40,8 @@ from .review import (
     ExternalReviewEvidence,
     ExternalReviewEvidenceError,
     ExternalReviewEvidencePort,
+    ExternalReviewFinding,
+    ExternalReviewScopeEvidence,
 )
 from .search import ContextPackStorePort, SearchIndexPort
 from .task_creation import (
@@ -89,6 +91,8 @@ __all__ = [
     "ExternalReviewEvidence",
     "ExternalReviewEvidenceError",
     "ExternalReviewEvidencePort",
+    "ExternalReviewFinding",
+    "ExternalReviewScopeEvidence",
     "EpisodeTracePort",
     "EvolutionEventPort",
     "EvolutionFollowupRequestPort",

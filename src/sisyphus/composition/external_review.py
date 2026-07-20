@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..application.commands.review import RecordExternalReviewCommand
-from ..application.results.review import ExternalReviewRecordResult
+from ..application.results.review import ExternalReviewRecordResult, ExternalReviewScopeResult
 from ..application.use_cases.external_review import ExternalReviewService
 from ..infra.clock import SystemClock
 from ..infra.config.loader import SisyphusConfig
@@ -27,26 +27,27 @@ def record_external_review(
     repo_root: Path,
     config: SisyphusConfig,
     task_id: str,
-    reviewer: str,
-    verdict: str,
-    report_path: str,
-    reviewed_head_sha: str,
-    finding_count: int = 0,
-    blocking_finding_count: int = 0,
-    summary: str | None = None,
+    envelope_path: str,
 ) -> ExternalReviewRecordResult:
     return build_external_review_service(repo_root, config).record(
         RecordExternalReviewCommand(
             task_id=task_id,
-            reviewer=reviewer,
-            verdict=verdict,
-            report_path=report_path,
-            reviewed_head_sha=reviewed_head_sha,
-            finding_count=finding_count,
-            blocking_finding_count=blocking_finding_count,
-            summary=summary,
+            envelope_path=envelope_path,
         )
     )
 
 
-__all__ = ["build_external_review_service", "record_external_review"]
+def external_review_scope(
+    *,
+    repo_root: Path,
+    config: SisyphusConfig,
+    task_id: str,
+) -> ExternalReviewScopeResult:
+    return build_external_review_service(repo_root, config).scope(task_id)
+
+
+__all__ = [
+    "build_external_review_service",
+    "external_review_scope",
+    "record_external_review",
+]

@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import PurePosixPath
-import re
 
 from ..commands.review import RecordExternalReviewCommand
+from ..planning_records import dedupe_gate_records, make_gate_record
 from ..ports.clock import ClockPort
 from ..ports.review import ExternalReviewEvidencePort
 from ..ports.workflow import TaskRecordPort
-from ..results.review import ExternalReviewRecordResult
+from ..results.review import ExternalReviewRecordResult, ExternalReviewScopeResult
+from ..review_scope import external_review_scope_digest
 
 
-_GIT_SHA_PATTERN = re.compile(r"^[0-9a-fA-F]{40,64}$")
 _REVIEW_POLICY_FIELDS = ("required", "provider", "purpose", "trigger")
+_REVIEW_GATE_CODES = {
+    "EXTERNAL_LLM_REVIEW_REQUIRED",
+    "EXTERNAL_LLM_REVIEW_STALE",
+    "VERIFY_REQUIRED",
+}
 
 
 @dataclass(slots=True)
@@ -21,37 +25,47 @@ class ExternalReviewService:
     evidence: ExternalReviewEvidencePort
     clock: ClockPort
 
+    def scope(self, task_id: str) -> ExternalReviewScopeResult:
+        normalized_task_id = _required_text(task_id, field="task_id")
+        task = self.tasks.load(normalized_task_id)
+        _review, _provider, workspace = _review_policy(normalized_task_id, task)
+        inspected = self.evidence.scope(workspace, task)
+        return ExternalReviewScopeResult(
+            task_id=normalized_task_id,
+            current_head_sha=inspected.current_head_sha,
+            scope_digest=inspected.scope_digest,
+            document_digests=inspected.document_digests,
+        )
+
     def record(
         self,
         command: RecordExternalReviewCommand,
     ) -> ExternalReviewRecordResult:
         task_id = _required_text(command.task_id, field="task_id")
-        reviewer = _required_text(command.reviewer, field="reviewer")
-        verdict = _normalize_verdict(command.verdict)
-        report_path = _normalize_report_path(command.report_path)
-        reviewed_head_sha = _normalize_head_sha(command.reviewed_head_sha)
-        finding_count = _non_negative(command.finding_count, field="finding_count")
-        blocking_finding_count = _non_negative(
-            command.blocking_finding_count,
-            field="blocking_finding_count",
-        )
-        if blocking_finding_count > finding_count:
-            raise ValueError("blocking_finding_count cannot exceed finding_count")
-        if verdict == "pass" and blocking_finding_count:
-            raise ValueError("a passing external review cannot contain blocking findings")
-
+        envelope_path = _required_text(command.envelope_path, field="envelope_path")
         task = self.tasks.load(task_id)
         review, provider, workspace = _review_policy(task_id, task)
         policy_fingerprint = tuple(review.get(field) for field in _REVIEW_POLICY_FIELDS)
 
-        inspected = self.evidence.inspect(workspace, report_path)
-        if inspected.current_head_sha.lower() != reviewed_head_sha.lower():
+        inspected = self.evidence.inspect(workspace, envelope_path, task)
+        if inspected.provider != provider:
+            raise ValueError(
+                "external review provider does not match the frozen review policy: "
+                f"{inspected.provider!r} != {provider!r}"
+            )
+        if inspected.reviewed_head_sha != inspected.current_head_sha:
             raise ValueError(
                 "external review is stale: reviewed head "
-                f"{reviewed_head_sha} does not match current HEAD {inspected.current_head_sha}"
+                f"{inspected.reviewed_head_sha} does not match current HEAD "
+                f"{inspected.current_head_sha}"
+            )
+        if inspected.scope_digest != inspected.current_scope_digest:
+            raise ValueError(
+                "external review is stale: envelope scope does not match the current frozen task scope"
             )
         unrelated_dirty_paths = sorted(
-            set(inspected.dirty_paths) - {inspected.relative_path}
+            set(inspected.dirty_paths)
+            - {inspected.envelope_path, inspected.report_path}
         )
         if unrelated_dirty_paths:
             raise ValueError(
@@ -60,19 +74,33 @@ class ExternalReviewService:
             )
 
         completed_at = self.clock.now()
-        status = "passed" if verdict == "pass" else "failed"
+        status = inspected.status
         review_record = {
             "status": status,
-            "provider": provider,
-            "reviewer": reviewer,
+            "provider": inspected.provider,
+            "reviewer": inspected.reviewer,
             "reviewed_at": completed_at,
             "reviewed_head_sha": inspected.current_head_sha,
-            "report_path": inspected.relative_path,
-            "report_digest": inspected.digest,
-            "report_size_bytes": inspected.size_bytes,
-            "finding_count": finding_count,
-            "blocking_finding_count": blocking_finding_count,
-            "summary": _optional_text(command.summary),
+            "scope_digest": inspected.scope_digest,
+            "envelope_path": inspected.envelope_path,
+            "envelope_digest": inspected.envelope_digest,
+            "envelope_size_bytes": inspected.envelope_size_bytes,
+            "report_path": inspected.report_path,
+            "report_digest": inspected.report_digest,
+            "report_size_bytes": inspected.report_size_bytes,
+            "finding_count": inspected.finding_count,
+            "blocking_finding_count": inspected.blocking_finding_count,
+            "findings": [
+                {
+                    "id": finding.finding_id,
+                    "severity": finding.severity,
+                    "title": finding.title,
+                    "detail": finding.detail,
+                    "blocking": finding.blocking,
+                }
+                for finding in inspected.findings
+            ],
+            "summary": inspected.summary,
         }
 
         def persist(latest: dict) -> None:
@@ -80,30 +108,87 @@ class ExternalReviewService:
             latest_policy = tuple(
                 latest_review.get(field) for field in _REVIEW_POLICY_FIELDS
             )
-            if latest_policy != policy_fingerprint or latest_workspace != workspace:
-                raise ValueError("external review policy or worktree changed during recording")
+            latest_scope_digest = external_review_scope_digest(
+                latest,
+                dict(inspected.document_digests),
+            )
+            if (
+                latest_policy != policy_fingerprint
+                or latest_workspace != workspace
+                or latest_scope_digest != inspected.current_scope_digest
+            ):
+                raise ValueError(
+                    "external review policy, scope, or worktree changed during recording"
+                )
+            confirmed = self.evidence.inspect(
+                latest_workspace,
+                inspected.envelope_path,
+                latest,
+            )
+            if confirmed != inspected:
+                raise ValueError(
+                    "external review evidence or workspace changed during recording"
+                )
+            latest_review.pop("verification_binding", None)
             latest_review.update(review_record)
+            _invalidate_verification(latest, status=status, created_at=completed_at)
 
         self.tasks.update(task_id, persist)
         return ExternalReviewRecordResult(
             task_id=task_id,
             status=status,
-            provider=provider,
-            reviewer=reviewer,
+            provider=inspected.provider,
+            reviewer=inspected.reviewer,
             reviewed_head_sha=inspected.current_head_sha,
-            report_path=inspected.relative_path,
-            report_digest=inspected.digest,
-            finding_count=finding_count,
-            blocking_finding_count=blocking_finding_count,
+            scope_digest=inspected.scope_digest,
+            envelope_path=inspected.envelope_path,
+            envelope_digest=inspected.envelope_digest,
+            report_path=inspected.report_path,
+            report_digest=inspected.report_digest,
+            finding_count=inspected.finding_count,
+            blocking_finding_count=inspected.blocking_finding_count,
             completed_at=completed_at,
         )
 
 
-def _normalize_verdict(value: object) -> str:
-    verdict = _required_text(value, field="verdict").lower()
-    if verdict not in {"pass", "fail"}:
-        raise ValueError("verdict must be `pass` or `fail`")
-    return verdict
+def _invalidate_verification(task: dict, *, status: str, created_at: str) -> None:
+    task["verify_status"] = "not_run"
+    task["last_verified_at"] = None
+    task["last_verify_results"] = []
+    task["status"] = "blocked"
+    task["stage"] = "audit"
+    task["workflow_phase"] = "execution"
+    task["updated_at"] = created_at
+
+    promotion = task.get("promotion")
+    if isinstance(promotion, dict) and promotion.get("required"):
+        promotion["reverify_required"] = True
+
+    gates = [
+        gate
+        for gate in task.get("gates", [])
+        if gate.get("code") not in _REVIEW_GATE_CODES
+        and gate.get("source") != "review"
+    ]
+    if status == "passed":
+        gates.append(
+            make_gate_record(
+                "VERIFY_REQUIRED",
+                "task must be verified against the recorded external review",
+                "review",
+                created_at=created_at,
+            )
+        )
+    else:
+        gates.append(
+            make_gate_record(
+                "EXTERNAL_LLM_REVIEW_REQUIRED",
+                "external LLM review contains blocking findings",
+                "review",
+                created_at=created_at,
+            )
+        )
+    task["gates"] = dedupe_gate_records(gates)
 
 
 def _review_policy(task_id: str, task: dict) -> tuple[dict, str, str]:
@@ -120,45 +205,11 @@ def _review_policy(task_id: str, task: dict) -> tuple[dict, str, str]:
     return review, provider, workspace
 
 
-def _normalize_report_path(value: object) -> str:
-    raw = _required_text(value, field="report_path")
-    if "\\" in raw or "\x00" in raw:
-        raise ValueError("report_path must be a relative POSIX path")
-    path = PurePosixPath(raw)
-    if path.is_absolute() or path == PurePosixPath(".") or ".." in path.parts:
-        raise ValueError("report_path must be a contained relative path")
-    normalized = path.as_posix()
-    if normalized != raw or any(part in {"", "."} for part in path.parts):
-        raise ValueError("report_path must be a normalized relative POSIX path")
-    return normalized
-
-
-def _normalize_head_sha(value: object) -> str:
-    head_sha = _required_text(value, field="reviewed_head_sha")
-    if not _GIT_SHA_PATTERN.fullmatch(head_sha):
-        raise ValueError(
-            "reviewed_head_sha must be a 40-64 character hexadecimal Git object ID"
-        )
-    return head_sha.lower()
-
-
 def _required_text(value: object, *, field: str) -> str:
     text = str(value or "").strip()
     if not text:
         raise ValueError(f"{field} must be non-empty")
     return text
-
-
-def _optional_text(value: object) -> str | None:
-    text = str(value or "").strip()
-    return text or None
-
-
-def _non_negative(value: int, *, field: str) -> int:
-    normalized = int(value)
-    if normalized < 0:
-        raise ValueError(f"{field} must be non-negative")
-    return normalized
 
 
 __all__ = ["ExternalReviewService"]

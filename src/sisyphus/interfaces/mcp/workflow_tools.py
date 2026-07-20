@@ -17,6 +17,7 @@ from ...composition.planning import (
     validate_task_spec,
 )
 from ...shared.coerce import optional_str
+from .operator_auth import require_operator_capability
 from ..agent_queries import list_agents
 
 
@@ -178,17 +179,12 @@ def _record_external_review(
     record_review=record_external_review,
     **_: object,
 ) -> dict[str, object]:
+    require_operator_capability(args.get("operator_capability"))
     outcome = record_review(
         repo_root=repo_root,
         config=config,
         task_id=str(args["task_id"]),
-        reviewer=str(args["reviewer"]),
-        verdict=str(args["verdict"]),
-        report_path=str(args["report_path"]),
-        reviewed_head_sha=str(args["reviewed_head_sha"]),
-        finding_count=int(args.get("finding_count", 0)),
-        blocking_finding_count=int(args.get("blocking_finding_count", 0)),
-        summary=optional_str(args.get("summary")),
+        envelope_path=str(args["envelope_path"]),
     )
     return {
         "task_id": outcome.task_id,
@@ -196,6 +192,9 @@ def _record_external_review(
         "provider": outcome.provider,
         "reviewer": outcome.reviewer,
         "reviewed_head_sha": outcome.reviewed_head_sha,
+        "scope_digest": outcome.scope_digest,
+        "envelope_path": outcome.envelope_path,
+        "envelope_digest": outcome.envelope_digest,
         "report_path": outcome.report_path,
         "report_digest": outcome.report_digest,
         "finding_count": outcome.finding_count,

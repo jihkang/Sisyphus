@@ -12,6 +12,7 @@ import sisyphus.dsl as dsl
 import sisyphus.episode_trace as episode_trace
 import sisyphus.eval.loop as eval_loop
 import sisyphus.events as events
+import sisyphus.inbox as inbox
 import sisyphus.retrieval as retrieval
 import sisyphus.search_document as search_document
 import sisyphus.search_index as search_index
@@ -52,6 +53,10 @@ class PublicSerializationCompatibilityTests(unittest.TestCase):
             episode_trace.EpisodeStep: {"to_dict"},
             eval_loop.EvalLoopResult: {"to_dict"},
             events.EventEnvelope: {"to_dict", "to_json"},
+            inbox.ChangedFile: {"from_dict", "to_dict"},
+            inbox.ConversationPayload: {"from_dict", "to_dict"},
+            inbox.PullRequestMergedPayload: {"from_dict", "to_dict"},
+            inbox.InboxEvent: {"from_dict", "to_dict"},
             provider_benchmark.LocalAgentBenchmarkCaseResult: {"to_dict"},
             provider_benchmark.LocalAgentBenchmarkRunResult: {"to_dict"},
             local_agent.LocalAgentRunResult: {"to_dict"},
@@ -77,6 +82,20 @@ class PublicSerializationCompatibilityTests(unittest.TestCase):
 
         self.assertEqual(artifacts.ArtifactRef.from_dict(reference.to_dict()), reference)
         self.assertEqual(dsl.RefSelector.from_dict(selector.to_dict()), selector)
+
+    def test_inbox_methods_round_trip_through_strict_boundary_codecs(self) -> None:
+        changed_file = inbox.ChangedFile.from_dict(
+            {"path": "src/example.py", "status": "modified"},
+            field="changed_files[0]",
+        )
+
+        self.assertEqual(
+            changed_file.to_dict(),
+            {
+                "path": "src/example.py",
+                "status": "modified",
+            },
+        )
 
     def test_event_json_and_provider_result_shapes_match_legacy_contracts(self) -> None:
         envelope = events.new_event_envelope(

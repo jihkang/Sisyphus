@@ -9,8 +9,41 @@
 
 ## Findings
 
-No unresolved High or Medium implementation defect remains after the review
-fixes below.
+No known unresolved High or Medium implementation defect remains in the current
+working tree. The second independent challenge findings described below are
+implemented locally but still require re-review against an immutable commit.
+
+### Independent challenge round 2: trust-boundary findings
+
+The independent reviewer rejected commit `bf79210e` for six additional gaps:
+
+1. external review verdict and reviewer metadata were caller-authored rather
+   than derived from validated evidence, and MCP had no operator capability
+2. the four inbox models had lost their public legacy serialization methods
+3. recording a new or failed review did not invalidate an already-passed verify
+4. Git dirty-path inspection returned an empty set when Git failed
+5. verification exempted every mutation below the task directory
+6. concurrent Evolution runs could race while creating shared parent directories
+
+Current remediation:
+
+- strict review envelopes under task-local review artifacts derive findings and
+  status, bind report/envelope digests to HEAD and normalized frozen scope, and
+  require a redacted MCP operator capability
+- any review change atomically invalidates verify and marks promotion for
+  re-verification; verify checks evidence before and after commands and stores an
+  exact binding used by closeout and promotion
+- the outer inbox facade restores all eight public methods through the existing
+  strict parser and mapper without adding methods to canonical domain models
+- `git status --porcelain=v1 -z` is parsed as bytes and any Git failure raises
+  `GitOperationError`
+- only the exact review files and service-owned `task.json` mutation are accepted
+  during verification; scope changes and other task-directory files are stale
+- shared Evolution parent directories use verified `exist_ok` semantics while
+  final run IDs remain exclusive
+- promotion re-inspects the exact review and permits only named verification
+  outputs; review-gated promotion pushes the reviewed commit and never stages
+  post-review implementation changes
 
 ### Resolved High: support-file mirror could cross its boundary
 
@@ -115,15 +148,16 @@ The final local evidence after review fixes is:
 | Gate | Result |
 | --- | --- |
 | lock consistency | `uv lock --check` passed |
-| architecture/interface/hygiene target | 81 tests passed |
+| review/security/architecture target | 142 tests passed |
 | persistence/path/inbox/lifecycle/spec/workflow target | 71 tests passed before the focused security additions |
 | Python/MCP/Evolution target | 238 tests passed |
-| final full suite | 735 tests passed |
-| branch coverage | 85.2%, threshold 80% |
+| supported Python matrix | 775 tests passed on each of Python 3.11, 3.12, 3.13, and 3.14 |
+| final full suite | 775 tests passed after round-2 remediation and promotion hardening |
+| branch coverage | 85.1%, threshold 80% |
 | standard build | sdist and wheel passed |
 | offline build | cached sdist and wheel build passed |
-| installed wheel | Python 3.14 import, CLI help, 25 MCP tools, and 32 MCP resources passed outside the source tree |
-| diff integrity | `git diff --check` passed before review documentation |
+| installed wheel | Python 3.11 import, all inbox compatibility methods, CLI/review help, 26 MCP tools, and 32 MCP resources passed outside the source tree |
+| diff integrity | `git diff --check` passed after review documentation |
 
 The suite covers public import identity, CLI dispatch, MCP schemas/resources,
 legacy mapping, unknown-field preservation, lifecycle gates, side-effect order,
@@ -139,8 +173,8 @@ The implementation debt ledger is authoritative. At this review point:
   retirement conditions
 - mutable-record and Evolution-coordinator watch points are future migration
   triggers, not additional authority exceptions
-- independent review, Sisyphus verify, GitHub CI, PR merge, merge receipt, and
-  merged-main revalidation remain release gates
+- immutable-commit independent re-review, Sisyphus verify, GitHub CI, PR merge,
+  merge receipt, and merged-main revalidation remain release gates
 
 The separate Sisyphus Harness work for Docker service separation, Hermes agent
 evolution, GEPA, and a real 30.5B benchmark remains outside this repository task.

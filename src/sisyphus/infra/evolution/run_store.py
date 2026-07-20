@@ -195,7 +195,7 @@ class RepositoryEvolutionRunStore:
                     if not create:
                         raise
                     relative = "/".join(_RUNS_ROOT_PARTS[: index + 1])
-                    _mkdir_at(parent_fd, part, relative=relative)
+                    _mkdir_at(parent_fd, part, relative=relative, exist_ok=True)
                     os.fsync(parent_fd)
                     child_fd = os.open(part, _DIRECTORY_FLAGS, dir_fd=parent_fd)
                 except OSError as exc:
@@ -236,7 +236,13 @@ def _secure_directory_operations_supported() -> bool:
     ) and os.stat in os.supports_follow_symlinks
 
 
-def _mkdir_at(parent_fd: int, name: str, *, relative: str) -> None:
+def _mkdir_at(
+    parent_fd: int,
+    name: str,
+    *,
+    relative: str,
+    exist_ok: bool = False,
+) -> None:
     try:
         os.mkdir(name, 0o755, dir_fd=parent_fd)
     except FileExistsError:
@@ -247,6 +253,8 @@ def _mkdir_at(parent_fd: int, name: str, *, relative: str) -> None:
             raise
         if stat.S_ISLNK(metadata.st_mode):
             raise PathBoundaryError(f"evolution storage path is a symlink: {relative}")
+        if exist_ok and stat.S_ISDIR(metadata.st_mode):
+            return
         raise
 
 

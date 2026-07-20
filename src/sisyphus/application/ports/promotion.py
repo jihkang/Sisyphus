@@ -21,6 +21,14 @@ class VersionControlPort(Protocol):
 
     def push(self, workspace: str, remote: str, branch: str) -> None: ...
 
+    def push_revision(
+        self,
+        workspace: str,
+        remote: str,
+        revision: str,
+        branch: str,
+    ) -> None: ...
+
     def remote_url(self, workspace: str, remote: str) -> str | None: ...
 
 

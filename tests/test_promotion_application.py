@@ -16,6 +16,7 @@ from sisyphus.application.commands.promotion import (  # noqa: E402
     ExecutePromotionCommand,
     RecordMergedPullRequestCommand,
 )
+from sisyphus.application.ports.review import ExternalReviewEvidence  # noqa: E402
 from sisyphus.application.results.artifacts import ArtifactRef  # noqa: E402
 from sisyphus.application.use_cases.promotion import PromotionService  # noqa: E402
 from sisyphus.domain.lifecycle import ConformanceState  # noqa: E402
@@ -71,6 +72,15 @@ class VersionControlFake:
     def push(self, workspace: str, remote: str, branch: str) -> None:
         self.calls.append(("push", workspace, remote, branch))
 
+    def push_revision(
+        self,
+        workspace: str,
+        remote: str,
+        revision: str,
+        branch: str,
+    ) -> None:
+        self.calls.append(("push_revision", workspace, remote, revision, branch))
+
     def remote_url(self, workspace: str, remote: str) -> str | None:
         self.calls.append(("remote_url", workspace, remote))
         return "git@github.com:jihkang/Sisyphus.git"
@@ -102,6 +112,42 @@ class ArtifactsFake:
 class ConformanceFake:
     def snapshot(self, task: dict) -> ConformanceState:
         return ConformanceState()
+
+
+class ExternalReviewsFake:
+    def __init__(self, *, dirty_paths: tuple[str, ...] = ()) -> None:
+        self.dirty_paths = dirty_paths
+        self.inspect_calls = 0
+
+    def scope(self, workspace: str, task: dict):
+        raise AssertionError("promotion must inspect the recorded envelope")
+
+    def inspect(
+        self,
+        workspace: str,
+        envelope_path: str,
+        task: dict,
+    ) -> ExternalReviewEvidence:
+        self.inspect_calls += 1
+        review = task["test_strategy"]["external_llm"]
+        return ExternalReviewEvidence(
+            envelope_path=envelope_path,
+            envelope_digest=review["envelope_digest"],
+            envelope_size_bytes=256,
+            provider=review["provider"],
+            reviewer=review["reviewer"],
+            reviewed_head_sha=review["reviewed_head_sha"],
+            scope_digest=review["scope_digest"],
+            report_path=review["report_path"],
+            report_digest=review["report_digest"],
+            report_size_bytes=128,
+            summary="No blocking findings.",
+            findings=(),
+            current_head_sha=review["reviewed_head_sha"],
+            current_scope_digest=review["scope_digest"],
+            document_digests=(),
+            dirty_paths=self.dirty_paths,
+        )
 
 
 class CloseoutFake:
@@ -172,6 +218,20 @@ class PromotionApplicationTests(unittest.TestCase):
         receipts = dependencies["artifacts"].json_writes
         self.assertEqual([entry[2]["status"] for entry in receipts], ["committed", "pushed", "pr_open"])
 
+    def test_existing_constructor_without_review_adapter_remains_valid(self) -> None:
+        _service_with_adapter, dependencies = _service(_task())
+        legacy_dependencies = {
+            key: value
+            for key, value in dependencies.items()
+            if key != "external_reviews"
+        }
+
+        result = PromotionService(**legacy_dependencies).execute(
+            ExecutePromotionCommand(task_id="TF-1")
+        )
+
+        self.assertEqual(result.status, "pr_open")
+
     def test_execute_resumes_existing_commit_without_creating_another_commit(self) -> None:
         task = _task()
         task["promotion"].update({"status": "pushed", "head_sha": "existing-sha"})
@@ -182,6 +242,72 @@ class PromotionApplicationTests(unittest.TestCase):
         self.assertEqual(result.commit_sha, "existing-sha")
         self.assertNotIn("commit", [call[0] for call in dependencies["version_control"].calls])
         self.assertEqual(result.status, "pr_open")
+
+    def test_reviewed_promotion_pushes_exact_reviewed_head_without_staging(self) -> None:
+        task = _reviewed_task()
+        allowed_dirty_paths = (
+            task["test_strategy"]["external_llm"]["envelope_path"],
+            task["test_strategy"]["external_llm"]["report_path"],
+            ".planning/tasks/TF-1/task.json",
+            ".planning/tasks/TF-1/VERIFY.md",
+            ".planning/tasks/TF-1/artifacts/evidence/evidence-graph.json",
+        )
+        service, dependencies = _service(
+            task,
+            external_dirty_paths=allowed_dirty_paths,
+        )
+
+        result = service.execute(ExecutePromotionCommand(task_id="TF-1"))
+
+        self.assertEqual(result.commit_sha, "a" * 40)
+        self.assertEqual(
+            [call[0] for call in dependencies["version_control"].calls],
+            ["exists", "remote_url", "push_revision"],
+        )
+        self.assertEqual(
+            dependencies["version_control"].calls[-1],
+            ("push_revision", "/workspace", "origin", "a" * 40, "codex/clean"),
+        )
+        self.assertEqual(dependencies["external_reviews"].inspect_calls, 1)
+        self.assertEqual(
+            [entry[2]["status"] for entry in dependencies["artifacts"].json_writes],
+            ["pushed", "pr_open"],
+        )
+
+    def test_reviewed_promotion_rejects_unreviewed_workspace_change(self) -> None:
+        task = _reviewed_task()
+        service, dependencies = _service(
+            task,
+            external_dirty_paths=("src/sisyphus/runtime.py",),
+        )
+
+        with self.assertRaisesRegex(ValueError, "evidence changed"):
+            service.execute(ExecutePromotionCommand(task_id="TF-1"))
+
+        self.assertEqual(
+            dependencies["version_control"].calls,
+            [("exists", "/workspace")],
+        )
+        self.assertEqual(dependencies["tasks"].load("TF-1")["verify_status"], "not_run")
+        self.assertIn(
+            "EXTERNAL_LLM_REVIEW_STALE",
+            {gate["code"] for gate in dependencies["tasks"].load("TF-1")["gates"]},
+        )
+
+    def test_reviewed_promotion_fails_closed_without_evidence_adapter(self) -> None:
+        _service_with_adapter, dependencies = _service(_reviewed_task())
+        legacy_dependencies = {
+            key: value
+            for key, value in dependencies.items()
+            if key != "external_reviews"
+        }
+
+        with self.assertRaisesRegex(ValueError, "adapter is unavailable"):
+            PromotionService(**legacy_dependencies).execute(
+                ExecutePromotionCommand(task_id="TF-1")
+            )
+
+        self.assertEqual(dependencies["tasks"].load("TF-1")["verify_status"], "not_run")
 
     def test_record_merge_retargets_verified_stacked_child_and_closes_parent(self) -> None:
         parent = _task(task_id="TF-parent")
@@ -224,6 +350,7 @@ class PromotionApplicationTests(unittest.TestCase):
 def _service(
     *tasks: dict,
     staged_changes: bool = True,
+    external_dirty_paths: tuple[str, ...] = (),
 ) -> tuple[PromotionService, dict[str, object]]:
     dependencies = {
         "tasks": MemoryTasks(*tasks),
@@ -231,6 +358,7 @@ def _service(
         "pull_requests": PullRequestsFake(),
         "artifacts": ArtifactsFake(),
         "conformance": ConformanceFake(),
+        "external_reviews": ExternalReviewsFake(dirty_paths=external_dirty_paths),
         "closeout": CloseoutFake(),
         "interventions": InterventionsFake(),
         "reopened_tasks": ReopenedTasksFake(),
@@ -269,6 +397,37 @@ def _task(*, task_id: str = "TF-1", verify_status: str = "passed") -> dict:
         },
         "meta": {},
     }
+
+
+def _reviewed_task() -> dict:
+    task = _task()
+    task["task_dir"] = ".planning/tasks/TF-1"
+    task["docs"]["verify"] = "VERIFY.md"
+    review = {
+        "required": True,
+        "status": "passed",
+        "provider": "independent Codex reviewer",
+        "reviewer": "independent-codex-agent",
+        "reviewed_head_sha": "a" * 40,
+        "scope_digest": "sha256:" + "s" * 64,
+        "envelope_path": ".planning/tasks/TF-1/artifacts/reviews/review.json",
+        "envelope_digest": "sha256:" + "e" * 64,
+        "report_path": ".planning/tasks/TF-1/artifacts/reviews/review.md",
+        "report_digest": "sha256:" + "r" * 64,
+        "finding_count": 0,
+        "blocking_finding_count": 0,
+    }
+    review["verification_binding"] = {
+        field: review[field]
+        for field in (
+            "envelope_digest",
+            "report_digest",
+            "reviewed_head_sha",
+            "scope_digest",
+        )
+    }
+    task["test_strategy"] = {"external_llm": review}
+    return task
 
 
 if __name__ == "__main__":

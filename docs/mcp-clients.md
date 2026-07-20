@@ -16,6 +16,19 @@ By default, the server targets the current working directory as the repository r
 export SISYPHUS_REPO_ROOT=/absolute/path/to/your/repository
 ```
 
+Human-only external-review recording also requires a high-entropy operator
+capability in the MCP server environment:
+
+```bash
+export SISYPHUS_OPERATOR_CAPABILITY=<random-operator-secret>
+```
+
+The caller supplies the same value as the `operator_capability` input to
+`sisyphus.record_external_review`. The server rejects the action when the
+environment value is absent or does not match, and never writes the supplied
+value to an episode trace. Read-only tools and other lifecycle tools do not use
+this capability.
+
 ## Recommended: `init-mcp.sh`
 
 From the Sisyphus repo root:
@@ -46,7 +59,7 @@ codex mcp add sisyphus --env PYTHONPATH=/absolute/path/to/Sisyphus/src -- /absol
 Add Sisyphus for a specific repository:
 
 ```bash
-codex mcp add sisyphus --env SISYPHUS_REPO_ROOT=/absolute/path/to/your/repository --env SISYPHUS_MCP_DEBUG_LOG=/tmp/sisyphus-mcp-debug.log --env PYTHONPATH=/absolute/path/to/Sisyphus/src -- /absolute/path/to/Sisyphus/.venv/bin/python -m sisyphus.mcp_server
+codex mcp add sisyphus --env SISYPHUS_REPO_ROOT=/absolute/path/to/your/repository --env SISYPHUS_OPERATOR_CAPABILITY=<random-operator-secret> --env SISYPHUS_MCP_DEBUG_LOG=/tmp/sisyphus-mcp-debug.log --env PYTHONPATH=/absolute/path/to/Sisyphus/src -- /absolute/path/to/Sisyphus/.venv/bin/python -m sisyphus.mcp_server
 ```
 
 Inspect the registration:
@@ -75,6 +88,7 @@ cat > .mcp.json <<'EOF'
       "args": ["-m", "sisyphus.mcp_server"],
       "env": {
         "SISYPHUS_REPO_ROOT": "/absolute/path/to/your/repository",
+        "SISYPHUS_OPERATOR_CAPABILITY": "<random-operator-secret>",
         "SISYPHUS_MCP_DEBUG_LOG": "/tmp/sisyphus-mcp-debug.log",
         "PYTHONPATH": "/absolute/path/to/Sisyphus/src"
       }

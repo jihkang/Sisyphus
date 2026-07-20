@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import NoReturn
 
 from ...domain.lifecycle import LifecycleAction
 from ...domain.promotion import (
@@ -14,6 +15,8 @@ from ...domain.promotion import (
     ensure_task_promotion_defaults,
 )
 from ..commands.promotion import ExecutePromotionCommand
+from ..external_review_verification import collect_external_review_evidence_gates
+from ..planning_records import dedupe_gate_records, make_gate_record
 from ..ports.artifacts import ArtifactStorePort
 from ..ports.clock import ClockPort
 from ..ports.promotion import (
@@ -22,6 +25,7 @@ from ..ports.promotion import (
     PullRequestSpec,
     VersionControlPort,
 )
+from ..ports.review import ExternalReviewEvidencePort
 from ..ports.verification import VerificationConformancePort
 from ..ports.workflow import TaskRecord
 from ..promotion_projection import (
@@ -38,6 +42,10 @@ from ..promotion_projection import (
 from ..promotion_records import blocked_phase, blocked_stage, record_promotion_lifecycle_transition
 from ..results.artifacts import ArtifactRef
 from ..results.promotion import PromotionExecutionResult
+from ..review_scope import (
+    external_review_binding_is_current,
+    external_review_post_verification_paths,
+)
 
 
 class PromotionExecutionError(RuntimeError):
@@ -51,6 +59,7 @@ class PromotionExecutionService:
     pull_requests: PullRequestPort
     artifacts: ArtifactStorePort
     conformance: VerificationConformancePort
+    external_reviews: ExternalReviewEvidencePort | None
     clock: ClockPort
 
     def execute(self, command: ExecutePromotionCommand) -> PromotionExecutionResult:
@@ -59,6 +68,13 @@ class PromotionExecutionService:
         promotion = task["promotion"]
         if not bool(promotion.get("required")):
             raise ValueError(f"task `{command.task_id}` does not require promotion")
+        review = _required_external_review(task)
+        if review is not None and not external_review_binding_is_current(task):
+            self._block_for_stale_review(
+                task,
+                promotion,
+                message="verification is not bound to the current external review",
+            )
 
         transition = record_promotion_lifecycle_transition(
             task,
@@ -81,6 +97,37 @@ class PromotionExecutionService:
         workspace = str(task.get("worktree_path") or "")
         if not self.version_control.workspace_exists(workspace):
             raise FileNotFoundError(f"task worktree does not exist: {workspace}")
+        reviewed_commit_sha: str | None = None
+        if review is not None:
+            external_reviews = self.external_reviews
+            if external_reviews is None:
+                self._block_for_stale_review(
+                    task,
+                    promotion,
+                    message="external review evidence adapter is unavailable",
+                )
+            review_gates = collect_external_review_evidence_gates(
+                task,
+                review,
+                evidence=external_reviews,
+                gate=lambda code, message, source: make_gate_record(
+                    code,
+                    message,
+                    source,
+                    created_at=self.clock.now(),
+                ),
+                additional_allowed_dirty_paths=external_review_post_verification_paths(
+                    task
+                ),
+            )
+            if review_gates:
+                self._block_for_stale_review(
+                    task,
+                    promotion,
+                    message="external review evidence changed after verification",
+                    gates=review_gates,
+                )
+            reviewed_commit_sha = str(review["reviewed_head_sha"]).strip().lower()
         remote = command.remote_name.strip()
         if not remote:
             raise ValueError("remote_name must be non-empty")
@@ -130,26 +177,38 @@ class PromotionExecutionService:
         if repo_full_name:
             promotion["repo_full_name"] = repo_full_name
 
-        self.version_control.stage_all(workspace)
-        staged_changes = self.version_control.has_staged_changes(workspace)
-        commit_sha = str(promotion.get("head_sha") or "").strip()
-        if staged_changes:
-            commit_sha = self.version_control.commit(workspace, commit_message)
-            promotion.update(
-                {
-                    "required": True,
-                    "status": PROMOTION_STATUS_COMMITTED,
-                    "head_sha": commit_sha,
-                    "commit_message": commit_message,
-                    "committed_at": self.clock.now(),
-                }
-            )
-            self.tasks.save(task)
-            self._write_execution_receipt(task, receipt_path, draft=command.draft)
-        elif not commit_sha:
-            raise PromotionExecutionError("no staged changes available for promotion")
+        if reviewed_commit_sha is not None:
+            commit_sha = reviewed_commit_sha
+            promotion["head_sha"] = commit_sha
+        else:
+            self.version_control.stage_all(workspace)
+            staged_changes = self.version_control.has_staged_changes(workspace)
+            commit_sha = str(promotion.get("head_sha") or "").strip()
+            if staged_changes:
+                commit_sha = self.version_control.commit(workspace, commit_message)
+                promotion.update(
+                    {
+                        "required": True,
+                        "status": PROMOTION_STATUS_COMMITTED,
+                        "head_sha": commit_sha,
+                        "commit_message": commit_message,
+                        "committed_at": self.clock.now(),
+                    }
+                )
+                self.tasks.save(task)
+                self._write_execution_receipt(task, receipt_path, draft=command.draft)
+            elif not commit_sha:
+                raise PromotionExecutionError("no staged changes available for promotion")
 
-        self.version_control.push(workspace, remote, head_branch)
+        if reviewed_commit_sha is not None:
+            self.version_control.push_revision(
+                workspace,
+                remote,
+                reviewed_commit_sha,
+                head_branch,
+            )
+        else:
+            self.version_control.push(workspace, remote, head_branch)
         promotion["status"] = (
             PROMOTION_STATUS_PR_OPEN if task_has_open_pr(task) else PROMOTION_STATUS_PUSHED
         )
@@ -192,6 +251,37 @@ class PromotionExecutionService:
             pr_url=(str(promotion["pr_url"]) if promotion.get("pr_url") else None),
             receipt=ArtifactRef(relative_path=receipt_path),
         )
+
+    def _block_for_stale_review(
+        self,
+        task: TaskRecord,
+        promotion: dict,
+        *,
+        message: str,
+        gates: list[dict] | None = None,
+    ) -> NoReturn:
+        blocked_at = self.clock.now()
+        task["verify_status"] = "not_run"
+        task["last_verified_at"] = None
+        task["last_verify_results"] = []
+        task["status"] = "blocked"
+        task["stage"] = "audit"
+        task["workflow_phase"] = "execution"
+        promotion["reverify_required"] = True
+        task["updated_at"] = blocked_at
+        stale_gates = gates or [
+            make_gate_record(
+                "EXTERNAL_LLM_REVIEW_STALE",
+                message,
+                "promotion",
+                created_at=blocked_at,
+            )
+        ]
+        task["gates"] = dedupe_gate_records(
+            [*task.get("gates", []), *stale_gates]
+        )
+        self.tasks.save(task)
+        raise ValueError(f"promotion blocked: {message}")
 
     def resolve_base(
         self,
@@ -321,6 +411,16 @@ class PromotionExecutionService:
             path,
             build_execution_receipt(task, draft=draft, written_at=self.clock.now()),
         )
+
+
+def _required_external_review(task: TaskRecord) -> dict | None:
+    strategy = task.get("test_strategy")
+    if not isinstance(strategy, dict):
+        return None
+    review = strategy.get("external_llm")
+    if not isinstance(review, dict) or not review.get("required"):
+        return None
+    return review
 
 
 __all__ = ["PromotionExecutionError", "PromotionExecutionService"]

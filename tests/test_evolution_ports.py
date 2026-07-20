@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import os
 import shlex
 import sys
 import tempfile
+import threading
 import time
 import unittest
 
@@ -161,6 +163,22 @@ class EvolutionPortTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "exceeds read limit"):
                 store.read_text("EVR-bounded", "report.md")
+
+    def test_concurrent_run_creation_shares_verified_parent_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            worker_count = 64
+            barrier = threading.Barrier(worker_count)
+            with RepositoryEvolutionRunStore(Path(tempdir)) as store:
+
+                def create(index: int) -> Path:
+                    barrier.wait()
+                    return store.create_run(f"EVR-race-{index}")
+
+                with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                    paths = tuple(executor.map(create, range(worker_count)))
+
+            self.assertEqual(len(paths), worker_count)
+            self.assertTrue(all(path.is_dir() for path in paths))
 
     def test_evolution_command_runner_bounds_stdout_and_stderr_with_receipts(self) -> None:
         script = (

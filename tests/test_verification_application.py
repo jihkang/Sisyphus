@@ -13,7 +13,10 @@ if str(SRC_ROOT) not in sys.path:
 
 
 from sisyphus.application.results.artifacts import ArtifactRef  # noqa: E402
-from sisyphus.application.ports.review import ExternalReviewEvidence  # noqa: E402
+from sisyphus.application.ports.review import (  # noqa: E402
+    ExternalReviewEvidence,
+    ExternalReviewScopeEvidence,
+)
 from sisyphus.application.use_cases.verification import VerificationService  # noqa: E402
 from sisyphus.domain.lifecycle import ConformanceState  # noqa: E402
 from sisyphus.domain.verification import CommandExecution, VerificationStatus  # noqa: E402
@@ -120,12 +123,29 @@ class EvidenceFake:
 class ExternalReviewsFake:
     def __init__(self, evidence: ExternalReviewEvidence | None = None) -> None:
         self.evidence = evidence
+        self.evidence_after: ExternalReviewEvidence | None = None
         self.calls: list[tuple[str, str]] = []
 
-    def inspect(self, workspace: str, relative_path: str) -> ExternalReviewEvidence:
-        self.calls.append((workspace, relative_path))
+    def scope(self, workspace: str, task: dict) -> ExternalReviewScopeEvidence:
         if self.evidence is None:
             raise AssertionError("external review evidence was not expected")
+        return ExternalReviewScopeEvidence(
+            current_head_sha=self.evidence.current_head_sha,
+            scope_digest=self.evidence.current_scope_digest,
+            document_digests=self.evidence.document_digests,
+        )
+
+    def inspect(
+        self,
+        workspace: str,
+        envelope_path: str,
+        task: dict,
+    ) -> ExternalReviewEvidence:
+        self.calls.append((workspace, envelope_path))
+        if self.evidence is None:
+            raise AssertionError("external review evidence was not expected")
+        if len(self.calls) > 1 and self.evidence_after is not None:
+            return self.evidence_after
         return self.evidence
 
 
@@ -216,13 +236,7 @@ class VerificationApplicationTests(unittest.TestCase):
 
     def test_stale_external_review_head_blocks_verification(self) -> None:
         task = _task_with_external_review()
-        external_review = ExternalReviewEvidence(
-            relative_path="docs/reviews/external.md",
-            digest="sha256:" + "b" * 64,
-            size_bytes=128,
-            current_head_sha="c" * 40,
-            dirty_paths=("docs/reviews/external.md",),
-        )
+        external_review = _external_review_evidence(current_head_sha="c" * 40)
         service, _dependencies = _service(task, external_review=external_review)
 
         outcome = service.verify("TF-1")
@@ -232,21 +246,65 @@ class VerificationApplicationTests(unittest.TestCase):
 
     def test_head_bound_review_allows_only_report_and_task_evidence_changes(self) -> None:
         task = _task_with_external_review()
-        external_review = ExternalReviewEvidence(
-            relative_path="docs/reviews/external.md",
-            digest="sha256:" + "b" * 64,
-            size_bytes=128,
-            current_head_sha="a" * 40,
+        external_review = _external_review_evidence(
             dirty_paths=(
+                ".planning/tasks/TF-1/artifacts/reviews/review.json",
+                ".planning/tasks/TF-1/artifacts/reviews/review.md",
                 ".planning/tasks/TF-1/task.json",
-                "docs/reviews/external.md",
-            ),
+            )
+        )
+        service, dependencies = _service(task, external_review=external_review)
+
+        outcome = service.verify("TF-1")
+
+        self.assertEqual(outcome.status, "passed")
+        review = dependencies["tasks"].task["test_strategy"]["external_llm"]
+        self.assertEqual(review["verification_binding"]["envelope_digest"], "sha256:" + "e" * 64)
+        self.assertFalse(dependencies["tasks"].task["promotion"]["reverify_required"])
+
+    def test_task_directory_policy_mutation_is_not_exempt_from_review(self) -> None:
+        task = _task_with_external_review()
+        external_review = _external_review_evidence(
+            dirty_paths=(
+                ".planning/tasks/TF-1/artifacts/reviews/review.json",
+                ".planning/tasks/TF-1/artifacts/reviews/review.md",
+                ".planning/tasks/TF-1/PLAN.md",
+            )
         )
         service, _dependencies = _service(task, external_review=external_review)
 
         outcome = service.verify("TF-1")
 
-        self.assertEqual(outcome.status, "passed")
+        self.assertEqual(outcome.status, "failed")
+        self.assertIn("EXTERNAL_LLM_REVIEW_STALE", {gate["code"] for gate in outcome.gates})
+
+    def test_scope_digest_change_blocks_verification(self) -> None:
+        task = _task_with_external_review()
+        external_review = _external_review_evidence(
+            current_scope_digest="sha256:" + "c" * 64,
+        )
+        service, _dependencies = _service(task, external_review=external_review)
+
+        outcome = service.verify("TF-1")
+
+        self.assertEqual(outcome.status, "failed")
+        self.assertIn("EXTERNAL_LLM_REVIEW_STALE", {gate["code"] for gate in outcome.gates})
+
+    def test_verify_command_scope_mutation_is_detected_before_binding(self) -> None:
+        task = _task_with_external_review()
+        service, dependencies = _service(
+            task,
+            external_review=_external_review_evidence(),
+        )
+        dependencies["external_reviews"].evidence_after = _external_review_evidence(
+            current_scope_digest="sha256:" + "c" * 64,
+        )
+
+        outcome = service.verify("TF-1")
+
+        self.assertEqual(outcome.status, "failed")
+        review = dependencies["tasks"].task["test_strategy"]["external_llm"]
+        self.assertNotIn("verification_binding", review)
 
 
 def _service(
@@ -289,6 +347,7 @@ def _task(*, plan_status: str = "approved") -> dict:
         "gates": [],
         "docs": {"brief": "BRIEF.md", "plan": "PLAN.md", "verify": "VERIFY.md"},
         "verify_commands": ["python -m unittest"],
+        "promotion": {"required": False, "reverify_required": False},
         "test_strategy": {
             "normal_cases": [{"name": "happy"}],
             "edge_cases": [{"name": "empty"}],
@@ -311,11 +370,47 @@ def _task_with_external_review() -> dict:
         "purpose": "challenge the migration",
         "trigger": "before promotion",
         "status": "passed",
+        "reviewer": "independent-codex-agent",
         "reviewed_head_sha": "a" * 40,
-        "report_path": "docs/reviews/external.md",
+        "scope_digest": "sha256:" + "s" * 64,
+        "envelope_path": ".planning/tasks/TF-1/artifacts/reviews/review.json",
+        "envelope_digest": "sha256:" + "e" * 64,
+        "report_path": ".planning/tasks/TF-1/artifacts/reviews/review.md",
         "report_digest": "sha256:" + "b" * 64,
+        "finding_count": 0,
+        "blocking_finding_count": 0,
     }
+    task["promotion"] = {"required": True, "reverify_required": True}
     return task
+
+
+def _external_review_evidence(
+    *,
+    current_head_sha: str = "a" * 40,
+    current_scope_digest: str = "sha256:" + "s" * 64,
+    dirty_paths: tuple[str, ...] = (
+        ".planning/tasks/TF-1/artifacts/reviews/review.json",
+        ".planning/tasks/TF-1/artifacts/reviews/review.md",
+    ),
+) -> ExternalReviewEvidence:
+    return ExternalReviewEvidence(
+        envelope_path=".planning/tasks/TF-1/artifacts/reviews/review.json",
+        envelope_digest="sha256:" + "e" * 64,
+        envelope_size_bytes=256,
+        provider="independent Codex reviewer",
+        reviewer="independent-codex-agent",
+        reviewed_head_sha="a" * 40,
+        scope_digest="sha256:" + "s" * 64,
+        report_path=".planning/tasks/TF-1/artifacts/reviews/review.md",
+        report_digest="sha256:" + "b" * 64,
+        report_size_bytes=128,
+        summary="No blocking findings.",
+        findings=(),
+        current_head_sha=current_head_sha,
+        current_scope_digest=current_scope_digest,
+        document_digests=(),
+        dirty_paths=dirty_paths,
+    )
 
 
 if __name__ == "__main__":

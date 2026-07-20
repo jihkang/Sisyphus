@@ -146,6 +146,17 @@ class CloseoutApplicationTests(unittest.TestCase):
         self.assertEqual(dependencies["tasks"].task["stage"], "audit")
         self.assertEqual(dependencies["interventions"].requests, [])
 
+    def test_close_rejects_verify_status_not_bound_to_current_external_review(self) -> None:
+        task = _task()
+        task["test_strategy"] = {"external_llm": _review_with_binding()}
+        task["test_strategy"]["external_llm"]["report_digest"] = "sha256:" + "c" * 64
+        service, _dependencies, _calls = _service(task)
+
+        outcome = service.close("TF-1", allow_dirty=False)
+
+        self.assertFalse(outcome.closed)
+        self.assertIn("EXTERNAL_LLM_REVIEW_STALE", {gate["code"] for gate in outcome.gates})
+
     def test_event_failure_occurs_after_retryable_state_is_saved(self) -> None:
         service, dependencies, _ = _service(_task(), event_failure=True)
 
@@ -190,6 +201,24 @@ def _task() -> dict:
         "gates": [],
         "subtasks": [],
         "meta": {"close_override_used": False},
+    }
+
+
+def _review_with_binding() -> dict:
+    values = {
+        "envelope_digest": "sha256:" + "e" * 64,
+        "report_digest": "sha256:" + "b" * 64,
+        "reviewed_head_sha": "a" * 40,
+        "scope_digest": "sha256:" + "s" * 64,
+    }
+    return {
+        "required": True,
+        "status": "passed",
+        **values,
+        "verification_binding": {
+            **values,
+            "verified_at": "2026-07-19T12:00:00Z",
+        },
     }
 
 

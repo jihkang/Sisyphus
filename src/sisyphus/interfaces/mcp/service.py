@@ -153,7 +153,7 @@ class SisyphusMcpCoreService:
                 task_id=task_id,
                 observation=observation_before,
                 action_name=tool_name,
-                arguments=args,
+                arguments=_trace_arguments(tool_name, args),
                 result=trace_result,
                 state_before=state_before,
                 state_after=state_after,
@@ -287,7 +287,6 @@ _TRACEABLE_TASK_TOOLS = {
     "sisyphus.spec_freeze",
     "sisyphus.spec_validate",
     "sisyphus.subtasks_generate",
-    "sisyphus.record_external_review",
     "sisyphus.verify_task",
     "sisyphus.close_task",
     "sisyphus.execute_promotion",
@@ -298,6 +297,13 @@ _TRACEABLE_TASK_TOOLS = {
 
 def _trace_tool_enabled(tool_name: str) -> bool:
     return tool_name in _TRACEABLE_TASK_TOOLS
+
+
+def _trace_arguments(tool_name: str, args: dict[str, object]) -> dict[str, object]:
+    rendered = dict(args)
+    if tool_name == "sisyphus.record_external_review" and "operator_capability" in rendered:
+        rendered["operator_capability"] = "<redacted>"
+    return rendered
 
 
 def _trace_task_id(tool_name: str, args: dict[str, object]) -> str | None:

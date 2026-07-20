@@ -111,9 +111,10 @@ def pull_request_event() -> dict[str, object]:
 
 
 class InboxEventModelTests(unittest.TestCase):
-    def test_domain_event_does_not_own_boundary_serialization(self) -> None:
-        self.assertFalse(hasattr(InboxEvent, "from_dict"))
-        self.assertFalse(hasattr(InboxEvent, "to_dict"))
+    def test_legacy_serialization_methods_delegate_to_boundary_codecs(self) -> None:
+        raw = conversation_event()
+
+        self.assertEqual(InboxEvent.from_dict(raw).to_dict(), raw)
 
     def test_conversation_round_trip_preserves_current_shape(self) -> None:
         raw = conversation_event()

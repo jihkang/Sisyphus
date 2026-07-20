@@ -12,6 +12,7 @@ from ..ports.promotion import (
     ReopenedTaskPort,
     VersionControlPort,
 )
+from ..ports.review import ExternalReviewEvidencePort
 from ..ports.verification import VerificationConformancePort
 from ..ports.workflow import CloseoutPort, ManualInterventionPort, TaskRecord
 from ..promotion_projection import DEFAULT_PROMOTION_EXECUTION_RECEIPT_PATH
@@ -33,6 +34,7 @@ class PromotionService:
     interventions: ManualInterventionPort
     reopened_tasks: ReopenedTaskPort
     clock: ClockPort
+    external_reviews: ExternalReviewEvidencePort | None = None
 
     def execute(self, command: ExecutePromotionCommand) -> PromotionExecutionResult:
         return self._execution_service().execute(command)
@@ -69,6 +71,7 @@ class PromotionService:
             pull_requests=self.pull_requests,
             artifacts=self.artifacts,
             conformance=self.conformance,
+            external_reviews=self.external_reviews,
             clock=self.clock,
         )
 

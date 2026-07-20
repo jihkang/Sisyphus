@@ -78,6 +78,13 @@
 - 2026-07-19: Reused the same closeout service from workflow and promotion, preserved the public dirty-check patch point and evidence short-circuit behavior, added orchestration/failure-order regressions, and passed the expanded full suite with 629 tests.
 - 2026-07-19: Moved obligation queue execution to `infra/obligations`, extracted queue-to-execution-to-snapshot convergence into `ObligationConvergenceService`, injected canonical verification, and retained the public obligation result identities and function signatures.
 - 2026-07-19: Added convergence ordering, idle, blocked, max-step, and exception-short-circuit contracts; caught and fixed a snapshot-refresh short-circuit introduced during extraction; passed the expanded full suite with 636 tests and reduced workflow adapter root-facade dependencies to zero.
+- 2026-07-20: Completed the remaining repository-request, CLI/MCP, search, observation, episode, artifact, Evolution, serialization, hotspot, documentation, and support-file boundary slices recorded in `docs/clean-architecture-implementation-debt.md`.
+- 2026-07-20: Addressed the first independent review by hardening Evolution run storage, bounding Evolution subprocesses, restoring public serialization/package exports, and adding a persisted external-review lifecycle transition; 755 tests passed at 85.2% branch coverage.
+- 2026-07-20: The second independent review rejected the free-form review transition, missing inbox compatibility methods, stale verify state, fail-open Git status, broad task-directory exemption, and Evolution parent-directory race.
+- 2026-07-20: Replaced free-form review inputs with strict task-local envelopes, content-derived findings, HEAD and frozen-scope digests, operator-capability MCP authorization, atomic verify/promotion invalidation, pre/post-command evidence checks, and exact verification bindings.
+- 2026-07-20: Restored all four inbox model serialization contracts through the outer compatibility bootstrap, made Git status NUL-delimited and fail-closed, and made concurrent Evolution parent creation race-safe while retaining exclusive run IDs.
+- 2026-07-20: Passed 775 tests on each of Python 3.11-3.14 and 85.1% branch coverage after round-2 remediation and promotion hardening; lock, standard/offline builds, and installed-wheel CLI/MCP/serialization smoke checks also pass.
+- 2026-07-20: Closed a promotion-time review bypass found during final self-review: review-gated promotion now re-inspects evidence and pushes only the reviewed commit without staging later workspace changes.
 
 ## Notes
 
@@ -88,6 +95,6 @@
 
 ## Follow-ups
 
-- Execute the ordered debt ledger in `docs/clean-architecture-implementation-debt.md`, beginning with the remaining workflow/planning/spec-validation adapters and full creation/daemon/closeout use cases.
-- Isolate Evolve candidate generation from Control-owned approval, signing, active-policy, and queue authority.
-- Rewire remaining CLI/MCP consumers, validate architecture documentation, then run final package and merged-main verification.
+- Commit the round-2 remediation and obtain an independent review against that immutable commit.
+- Record the resulting strict review envelope and run Sisyphus verification.
+- Push the branch, open the PR, wait for CI, merge, record the merge receipt, and revalidate the updated `main` worktree.

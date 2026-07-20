@@ -280,17 +280,19 @@ sequenceDiagram
     participant Events as EventPublisherPort
     participant Close as CloseoutService
 
-    Workflow->>Review: record independent review verdict
-    Review->>ReviewEvidence: inspect bounded report, HEAD, digest, dirty paths
-    Review->>Tasks: persist head-bound external review evidence
+    Workflow->>Review: query reviewed HEAD and scope digest
+    Workflow->>Review: record strict independent-review envelope
+    Review->>ReviewEvidence: validate envelope, report, HEAD, scope, exact dirty paths
+    Review->>Tasks: persist derived findings and invalidate prior verify state
     Workflow->>Verify: verify(task_id)
     Verify->>Lifecycle: guarded verification transition
     Verify->>Spec: required/stale validation gates
     Verify->>Commands: bounded configured commands
     Commands-->>Verify: typed CommandExecution receipts
+    Verify->>ReviewEvidence: recheck envelope and scope after commands
     Verify->>Docs: write VERIFY.md projection
     Verify->>Evidence: write evidence graph
-    Verify->>Tasks: persist verification state and gates
+    Verify->>Tasks: persist verification state and exact review binding
     Verify->>Events: publish verify.completed
     Workflow->>Close: close(task_id)
     Close->>Tasks: enforce evidence, conformance, dirty, promotion gates
@@ -302,12 +304,26 @@ service owns gate order and saves retryable state before publishing completion.
 VERIFY Markdown is a pure projection in `application/verification_projection.py`.
 
 When a frozen strategy requires an external LLM review,
-`ExternalReviewService` is the only status-recording path. The human-only CLI/MCP
-action binds the verdict to a contained, no-follow report, its SHA-256 digest,
-and the exact Git HEAD. It rejects unrelated dirty paths and a passing verdict
-with blocking findings. Verification re-inspects the report, digest, current
-HEAD, and dirty paths and continues to fail closed until the evidence is both
-`passed` and current. PLAN synchronization preserves runtime review evidence
+`ExternalReviewService` is the only status-recording path. The command accepts
+only a task ID and a JSON envelope path under that task's
+`artifacts/reviews/` directory. The adapter strictly parses the envelope,
+derives reviewer, findings, and pass/fail status from its contents, verifies the
+bounded no-follow Markdown report and both SHA-256 digests, and binds it to the
+exact Git HEAD plus a normalized task/spec/verification-policy scope digest.
+Only the two review artifacts may be dirty when a review is recorded.
+
+Recording any new review atomically invalidates prior verification and marks
+promotion for re-verification. Verification re-inspects the envelope before and
+after configured commands, permits only the review files and exact service-owned
+`task.json` mutation, and records a binding to the envelope, report, HEAD, and
+scope digests only on success. Promotion performs one more evidence inspection,
+allows only the exact review and verification output files, skips staging, and
+pushes the reviewed commit itself. Any new implementation path blocks promotion
+and requires review and verification again. Closeout and promotion reject a
+missing or stale binding. MCP recording additionally requires
+`SISYPHUS_OPERATOR_CAPABILITY`; the capability input is not persisted in episode
+traces. PLAN synchronization
+preserves runtime review evidence
 only while the frozen required/provider/purpose/trigger policy is unchanged;
 any policy change invalidates the evidence back to `pending`.
 
@@ -343,13 +359,16 @@ flowchart TD
     Recorder --> Close
 ```
 
-The stable `PromotionService` constructor and methods remain unchanged. Execution
-and merge recording are separate commands. Receipt and changeset shapes are pure
-projections in `application/promotion_projection.py`.
+The stable public promotion entrypoints and result shapes remain unchanged.
+Execution and merge recording are separate commands, and composition injects
+the review-evidence adapter used by execution. Receipt and changeset shapes are
+pure projections in `application/promotion_projection.py`.
 
-Durable phases are saved after commit, push, and PR creation. Merge recording
-writes the receipt and changeset, persists promotion state, optionally attempts
-close, then marks open stacked children for retarget and reverify.
+For ordinary tasks, durable phases are saved after commit, push, and PR creation.
+For externally reviewed tasks, execution refuses to stage workspace changes and
+pushes the already-reviewed HEAD before PR creation. Merge recording writes the
+receipt and changeset, persists promotion state, optionally attempts close, then
+marks open stacked children for retarget and reverify.
 
 ## 10. Artifact And Obligation Pipeline
 

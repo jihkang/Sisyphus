@@ -11,6 +11,7 @@ from ...gitops import (
     commit_staged_changes,
     has_staged_changes,
     push_branch,
+    push_revision,
     remote_url,
     stage_all_changes,
 )
@@ -41,6 +42,15 @@ class GitVersionControlAdapter:
 
     def push(self, workspace: str, remote: str, branch: str) -> None:
         push_branch(Path(workspace), remote, branch, set_upstream=True)
+
+    def push_revision(
+        self,
+        workspace: str,
+        remote: str,
+        revision: str,
+        branch: str,
+    ) -> None:
+        push_revision(Path(workspace), remote, revision, branch)
 
     def remote_url(self, workspace: str, remote: str) -> str | None:
         return remote_url(Path(workspace), remote)

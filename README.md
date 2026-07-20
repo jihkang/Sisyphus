@@ -367,6 +367,7 @@ Coverage includes branch measurement and enforces the repository-wide floor conf
 ## Project Governance
 
 - Architecture and ownership boundaries: [docs/architecture.md](docs/architecture.md)
+- External LLM review evidence contract: [docs/external-review-evidence.md](docs/external-review-evidence.md)
 - Contribution workflow and verification requirements: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Security support and private reporting: [SECURITY.md](SECURITY.md)
 - Versioning and release gates: [RELEASES.md](RELEASES.md)

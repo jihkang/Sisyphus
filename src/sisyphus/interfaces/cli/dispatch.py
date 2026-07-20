@@ -49,17 +49,16 @@ COMMAND_SPECS: tuple[CliCommandSpec, ...] = (
     ),
     CliCommandSpec(("verify",), "handle_verify", ("task_id",)),
     CliCommandSpec(
+        ("review", "scope"),
+        "handle_review_scope",
+        ("task_id", ("json", "as_json")),
+    ),
+    CliCommandSpec(
         ("review", "record"),
         "handle_review_record",
         (
             "task_id",
-            "reviewer",
-            "verdict",
-            "report_path",
-            "reviewed_head_sha",
-            "finding_count",
-            "blocking_finding_count",
-            "summary",
+            "envelope_path",
             ("json", "as_json"),
         ),
     ),
