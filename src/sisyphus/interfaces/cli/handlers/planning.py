@@ -4,14 +4,14 @@ import json
 from pathlib import Path
 
 from ....config import SisyphusConfig
-from ....planning import (
+from ....composition.planning import (
     approve_task_plan,
     freeze_task_spec,
     generate_subtasks,
     request_plan_changes,
     revise_task_plan,
+    validate_task_spec,
 )
-from ....spec_validation import validate_task_spec
 
 
 def handle_plan_approve(

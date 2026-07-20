@@ -1,0 +1,689 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from dataclasses import dataclass
+import json
+
+from ..contracts.spec_validation import SPEC_VALIDATION_GATE_CODES, SPEC_VALIDATION_SOURCES
+from ..external_review_verification import (
+    collect_external_review_evidence_gates,
+    record_external_review_verification_binding,
+)
+from ...domain.task.design import (
+    DESIGN_ASSESSMENT_APPROPRIATE,
+    DESIGN_ASSESSMENT_OVERDESIGNED,
+    DESIGN_ASSESSMENT_UNDERDESIGNED,
+    ensure_task_design_defaults,
+    evaluate_design_adequacy,
+)
+from ...domain.verification import CommandExecution, VerificationStatus
+from ..planning_records import (
+    collect_plan_gate_records,
+    dedupe_gate_records,
+    make_gate_record,
+)
+from ..ports.clock import ClockPort
+from ..ports.planning import PlanningDocumentPort, SpecValidationPort
+from ..ports.review import ExternalReviewEvidencePort
+from ..ports.verification import (
+    VerificationCommandPort,
+    VerificationConformancePort,
+    VerificationDocumentPort,
+    VerificationEvidencePort,
+)
+from ..ports.workflow import EventPublisherPort, TaskRecord, TaskRecordPort, WorkflowEvent
+from ..results.verification import VerificationOutcome
+from ..review_scope import (
+    external_review_post_verification_paths,
+    external_review_scope_digest,
+    external_review_verify_document_path,
+)
+from ..verification_projection import looks_like_unfilled_template, render_verify_markdown
+from ..verification_records import (
+    blocked_phase,
+    blocked_stage,
+    collect_conformance_gate_records,
+    command_execution_to_record,
+    record_verification_lifecycle_transition,
+)
+from .planning import reopen_task_plan_for_design_replan
+
+
+VERIFY_GATE_CODES = {
+    "SPEC_INCOMPLETE",
+    "ACCEPTANCE_CRITERIA_MISSING",
+    "VERIFICATION_MAPPING_MISSING",
+    "EXTERNAL_LLM_POLICY_MISSING",
+    "VERIFY_FAILED",
+    "DOC_INCOMPLETE",
+    "REPRO_MISSING",
+    "REGRESSION_TEST_MISSING",
+    "AUDIT_LIMIT_REACHED",
+    "TEST_STRATEGY_MISSING",
+    "EXTERNAL_LLM_REVIEW_REQUIRED",
+    "EXTERNAL_LLM_REVIEW_STALE",
+    "VERIFY_SCOPE_CHANGED",
+    "VERIFY_REQUIRED",
+    "PLAN_APPROVAL_REQUIRED",
+    "PLAN_CHANGES_REQUESTED",
+    "DESIGN_REPLAN_REQUIRED",
+    "DESIGN_ARTIFACTS_MISSING",
+    *SPEC_VALIDATION_GATE_CODES,
+}
+
+TRANSIENT_GATE_SOURCES = {
+    "verify",
+    "docs",
+    "strategy",
+    "design",
+    "close",
+    "plan",
+    "conformance",
+    "review",
+    *SPEC_VALIDATION_SOURCES,
+}
+
+CONFORMANCE_CHECKPOINT_DESIGN_ASSESSMENT = "design_assessment"
+
+
+@dataclass(slots=True)
+class VerificationService:
+    tasks: TaskRecordPort
+    planning_documents: PlanningDocumentPort
+    documents: VerificationDocumentPort
+    validation: SpecValidationPort
+    conformance: VerificationConformancePort
+    commands: VerificationCommandPort
+    evidence: VerificationEvidencePort
+    external_reviews: ExternalReviewEvidencePort
+    events: EventPublisherPort
+    clock: ClockPort
+
+    def verify(self, task_id: str) -> VerificationOutcome:
+        task = deepcopy(self.tasks.load(task_id))
+        task = self.planning_documents.sync_strategy(task_id, task)
+        authority_snapshot = _verification_authority_snapshot(task)
+        authority_gates = tuple(deepcopy(task.get("gates", [])))
+        verify_document_path = self._verify_document_path(task)
+        lifecycle = record_verification_lifecycle_transition(
+            task,
+            self.conformance.snapshot(task),
+            created_at=self.clock.now(),
+        )
+        if not lifecycle.allowed:
+            task["updated_at"] = self.clock.now()
+            task["verify_status"] = VerificationStatus.FAILED.value
+            task["status"] = "blocked"
+            task["stage"] = blocked_stage(lifecycle)
+            task["workflow_phase"] = blocked_phase(lifecycle)
+            task["last_verify_results"] = []
+            task["last_verified_at"] = self.clock.now()
+            candidate_projection = _verification_projection(task)
+            artifact = self.documents.write(
+                task_id,
+                verify_document_path,
+                render_verify_markdown(task, ()),
+            )
+            task = self._commit_latest(
+                task_id,
+                candidate=task,
+                authority_snapshot=authority_snapshot,
+                authority_gates=authority_gates,
+                command_results=(),
+                recheck_review=False,
+            )
+            if _verification_projection(task) != candidate_projection:
+                artifact = self.documents.write(
+                    task_id,
+                    verify_document_path,
+                    render_verify_markdown(task, ()),
+                )
+            self._publish_completion(task)
+            return _outcome(task, (), artifact)
+
+        self._evaluate_and_record_design(task)
+        task["audit_attempts"] = int(task.get("audit_attempts", 0)) + 1
+        task["updated_at"] = self.clock.now()
+        task["stage"] = "audit"
+
+        gates = [
+            gate
+            for gate in task.get("gates", [])
+            if gate.get("code") not in VERIFY_GATE_CODES
+            and gate.get("source") not in TRANSIENT_GATE_SOURCES
+        ]
+        if not self.validation.required(task_id, task):
+            gates.extend(self._collect_doc_gates(task_id, task))
+        spec_gates = self._collect_spec_gates(task_id, task)
+        gates.extend(spec_gates)
+        design_gates = self._collect_design_gates(task)
+        gates.extend(design_gates)
+        validation_gates = list(
+            self.validation.collect_gates(
+                task_id,
+                task,
+                action="verify",
+                require_existing_report=True,
+            )
+        )
+        gates.extend(validation_gates)
+        plan_gates = collect_plan_gate_records(
+            task,
+            action="verify",
+            created_at=self.clock.now(),
+        )
+        gates.extend(plan_gates)
+        conformance_gates = collect_conformance_gate_records(
+            self.conformance.snapshot(task),
+            action="verify",
+            created_at=self.clock.now(),
+        )
+        gates.extend(conformance_gates)
+
+        command_results: tuple[CommandExecution, ...] = ()
+        if not (
+            spec_gates
+            or design_gates
+            or validation_gates
+            or plan_gates
+            or conformance_gates
+        ):
+            task["stage"] = "audit"
+            gates.extend(self._collect_test_strategy_gates(task))
+            command_results = self.commands.run(
+                task_id,
+                tuple(str(command) for command in task.get("verify_commands", [])),
+            )
+        task["last_verify_results"] = [
+            command_execution_to_record(result) for result in command_results
+        ]
+        task["last_verified_at"] = self.clock.now()
+
+        if any(result.status == VerificationStatus.FAILED for result in command_results):
+            gates.append(
+                self._gate("VERIFY_FAILED", "one or more verify commands failed", "verify")
+            )
+        if int(task["audit_attempts"]) >= int(task.get("max_audit_attempts", 10)):
+            gates.append(
+                self._gate("AUDIT_LIMIT_REACHED", "maximum audit attempts reached", "verify")
+            )
+
+        task["gates"] = dedupe_gate_records(gates)
+        passed = not task["gates"]
+        task["verify_status"] = (
+            VerificationStatus.PASSED.value if passed else VerificationStatus.FAILED.value
+        )
+        record_external_review_verification_binding(task, passed=False, verified_at=self.clock.now())
+        task["status"] = "verified" if passed else "blocked"
+        if passed:
+            task["stage"] = "done"
+            task["workflow_phase"] = "verified"
+        elif spec_gates:
+            task["stage"] = "spec"
+        elif design_gates or plan_gates:
+            task["stage"] = "plan_review"
+        elif validation_gates:
+            task["stage"] = "spec"
+            task["workflow_phase"] = "spec_in_review"
+        else:
+            task["stage"] = "audit"
+
+        artifact = self.documents.write(
+            task_id,
+            verify_document_path,
+            render_verify_markdown(task, command_results),
+        )
+        task.setdefault("meta", {})["evidence_graph_required"] = True
+        self.evidence.write(task_id, task, command_results)
+        candidate_projection = _verification_projection(task)
+        task = self._commit_latest(
+            task_id,
+            candidate=task,
+            authority_snapshot=authority_snapshot,
+            authority_gates=authority_gates,
+            command_results=command_results,
+            recheck_review=True,
+        )
+        if _verification_projection(task) != candidate_projection:
+            artifact = self.documents.write(
+                task_id,
+                verify_document_path,
+                render_verify_markdown(task, command_results),
+            )
+            self.evidence.write(task_id, task, command_results)
+        post_write_gates = self._collect_post_write_review_gates(task)
+        if post_write_gates:
+            task = self._fail_after_output_change(task_id, post_write_gates)
+            artifact = self.documents.write(
+                task_id,
+                verify_document_path,
+                render_verify_markdown(task, command_results),
+            )
+            self.evidence.write(task_id, task, command_results)
+        self._publish_completion(task)
+        return _outcome(task, command_results, artifact)
+
+    def _commit_latest(
+        self,
+        task_id: str,
+        *,
+        candidate: TaskRecord,
+        authority_snapshot: tuple[object, ...],
+        authority_gates: tuple[dict, ...],
+        command_results: tuple[CommandExecution, ...],
+        recheck_review: bool,
+    ) -> TaskRecord:
+        def commit(latest: TaskRecord) -> TaskRecord:
+            snapshot_matches = _verification_authority_snapshot(latest) == authority_snapshot
+            if snapshot_matches:
+                gates = list(candidate.get("gates", []))
+            else:
+                gates = [
+                    *latest.get("gates", []),
+                    *_verification_attempt_gates(candidate, authority_gates),
+                ]
+                gates.append(
+                    self._gate(
+                        "VERIFY_SCOPE_CHANGED",
+                        "task verification authority changed while verify commands were running",
+                        "verify",
+                    )
+                )
+            if recheck_review:
+                gates.extend(self._collect_review_policy_gates(latest))
+
+            if snapshot_matches:
+                committed = deepcopy(candidate)
+            else:
+                committed = latest
+                committed["audit_attempts"] = max(
+                    int(committed.get("audit_attempts", 0)),
+                    int(candidate.get("audit_attempts", 0)),
+                )
+                committed["last_verify_results"] = [
+                    command_execution_to_record(result) for result in command_results
+                ]
+                committed["last_verified_at"] = candidate.get("last_verified_at")
+                if not committed.get("updated_at"):
+                    committed["updated_at"] = candidate.get("updated_at")
+                committed.setdefault("meta", {})["evidence_graph_required"] = bool(
+                    candidate.get("meta", {}).get("evidence_graph_required")
+                )
+
+            committed["gates"] = dedupe_gate_records(gates)
+            passed = not committed["gates"]
+            committed["verify_status"] = (
+                VerificationStatus.PASSED.value
+                if passed
+                else VerificationStatus.FAILED.value
+            )
+            committed["status"] = "verified" if passed else "blocked"
+            if passed:
+                committed["stage"] = "done"
+                committed["workflow_phase"] = "verified"
+            elif not snapshot_matches:
+                committed["stage"] = "audit"
+                committed["workflow_phase"] = "execution"
+            record_external_review_verification_binding(
+                committed,
+                passed=passed,
+                verified_at=str(committed.get("last_verified_at") or self.clock.now()),
+            )
+            return committed
+
+        return self.tasks.update(task_id, commit)
+
+    def _collect_post_write_review_gates(self, task: TaskRecord) -> list[dict]:
+        if task.get("verify_status") != VerificationStatus.PASSED.value:
+            return []
+        review = _required_external_review(task)
+        if review is None:
+            return []
+        return self._collect_external_review_evidence_gates(task, review)
+
+    def _collect_review_policy_gates(self, task: TaskRecord) -> list[dict]:
+        review = _required_external_review(task)
+        if review is None:
+            return []
+        if review.get("status") != "passed":
+            return [
+                self._gate(
+                    "EXTERNAL_LLM_REVIEW_REQUIRED",
+                    "required external LLM review is not complete",
+                    "strategy",
+                )
+            ]
+        return self._collect_external_review_evidence_gates(task, review)
+
+    def _fail_after_output_change(
+        self,
+        task_id: str,
+        gates: list[dict],
+    ) -> TaskRecord:
+        def fail(latest: TaskRecord) -> TaskRecord:
+            latest["gates"] = dedupe_gate_records([*latest.get("gates", []), *gates])
+            latest["verify_status"] = VerificationStatus.FAILED.value
+            latest["status"] = "blocked"
+            latest["stage"] = "audit"
+            latest["workflow_phase"] = "execution"
+            record_external_review_verification_binding(
+                latest,
+                passed=False,
+                verified_at=str(latest.get("last_verified_at") or self.clock.now()),
+            )
+            return latest
+
+        return self.tasks.update(task_id, fail)
+
+    def _verify_document_path(self, task: TaskRecord) -> str:
+        review = _required_external_review(task)
+        try:
+            return external_review_verify_document_path(task, review)
+        except (TypeError, ValueError):
+            if review is None:
+                raise
+            return "VERIFY.md"
+
+    def _collect_doc_gates(self, task_id: str, task: TaskRecord) -> list[dict]:
+        gates: list[dict] = []
+        required_doc_keys = ["brief", "plan"] if task["type"] == "feature" else ["brief", "repro", "fix_plan"]
+        for key in required_doc_keys:
+            relative_path = task["docs"].get(key)
+            if not relative_path:
+                gates.append(
+                    self._gate(
+                        "DOC_INCOMPLETE",
+                        f"{key} document is missing from task metadata",
+                        "docs",
+                    )
+                )
+                continue
+            content = self.documents.read(task_id, str(relative_path))
+            if content is None:
+                gates.append(
+                    self._gate("DOC_INCOMPLETE", f"{relative_path} does not exist", "docs")
+                )
+            elif looks_like_unfilled_template(content.strip()):
+                gates.append(
+                    self._gate("DOC_INCOMPLETE", f"{relative_path} is incomplete", "docs")
+                )
+
+        if task["type"] == "issue":
+            repro_path = str(task["docs"].get("repro") or "")
+            repro_content = self.documents.read(task_id, repro_path) or ""
+            if "Regression Test Target" in repro_content and "Describe the test" in repro_content:
+                gates.append(
+                    self._gate(
+                        "REGRESSION_TEST_MISSING",
+                        "issue task is missing a regression test target",
+                        "docs",
+                    )
+                )
+        return gates
+
+    def _collect_spec_gates(self, task_id: str, task: TaskRecord) -> list[dict]:
+        gates: list[dict] = []
+        brief_content = self.documents.read(task_id, str(task["docs"]["brief"])) or ""
+        if task["type"] == "feature":
+            if "Criterion 1" in brief_content or "- [ ] Criterion 1" in brief_content:
+                gates.append(
+                    self._gate(
+                        "ACCEPTANCE_CRITERIA_MISSING",
+                        "feature task requires filled acceptance criteria",
+                        "docs",
+                    )
+                )
+        else:
+            repro_content = self.documents.read(task_id, str(task["docs"]["repro"])) or ""
+            if "1. Step 1" in repro_content or "Describe the test" in repro_content:
+                gates.append(
+                    self._gate(
+                        "SPEC_INCOMPLETE",
+                        "issue repro and regression target must be completed before audit",
+                        "docs",
+                    )
+                )
+
+        strategy = task.get("test_strategy", {})
+        if not strategy.get("normal_cases") or not strategy.get("edge_cases") or not strategy.get("exception_cases"):
+            gates.append(
+                self._gate(
+                    "SPEC_INCOMPLETE",
+                    "task spec must define normal, edge, and exception cases before audit",
+                    "strategy",
+                )
+            )
+        if not strategy.get("verification_methods"):
+            gates.append(
+                self._gate(
+                    "VERIFICATION_MAPPING_MISSING",
+                    "verification mapping must be completed before audit",
+                    "strategy",
+                )
+            )
+        external_llm = strategy.get("external_llm", {})
+        if external_llm.get("required") and (
+            not external_llm.get("provider")
+            or not external_llm.get("purpose")
+            or not external_llm.get("trigger")
+        ):
+            gates.append(
+                self._gate(
+                    "EXTERNAL_LLM_POLICY_MISSING",
+                    "external LLM review policy must be fully defined",
+                    "strategy",
+                )
+            )
+        return gates
+
+    def _collect_design_gates(self, task: TaskRecord) -> list[dict]:
+        ensure_task_design_defaults(task)
+        assessment = task.get("design", {}).get("assessment", {})
+        missing_artifacts = list(assessment.get("missing_artifacts") or [])
+        gates: list[dict] = []
+        if assessment.get("status") == DESIGN_ASSESSMENT_UNDERDESIGNED:
+            gates.append(
+                self._gate(
+                    "DESIGN_REPLAN_REQUIRED",
+                    "design assessment requires a plan revision before verify",
+                    "design",
+                )
+            )
+        if missing_artifacts:
+            gates.append(
+                self._gate(
+                    "DESIGN_ARTIFACTS_MISSING",
+                    f"missing required design artifacts: {', '.join(missing_artifacts)}",
+                    "design",
+                )
+            )
+        return gates
+
+    def _collect_test_strategy_gates(self, task: TaskRecord) -> list[dict]:
+        strategy = task.get("test_strategy", {})
+        gates: list[dict] = []
+        normal_cases = strategy.get("normal_cases", [])
+        edge_cases = strategy.get("edge_cases", [])
+        exception_cases = strategy.get("exception_cases", [])
+        verification_methods = strategy.get("verification_methods", [])
+        external_llm = strategy.get("external_llm", {})
+        if not normal_cases or not edge_cases or not exception_cases or not verification_methods:
+            gates.append(
+                self._gate(
+                    "TEST_STRATEGY_MISSING",
+                    "normal, edge, exception cases and verification methods must be defined",
+                    "strategy",
+                )
+            )
+        if task["type"] == "issue" and not normal_cases:
+            gates.append(
+                self._gate(
+                    "REPRO_MISSING",
+                    "issue task requires explicit regression-oriented test coverage",
+                    "strategy",
+                )
+            )
+        if external_llm.get("required") and external_llm.get("status") != "passed":
+            gates.append(
+                self._gate(
+                    "EXTERNAL_LLM_REVIEW_REQUIRED",
+                    "required external LLM review is not complete",
+                    "strategy",
+                )
+            )
+        elif external_llm.get("required"):
+            gates.extend(self._collect_external_review_evidence_gates(task, external_llm))
+        return gates
+
+    def _collect_external_review_evidence_gates(
+        self,
+        task: TaskRecord,
+        review: dict,
+    ) -> list[dict]:
+        try:
+            allowed_paths = external_review_post_verification_paths(task, review)
+        except (TypeError, ValueError):
+            allowed_paths = ()
+        return collect_external_review_evidence_gates(
+            task,
+            review,
+            evidence=self.external_reviews,
+            gate=self._gate,
+            additional_allowed_dirty_paths=allowed_paths,
+        )
+
+    def _evaluate_and_record_design(self, task: TaskRecord) -> None:
+        ensure_task_design_defaults(task)
+        previous_status = str(task.get("design", {}).get("assessment", {}).get("status") or "")
+        assessment = evaluate_design_adequacy(task)
+        status = str(assessment.get("status") or "")
+        summary = str(assessment.get("summary") or "design adequacy evaluated")
+        if status == DESIGN_ASSESSMENT_UNDERDESIGNED:
+            self.conformance.append(
+                task,
+                checkpoint_type=CONFORMANCE_CHECKPOINT_DESIGN_ASSESSMENT,
+                status="yellow",
+                summary=summary,
+                source="audit.design",
+                resolved=False,
+                drift=0,
+            )
+            reopen_task_plan_for_design_replan(
+                task,
+                actor="design-audit",
+                notes=assessment.get("escalation_reason") or summary,
+                clock=self.clock,
+            )
+        elif status in {DESIGN_ASSESSMENT_APPROPRIATE, DESIGN_ASSESSMENT_OVERDESIGNED}:
+            self.conformance.append(
+                task,
+                checkpoint_type=CONFORMANCE_CHECKPOINT_DESIGN_ASSESSMENT,
+                status="green",
+                summary=summary,
+                source="audit.design",
+                resolved=previous_status == DESIGN_ASSESSMENT_UNDERDESIGNED,
+                drift=0,
+            )
+
+    def _gate(self, code: str, message: str, source: str) -> dict:
+        return make_gate_record(
+            code,
+            message,
+            source,
+            created_at=self.clock.now(),
+        )
+
+    def _publish_completion(self, task: TaskRecord) -> None:
+        self.events.publish(
+            WorkflowEvent(
+                event_type="verify.completed",
+                source={"module": "audit"},
+                data={
+                    "task_id": task["id"],
+                    "status": task["verify_status"],
+                    "stage": task["stage"],
+                    "gate_count": len(task["gates"]),
+                },
+            )
+        )
+
+
+def _outcome(task: TaskRecord, commands: tuple[CommandExecution, ...], artifact) -> VerificationOutcome:
+    return VerificationOutcome(
+        task_id=str(task["id"]),
+        status=str(task["verify_status"]),
+        stage=str(task["stage"]),
+        audit_attempts=int(task.get("audit_attempts", 0)),
+        max_audit_attempts=int(task.get("max_audit_attempts", 10)),
+        gates=tuple(task["gates"]),
+        command_results=commands,
+        verify_artifact=artifact,
+    )
+
+
+def _required_external_review(task: TaskRecord) -> dict | None:
+    strategy = task.get("test_strategy")
+    if not isinstance(strategy, dict):
+        return None
+    review = strategy.get("external_llm")
+    if not isinstance(review, dict) or not review.get("required"):
+        return None
+    return review
+
+
+def _verification_authority_snapshot(task: TaskRecord) -> tuple[object, ...]:
+    return (
+        external_review_scope_digest(task, {}),
+        _canonical_gate_snapshot(task.get("gates", [])),
+        task.get("updated_at"),
+        int(task.get("audit_attempts", 0)),
+        task.get("verify_status"),
+        task.get("last_verified_at"),
+    )
+
+
+def _verification_attempt_gates(
+    candidate: TaskRecord,
+    authority_gates: tuple[dict, ...],
+) -> list[dict]:
+    authority_identities = {_gate_identity(gate) for gate in authority_gates}
+    return [
+        gate
+        for gate in candidate.get("gates", [])
+        if _gate_identity(gate) not in authority_identities
+    ]
+
+
+def _gate_identity(gate: dict) -> str:
+    semantic_gate = {key: value for key, value in gate.items() if key != "created_at"}
+    return json.dumps(
+        semantic_gate,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def _canonical_gate_snapshot(gates: object) -> str:
+    return json.dumps(
+        gates,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def _verification_projection(task: TaskRecord) -> tuple[object, ...]:
+    return (
+        task.get("verify_status"),
+        task.get("status"),
+        task.get("stage"),
+        task.get("workflow_phase"),
+        tuple(
+            (gate.get("code"), gate.get("message"), gate.get("source"))
+            for gate in task.get("gates", [])
+        ),
+    )
+
+
+__all__ = ["TRANSIENT_GATE_SOURCES", "VERIFY_GATE_CODES", "VerificationService"]

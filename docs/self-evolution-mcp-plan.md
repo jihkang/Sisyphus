@@ -34,7 +34,8 @@ These are the key files already added or updated:
 
 - [docs/architecture.md](./architecture.md)
 - [docs/mcp-clients.md](./mcp-clients.md)
-- [src/sisyphus/conformance.py](../src/sisyphus/conformance.py)
+- [src/sisyphus/application/conformance_records.py](../src/sisyphus/application/conformance_records.py) (canonical policy and projection)
+- [src/sisyphus/conformance.py](../src/sisyphus/conformance.py) (public compatibility facade)
 - [src/sisyphus/bus.py](../src/sisyphus/bus.py)
 - [src/sisyphus/bus_jsonl.py](../src/sisyphus/bus_jsonl.py)
 - [src/sisyphus/events.py](../src/sisyphus/events.py)

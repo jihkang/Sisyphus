@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import re
 import subprocess
 
 from .shared.paths import contained_path
@@ -8,6 +10,10 @@ from .shared.paths import contained_path
 
 class GitOperationError(RuntimeError):
     """Raised when Sisyphus git workspace provisioning fails."""
+
+
+_GIT_OBJECT_ID = re.compile(r"^[0-9a-fA-F]{40,64}$")
+_REMOTE_QUERY_TIMEOUT_SECONDS = 30.0
 
 
 def repo_name(repo_root: Path) -> str:
@@ -72,15 +78,29 @@ def current_branch_name(repo_root: Path) -> str | None:
 
 
 def list_dirty_paths(repo_root: Path) -> tuple[list[str], list[str]]:
-    changed = _git_name_only(repo_root, ["diff", "--name-only", "HEAD", "--"])
-    staged = _git_name_only(repo_root, ["diff", "--cached", "--name-only", "--"])
-    untracked = _git_name_only(repo_root, ["ls-files", "--others", "--exclude-standard"])
-    deleted = _git_name_only(repo_root, ["diff", "--name-only", "--diff-filter=D", "HEAD", "--"])
-    staged_deleted = _git_name_only(repo_root, ["diff", "--cached", "--name-only", "--diff-filter=D", "--"])
-
-    changed_paths = sorted({*changed, *staged, *untracked})
-    deleted_paths = sorted({*deleted, *staged_deleted})
-    return changed_paths, deleted_paths
+    try:
+        completed = subprocess.run(
+            [
+                "git",
+                "status",
+                "--porcelain=v1",
+                "-z",
+                "--untracked-files=all",
+                "--ignored=no",
+            ],
+            cwd=repo_root,
+            capture_output=True,
+            text=False,
+            check=False,
+        )
+    except OSError as exc:
+        raise GitOperationError(f"failed to inspect dirty paths: {exc}") from exc
+    if completed.returncode != 0:
+        detail = os.fsdecode(completed.stderr or completed.stdout).strip()
+        raise GitOperationError(
+            "failed to inspect dirty paths: " + (detail or "git status failed")
+        )
+    return _parse_porcelain_v1_z(completed.stdout)
 
 
 def stage_all_changes(repo_root: Path) -> None:
@@ -109,6 +129,75 @@ def current_head_sha(repo_root: Path) -> str:
         error_prefix="failed to resolve HEAD",
     )
     return completed.stdout.strip()
+
+
+def revision_sha(repo_root: Path, revision: str) -> str:
+    normalized_revision = revision.strip()
+    if not normalized_revision:
+        raise GitOperationError("revision must be non-empty")
+    completed = _run_git(
+        repo_root,
+        ["rev-parse", "--verify", f"{normalized_revision}^{{commit}}"],
+        error_prefix=f"failed to resolve revision `{normalized_revision}`",
+    )
+    return completed.stdout.strip()
+
+
+def remote_branch_sha(repo_root: Path, remote_name: str, branch: str) -> str:
+    normalized_remote = remote_name.strip()
+    normalized_branch = branch.strip()
+    if not normalized_remote:
+        raise GitOperationError("remote name must be non-empty")
+    if not normalized_branch:
+        raise GitOperationError("branch name must be non-empty")
+    expected_ref = f"refs/heads/{normalized_branch}"
+    env = dict(os.environ)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    try:
+        completed = subprocess.run(
+            [
+                "git",
+                "ls-remote",
+                "--exit-code",
+                "--heads",
+                "--",
+                normalized_remote,
+                expected_ref,
+            ],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_REMOTE_QUERY_TIMEOUT_SECONDS,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise GitOperationError(
+            f"failed to resolve remote branch `{normalized_remote}/{normalized_branch}`: timed out"
+        ) from exc
+    except OSError as exc:
+        raise GitOperationError(
+            f"failed to resolve remote branch `{normalized_remote}/{normalized_branch}`: {exc}"
+        ) from exc
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip() or "git ls-remote failed"
+        raise GitOperationError(
+            f"failed to resolve remote branch `{normalized_remote}/{normalized_branch}`: {detail}"
+        )
+    matches: list[str] = []
+    for line in completed.stdout.splitlines():
+        fields = line.split("\t", 1)
+        if len(fields) != 2 or fields[1] != expected_ref:
+            continue
+        object_id = fields[0].strip()
+        if not _GIT_OBJECT_ID.fullmatch(object_id):
+            raise GitOperationError("git ls-remote returned an invalid object ID")
+        matches.append(object_id.lower())
+    if len(matches) != 1:
+        raise GitOperationError(
+            f"remote branch `{normalized_remote}/{normalized_branch}` did not resolve uniquely"
+        )
+    return matches[0]
 
 
 def commit_staged_changes(repo_root: Path, message: str) -> str:
@@ -143,21 +232,64 @@ def push_branch(repo_root: Path, remote_name: str, branch: str, *, set_upstream:
     )
 
 
-def remote_url(repo_root: Path, remote_name: str) -> str | None:
+def push_revision(
+    repo_root: Path,
+    remote_name: str,
+    revision: str,
+    branch: str,
+) -> None:
+    normalized_remote = remote_name.strip()
+    normalized_revision = revision.strip()
+    normalized_branch = branch.strip()
+    if not normalized_remote:
+        raise GitOperationError("remote name must be non-empty")
+    if not normalized_revision:
+        raise GitOperationError("revision must be non-empty")
+    if not normalized_branch:
+        raise GitOperationError("branch name must be non-empty")
+    _run_git(
+        repo_root,
+        [
+            "push",
+            normalized_remote,
+            f"{normalized_revision}:refs/heads/{normalized_branch}",
+        ],
+        error_prefix="failed to push reviewed revision",
+    )
+
+
+def _remote_urls(
+    repo_root: Path,
+    remote_name: str,
+    *,
+    push: bool,
+) -> tuple[str, ...]:
     normalized_remote = remote_name.strip()
     if not normalized_remote:
-        return None
+        return ()
+    args = ["git", "remote", "get-url"]
+    if push:
+        args.append("--push")
+    args.extend(["--all", normalized_remote])
     completed = subprocess.run(
-        ["git", "remote", "get-url", normalized_remote],
+        args,
         cwd=repo_root,
         capture_output=True,
         text=True,
         check=False,
     )
     if completed.returncode != 0:
-        return None
-    value = completed.stdout.strip()
-    return value or None
+        return ()
+    return tuple(line.strip() for line in completed.stdout.splitlines() if line.strip())
+
+
+def remote_url(repo_root: Path, remote_name: str) -> str | None:
+    urls = _remote_urls(repo_root, remote_name, push=False)
+    return urls[0] if urls else None
+
+
+def remote_push_urls(repo_root: Path, remote_name: str) -> tuple[str, ...]:
+    return _remote_urls(repo_root, remote_name, push=True)
 
 
 def copy_relative_path(source_root: Path, target_root: Path, relative_path: str) -> None:
@@ -230,14 +362,35 @@ def _run_git(repo_root: Path, args: list[str], error_prefix: str) -> subprocess.
     raise GitOperationError(f"{error_prefix}: {message}")
 
 
-def _git_name_only(repo_root: Path, args: list[str]) -> list[str]:
-    completed = subprocess.run(
-        ["git", *args],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        return []
-    return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+def _parse_porcelain_v1_z(payload: bytes) -> tuple[list[str], list[str]]:
+    records = payload.split(b"\0")
+    changed: set[str] = set()
+    deleted: set[str] = set()
+    index = 0
+    while index < len(records):
+        record = records[index]
+        index += 1
+        if not record:
+            continue
+        if len(record) < 4 or record[2:3] != b" ":
+            raise GitOperationError("failed to parse NUL-delimited git status output")
+        try:
+            status = record[:2].decode("ascii")
+        except UnicodeDecodeError as exc:
+            raise GitOperationError("git status returned a non-ASCII status code") from exc
+        path = os.fsdecode(record[3:])
+        if not path:
+            raise GitOperationError("git status returned an empty path")
+        changed.add(path)
+        if "D" in status:
+            deleted.add(path)
+
+        if "R" in status or "C" in status:
+            if index >= len(records) or not records[index]:
+                raise GitOperationError("git status omitted a rename or copy source path")
+            source_path = os.fsdecode(records[index])
+            index += 1
+            changed.add(source_path)
+            if "R" in status:
+                deleted.add(source_path)
+    return sorted(changed), sorted(deleted)

@@ -27,7 +27,7 @@ _REGISTERED_TARGETS: tuple[EvolutionTarget, ...] = (
         kind=EVOLUTION_TARGET_KIND_TEXT_POLICY,
         title="Execution Contract Wording",
         description="Execution contract text used to anchor workers to the frozen spec and conformance model.",
-        source_paths=("src/sisyphus/conformance.py",),
+        source_paths=("src/sisyphus/application/conformance_records.py",),
         symbol_names=("build_execution_contract",),
     ),
     EvolutionTarget(
@@ -54,7 +54,7 @@ _REGISTERED_TARGETS: tuple[EvolutionTarget, ...] = (
         kind=EVOLUTION_TARGET_KIND_TEXT_POLICY,
         title="Conformance Summary Wording",
         description="Human-readable summaries derived from conformance history and warnings.",
-        source_paths=("src/sisyphus/conformance.py",),
+        source_paths=("src/sisyphus/application/conformance_records.py",),
         symbol_names=("_compose_summary", "_format_summary"),
     ),
     EvolutionTarget(
@@ -63,7 +63,7 @@ _REGISTERED_TARGETS: tuple[EvolutionTarget, ...] = (
         kind=EVOLUTION_TARGET_KIND_TEXT_POLICY,
         title="Review and Gate Explanation Text",
         description="Gate and audit wording surfaced during plan, spec, and verify review flows.",
-        source_paths=("src/sisyphus/audit.py",),
+        source_paths=("src/sisyphus/application/use_cases/verification.py",),
         symbol_names=("_collect_spec_gates", "_collect_test_strategy_gates", "_gate"),
     ),
 )

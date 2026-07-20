@@ -17,6 +17,7 @@ if str(SRC_ROOT) not in sys.path:
 from sisyphus.artifact_projection import project_feature_task
 from sisyphus.artifact_evaluator import evaluate_feature_task_projection
 from sisyphus.artifact_snapshot import materialize_feature_task_artifact_snapshot
+from sisyphus.application.codecs.artifact_dsl import encode_protocol_spec
 from sisyphus.config import load_config
 from sisyphus.dsl import InputContract, ProtocolSpec, RefSelector
 from sisyphus.feature_change_dsl import (
@@ -199,7 +200,7 @@ class FeatureChangeDslTests(unittest.TestCase):
         )
         protocol = load_feature_change_protocol_spec_declaration()
 
-        self.assertEqual(protocol.to_dict(), raw)
+        self.assertEqual(encode_protocol_spec(protocol), raw)
         self.assertEqual(default_feature_change_protocol_spec(), protocol)
 
     def test_evaluation_required_actions_compile_to_bound_obligations(self) -> None:

@@ -13,6 +13,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from sisyphus.conformance import append_conformance_log
 from sisyphus.episode_trace import append_episode_step, build_episode_step, next_episode_step
+from sisyphus.eval.codecs import encode_eval_loop_result
 from sisyphus.eval.loop import TEST_FIRST_LOOP_PHASES, build_task_eval_loop_result
 from sisyphus.evidence_graph import write_evidence_graph
 from sisyphus.reward import REWARD_METRIC_NAMES
@@ -28,7 +29,7 @@ class EvalLoopTests(unittest.TestCase):
             _append_action(task_dir, task["id"], "sisyphus.verify_task", ok=True)
 
             result = build_task_eval_loop_result(task, task_dir)
-            payload = result.to_dict()
+            payload = encode_eval_loop_result(result)
 
             self.assertEqual(result.terminal_status, "closed_verified")
             self.assertEqual(result.action_count, 1)
@@ -48,7 +49,10 @@ class EvalLoopTests(unittest.TestCase):
             result = build_task_eval_loop_result(task, task_dir)
 
             self.assertEqual(result.test_first.status, TEST_FIRST_STATUS_SATISFIED)
-            self.assertEqual(result.to_dict()["loop"]["test_first"]["status"], TEST_FIRST_STATUS_SATISFIED)
+            self.assertEqual(
+                encode_eval_loop_result(result)["loop"]["test_first"]["status"],
+                TEST_FIRST_STATUS_SATISFIED,
+            )
 
     def test_false_close_gets_explicit_penalty(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

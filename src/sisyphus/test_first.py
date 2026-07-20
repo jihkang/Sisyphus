@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .compat.serialization import install_serialization_compat
+from .test_first_codec import (
+    encode_test_first_evaluation,
+    encode_test_first_phase_event,
+)
+
 
 TEST_FIRST_STATUS_SATISFIED = "satisfied"
 TEST_FIRST_STATUS_INCOMPLETE = "incomplete"
@@ -29,14 +35,6 @@ class TestFirstPhaseEvent:
     step: int | None
     source: str
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "phase": self.phase,
-            "step": self.step,
-            "source": self.source,
-        }
-
-
 @dataclass(frozen=True, slots=True)
 class TestFirstEvaluation:
     status: str
@@ -44,16 +42,6 @@ class TestFirstEvaluation:
     observed_phases: tuple[TestFirstPhaseEvent, ...]
     missing_phases: tuple[str, ...]
     violations: tuple[str, ...]
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "status": self.status,
-            "required_phases": list(self.required_phases),
-            "observed_phases": [event.to_dict() for event in self.observed_phases],
-            "missing_phases": list(self.missing_phases),
-            "violations": list(self.violations),
-        }
-
 
 def evaluate_test_first_loop(episode_steps: list[dict[str, object]]) -> TestFirstEvaluation:
     events: list[TestFirstPhaseEvent] = []
@@ -140,6 +128,16 @@ def _ordering_violations(events: tuple[TestFirstPhaseEvent, ...]) -> list[str]:
         max_seen = max(max_seen, current)
         previous_phase = event.phase
     return violations
+
+
+install_serialization_compat(
+    TestFirstPhaseEvent,
+    encode_mapping=encode_test_first_phase_event,
+)
+install_serialization_compat(
+    TestFirstEvaluation,
+    encode_mapping=encode_test_first_evaluation,
+)
 
 
 __all__ = [

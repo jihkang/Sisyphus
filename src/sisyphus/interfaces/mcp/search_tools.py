@@ -3,10 +3,17 @@ from __future__ import annotations
 from types import MappingProxyType
 from pathlib import Path
 
+from ...application.codecs.search import (
+    encode_retrieval_result,
+    encode_search_index_rebuild_result,
+)
+from ...application.search.retrieval import retrieve_documents
+from ...composition.search import (
+    build_and_persist_context_pack,
+    read_search_index,
+    rebuild_search_index,
+)
 from ...config import SisyphusConfig
-from ...context_pack import build_and_persist_context_pack
-from ...retrieval import retrieve_documents
-from ...search_index import read_search_index, rebuild_search_index
 
 
 def _search_index_rebuild(
@@ -17,7 +24,7 @@ def _search_index_rebuild(
     **_: object,
 ) -> dict[str, object]:
     result = rebuild_index(repo_root, config)
-    return result.to_dict()
+    return encode_search_index_rebuild_result(result)
 
 
 def _search(
@@ -46,7 +53,7 @@ def _search(
     return {
         "query": str(args["query"]),
         "result_count": len(results),
-        "results": [result.to_dict() for result in results],
+        "results": [encode_retrieval_result(result) for result in results],
     }
 
 

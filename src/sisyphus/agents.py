@@ -1,20 +1,22 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
 
+from .application.commands.agent import RegisterAgentCommand, UpdateAgentCommand
+from .application.use_cases.agents import AgentManagementError
+from .composition.agents import build_agent_management_service
 from .config import SisyphusConfig
-from .domain.agent.models import (
+from .domain.agent import (
     ACTIVE_AGENT_STATUSES,
     AGENT_STATUSES,
     DEFAULT_STALE_AFTER_SECONDS,
     FINAL_AGENT_STATUSES,
+    AgentPolicyError,
 )
-from .domain.agent import repository as agent_repository
-from .shared.clock import utc_now
+from .interfaces.agent_presenter import present_agent
 from .shared.mappings import find_unknown_fields
-from .state import load_task_record
+from .shared.paths import agent_dir
 
 
 class AgentTrackingError(RuntimeError):
@@ -26,13 +28,17 @@ def guard_agent_updates(*allowed_fields: str):
 
     def decorator(func):
         @wraps(func)
-        def wrapper(repo_root: Path, config: SisyphusConfig, task_id: str, agent_id: str, **changes):
+        def wrapper(
+            repo_root: Path,
+            config: SisyphusConfig,
+            task_id: str,
+            agent_id: str,
+            **changes,
+        ):
             unknown_fields = find_unknown_fields(changes, allowed)
             if unknown_fields:
                 names = ", ".join(unknown_fields)
                 raise AgentTrackingError(f"unknown agent update field(s): {names}")
-            if "status" in changes and changes["status"] is not None:
-                _validate_status(str(changes["status"]))
             return func(repo_root, config, task_id, agent_id, **changes)
 
         return wrapper
@@ -53,34 +59,23 @@ def register_agent(
     command: list[str] | None = None,
     status: str = "running",
 ) -> dict:
-    _validate_agent_id(agent_id)
-    _validate_status(status)
-    _ensure_task_exists(repo_root, config, task_id)
-
-    agent_file = agent_repository.agent_file(repo_root, config.task_dir, task_id, agent_id)
-    if agent_file.exists():
-        raise AgentTrackingError(f"agent already exists: {agent_id}")
-
-    now = utc_now()
-    agent = {
-        "agent_id": agent_id,
-        "parent_task_id": task_id,
-        "role": role,
-        "provider": provider,
-        "status": status,
-        "current_step": current_step,
-        "last_message_summary": last_message_summary,
-        "owned_paths": owned_paths or [],
-        "command": command or [],
-        "pid": None,
-        "started_at": now,
-        "updated_at": now,
-        "finished_at": now if status in FINAL_AGENT_STATUSES else None,
-        "last_heartbeat_at": now,
-        "error": None,
-    }
-    agent_repository.save_agent_record(agent_file, agent)
-    return agent
+    try:
+        view = build_agent_management_service(repo_root, config).register(
+            RegisterAgentCommand(
+                task_id=task_id,
+                agent_id=agent_id,
+                role=role,
+                provider=provider,
+                current_step=current_step,
+                last_message_summary=last_message_summary,
+                owned_paths=tuple(owned_paths or ()),
+                command=tuple(command or ()),
+                status=status,
+            )
+        )
+    except (AgentManagementError, AgentPolicyError) as error:
+        raise AgentTrackingError(str(error)) from error
+    return present_agent(view)
 
 
 @guard_agent_updates(
@@ -100,25 +95,24 @@ def update_agent(
     agent_id: str,
     **changes: object,
 ) -> dict:
-    _validate_agent_id(agent_id)
-    agent_file = agent_repository.agent_file(repo_root, config.task_dir, task_id, agent_id)
-    if not agent_file.exists():
-        raise FileNotFoundError(f"agent not found: {agent_id}")
-
-    def mutate(agent: dict) -> None:
-        persisted_status = str(changes.get("status") or agent["status"])
-        _apply_agent_changes(agent, changes)
-
-        now = utc_now()
-        agent["updated_at"] = now
-        if persisted_status in ACTIVE_AGENT_STATUSES:
-            agent["last_heartbeat_at"] = now
-            agent["finished_at"] = None
-        elif agent.get("finished_at") is None:
-            agent["finished_at"] = now
-            agent["pid"] = None
-
-    return agent_repository.update_agent_record(agent_file, mutate)
+    try:
+        view = build_agent_management_service(repo_root, config).update(
+            UpdateAgentCommand(
+                task_id=task_id,
+                agent_id=agent_id,
+                status=_optional_text(changes.get("status")),
+                provider=_optional_text(changes.get("provider")),
+                current_step=_optional_text(changes.get("current_step")),
+                last_message_summary=_optional_text(changes.get("last_message_summary")),
+                owned_paths=_optional_tuple(changes.get("owned_paths")),
+                command=_optional_tuple(changes.get("command")),
+                pid=_optional_int(changes.get("pid")),
+                error=_optional_text(changes.get("error")),
+            )
+        )
+    except (AgentManagementError, AgentPolicyError) as error:
+        raise AgentTrackingError(str(error)) from error
+    return present_agent(view)
 
 
 def load_agent_record(
@@ -128,12 +122,18 @@ def load_agent_record(
     agent_id: str,
     stale_after_seconds: int | None = DEFAULT_STALE_AFTER_SECONDS,
 ) -> tuple[dict, Path]:
-    _validate_agent_id(agent_id)
-    agent_file = agent_repository.agent_file(repo_root, config.task_dir, task_id, agent_id)
-    if not agent_file.exists():
-        raise FileNotFoundError(f"agent not found: {agent_id}")
-    agent = agent_repository.read_agent_record(agent_file)
-    return _enrich_agent(agent, stale_after_seconds), agent_file
+    try:
+        view = build_agent_management_service(repo_root, config).get(
+            task_id,
+            agent_id,
+            stale_after_seconds=stale_after_seconds,
+        )
+    except AgentPolicyError as error:
+        raise AgentTrackingError(str(error)) from error
+    return (
+        present_agent(view),
+        agent_dir(repo_root, config.task_dir, task_id) / f"{agent_id}.json",
+    )
 
 
 def list_agents(
@@ -143,73 +143,38 @@ def list_agents(
     task_id: str | None = None,
     stale_after_seconds: int | None = DEFAULT_STALE_AFTER_SECONDS,
 ) -> list[dict]:
-    agent_files = agent_repository.list_agent_files(repo_root, config.task_dir, task_id=task_id)
-
-    agents: list[dict] = []
-    for agent_file in agent_files:
-        try:
-            raw = agent_repository.read_agent_record(agent_file)
-        except ValueError:
-            continue
-        agents.append(_enrich_agent(raw, stale_after_seconds))
-
-    return sorted(
-        agents,
-        key=lambda agent: (
-            agent.get("updated_at", ""),
-            agent.get("started_at", ""),
-            agent.get("agent_id", ""),
-        ),
-        reverse=True,
+    views = build_agent_management_service(repo_root, config).list(
+        task_id=task_id,
+        stale_after_seconds=stale_after_seconds,
     )
+    return [present_agent(view) for view in views]
 
 
-def _ensure_task_exists(repo_root: Path, config: SisyphusConfig, task_id: str) -> None:
-    load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+def _optional_text(value: object) -> str | None:
+    return None if value is None else str(value)
 
 
-def _enrich_agent(agent: dict, stale_after_seconds: int | None) -> dict:
-    enriched = dict(agent)
-    raw_status = agent.get("status", "running")
-    enriched["raw_status"] = raw_status
-    enriched["status"] = _derived_status(agent, stale_after_seconds)
-    return enriched
+def _optional_tuple(value: object) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)) or any(not isinstance(item, str) for item in value):
+        raise AgentTrackingError("agent list fields must contain strings")
+    return tuple(value)
 
 
-def _derived_status(agent: dict, stale_after_seconds: int | None) -> str:
-    status = agent.get("status", "running")
-    if stale_after_seconds is None or status not in ACTIVE_AGENT_STATUSES:
-        return status
-
-    heartbeat = agent.get("last_heartbeat_at") or agent.get("updated_at")
-    if not heartbeat:
-        return "stale"
-
-    try:
-        last_seen = datetime.fromisoformat(heartbeat.replace("Z", "+00:00"))
-    except ValueError:
-        return "stale"
-
-    age_seconds = (datetime.now(timezone.utc) - last_seen).total_seconds()
-    if age_seconds > stale_after_seconds:
-        return "stale"
-    return status
+def _optional_int(value: object) -> int | None:
+    return None if value is None else int(value)
 
 
-def _validate_status(status: str) -> None:
-    if status not in AGENT_STATUSES:
-        allowed = ", ".join(sorted(AGENT_STATUSES))
-        raise AgentTrackingError(f"invalid agent status `{status}`; expected one of: {allowed}")
-
-
-def _validate_agent_id(agent_id: str) -> None:
-    invalid_markers = {"/", "\\", ".."}
-    if not agent_id or any(marker in agent_id for marker in invalid_markers):
-        raise AgentTrackingError(f"invalid agent id: {agent_id}")
-
-
-def _apply_agent_changes(agent: dict, changes: dict[str, object]) -> None:
-    for field, value in changes.items():
-        if value is None:
-            continue
-        agent[field] = value
+__all__ = [
+    "ACTIVE_AGENT_STATUSES",
+    "AGENT_STATUSES",
+    "DEFAULT_STALE_AFTER_SECONDS",
+    "FINAL_AGENT_STATUSES",
+    "AgentTrackingError",
+    "guard_agent_updates",
+    "list_agents",
+    "load_agent_record",
+    "register_agent",
+    "update_agent",
+]

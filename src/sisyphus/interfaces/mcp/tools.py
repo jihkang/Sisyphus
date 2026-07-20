@@ -482,6 +482,42 @@ def mcp_tool_definitions() -> list[dict[str, object]]:
             "outputSchema": {"type": "object", "properties": {"task_id": {"type": "string"}, "workflow_phase": {"type": "string"}, "subtasks": {"type": "array"}}},
         },
         {
+            "name": "sisyphus.record_external_review",
+            "description": "Record independently produced external LLM review evidence.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "envelope_path": {"type": "string"},
+                    "operator_capability": {"type": "string", "writeOnly": True},
+                },
+                "required": [
+                    "task_id",
+                    "envelope_path",
+                    "operator_capability",
+                ],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "status": {"type": "string"},
+                    "provider": {"type": "string"},
+                    "reviewer": {"type": "string"},
+                    "reviewed_head_sha": {"type": "string"},
+                    "scope_digest": {"type": "string"},
+                    "envelope_path": {"type": "string"},
+                    "envelope_digest": {"type": "string"},
+                    "report_path": {"type": "string"},
+                    "report_digest": {"type": "string"},
+                    "finding_count": {"type": "integer"},
+                    "blocking_finding_count": {"type": "integer"},
+                    "completed_at": {"type": "string"},
+                },
+            },
+        },
+        {
             "name": "sisyphus.verify_task",
             "description": "Run verification for a task.",
             "inputSchema": {

@@ -1,925 +1,256 @@
 # Sisyphus Architecture
 
-This document describes the current architecture of Sisyphus as of 2026-07-11.
+Last verified against code: 2026-07-20
 
-Sisyphus is a graph-native work system that runs inside a target Git repository and manages repository-local work state, task documents, worktrees, execution, verification, and closeout.
+Sisyphus is a repository-local control plane for AI-assisted software work. It
+turns requests into reviewable task state, isolated Git worktrees, bounded agent
+execution, verification evidence, and promotion receipts. Repository artifacts,
+not an agent session, are authoritative.
 
-Its center is not an agent, a chat session, or a flat task list. The center is a controlled work world composed of specs, artifacts, typed relations, verification evidence, promotion state, invalidation state, and execution receipts. Intelligence is allowed to act on that world, but it is not allowed to become the authority over that world.
+This document is the architecture overview. See
+[architecture-and-data-pipeline.md](./architecture-and-data-pipeline.md) for the
+module-level data flow and [runtime-relationship-diagrams.md](./runtime-relationship-diagrams.md)
+for focused diagrams.
 
-## Core Purpose
+## Architectural Rules
 
-Sisyphus should be understood as:
-
-> a graph-native work system centered on a controllable work world, with intelligence gradually internalized as operations over that world
-
-This means:
-
-- the authoritative state lives in durable, reviewable repository artifacts
-- runtime intelligence is an operator over that state rather than the source of truth
-- reconstructability matters as much as execution convenience
-
-The task runtime is still the operator-facing control surface, but feature work now passes through an artifact projection, DSL, obligation queue, and convergence loop before verification and promotion decisions are considered closed.
-
-The package uses a staged ownership model. Stable top-level modules such as `sisyphus.cli`, `sisyphus.state`, `sisyphus.workflow`, `sisyphus.planning`, and `sisyphus.mcp_core` preserve public imports, while implementation authority is moving into `interfaces`, `domain`, `infra`, and `shared`. The `compat` package is explicitly legacy-facing; it is not a second implementation root.
-
-For visual diagrams of the current task runtime, artifact-governed feature-change path, target artifact authority, and adapter boundaries, see [runtime-relationship-diagrams.md](./runtime-relationship-diagrams.md).
-
-## Hard State And Soft Cognition
-
-The architecture separates two categories of system responsibility.
-
-### Hard State
-
-Hard state is the durable truth the system must be able to recover, validate, diff, and promote.
-
-- spec artifacts
-- produced artifacts
-- typed edges and slot bindings
-- verification claims and evidence
-- promotion decisions
-- invalidation state
-- execution receipts
-
-### Soft Cognition
-
-Soft cognition improves throughput and adaptability, but it must not replace durable state.
-
-- planning
-- decomposition
-- scheduling
-- impact analysis
-- retry and recovery strategy
-- replanning
-- semantic review
-- context condensation
-
-The governing rule is:
-
-> intelligence may be internalized, but it must not overwrite or bypass hard-state authority
-
-## Task And Artifact Model
-
-Tasks are still first-class, but they are not the primary durable object. Artifacts carry durable state. Tasks are operators that produce, transform, or compose artifacts.
-
-The intended model is:
-
-- `TaskSpec`: the planned operation
-- `TaskRun`: the executed operation and its receipt
-- `Artifact`: a durable state object
-- `CompositeArtifact`: a higher-order artifact whose validity depends on typed relationships among child artifacts
-- `VerificationArtifact`: evidence for a specific claim
-- `ArtifactPromotionDecision`: the recorded decision that an artifact obligation is closed or blocked
-- `RepositoryPromotionExecution`: the branch, commit, push, and pull-request execution path that publishes verified repository work
-
-This implies two important boundaries:
-
-- `TaskSpec` and `TaskRun` must remain distinct
-- higher-order results are not loose bundles; they are contract-bearing composite objects
-
-## Composite Artifacts And Reconstruction
-
-A higher-order artifact exists only when the system can recover:
-
-- which child artifacts participated
-- which task specs and task runs produced them
-- which typed edges and slot bindings connected them
-- which composition rule made the result valid
-- which verification claims supported the result
-- which promotion state the result currently holds
-
-For that reason, a final artifact should be understood as having two layers:
-
-- `payload`: the usable result
-- `envelope`: the reconstructable composition record explaining why the result is valid
-
-This reconstructability requirement is stronger than simple lineage tracking. It is a design constraint for persistence, verification, invalidation, and promotion.
-
-## Artifact DSL And Obligation Runtime
-
-The first implemented artifact-governed slice is the `FeatureChangeArtifact` protocol.
-
-The authoritative DSL boundary is intentionally about meaning, not provider selection:
-
-- `ProtocolSpec` defines the artifact type, slots, invariants, required claim scopes, and obligation specs.
-- `ObligationSpec` defines reusable obligation templates.
-- `InputContract` defines the evidence boundary for an obligation: required, optional, forbidden, and closure rules.
-- `ObligationIntent` is the runtime signal emitted by evaluation for the current world state.
-- `CompiledObligation` is the executable obligation instance after current slots are bound to concrete artifact refs.
-- `MaterializedInputSet` records the concrete input refs and fingerprint used by a compiled obligation.
-- `ExecutionPolicy` is a replaceable overlay that chooses the runner, role, provider, tool, timeout, retry, or budget.
-
-The key boundary is:
-
-> what to read, what to produce, and what to verify is DSL authority; who or what executes it is execution policy
-
-Feature-change DSL declarations live in packaged JSON so the protocol is data-declared instead of hard-coded:
-
-- `src/sisyphus/declarations/feature_change_protocol.json`
-- `src/sisyphus/declarations/execution_policies.json`
-
-At runtime, evaluation emits `ObligationIntent` records, the compiler binds them through `slot://` selectors into concrete `artifact://` refs, and the daemon materializes a compiled queue at:
+The implemented dependency direction is:
 
 ```text
-.planning/tasks/<task-id>/artifacts/obligations/compiled.json
+interfaces and public facades
+            |
+            v
+       composition
+            |
+            v
+       application
+            |
+            v
+          domain
+
+composition ------> infrastructure adapters
+infrastructure ---> application ports + domain + shared
 ```
 
-The queue stores the protocol declaration, execution policy registry, evaluation result, intents, compiled obligations, materialized input fingerprints, statuses, and execution receipts. Existing obligation state is preserved by `(obligation_id, input_fingerprint)`, so changing inputs naturally creates a new obligation instance instead of mutating the meaning of a previous one.
+- `domain` owns deterministic business values and policies. It does not own IO,
+  transport, clocks, subprocesses, or boundary serialization.
+- `application` owns commands, results, ports, use-case ordering, projections,
+  and explicit boundary codecs.
+- `composition` is the wiring boundary. It is where concrete infrastructure is
+  selected for application ports.
+- `infra` owns repository files, locking, atomic replacement, Git, subprocesses,
+  provider receipts, event storage, and other external effects.
+- `interfaces` own CLI, MCP, inbox, and provider-wrapper parsing, dispatch, and
+  presentation. Interfaces do not import infrastructure directly.
+- `shared` contains dependency-light primitives, not business services.
+- stable root modules and `compat` preserve supported imports and patch points;
+  they must not become a second implementation root.
 
-## Verification, Promotion, And Invalidation
+These rules are executable. `tests/test_architecture_dependencies.py` rejects
+outward application imports, direct interface-to-infrastructure imports, cycles,
+business logic returning to facades, model-owned mapping methods, and any domain
+outward edge beyond the two named compatibility shims.
 
-Verification is not a generic boolean. It is proof for a claim over a scope with explicit dependencies and evidence.
+## Package Ownership
 
-The system should reason about verification in three layers:
+| Package | Owns | Representative modules |
+| --- | --- | --- |
+| `domain` | entities, value objects, lifecycle and promotion policy, artifact semantics | `domain/lifecycle`, `domain/task`, `domain/artifact`, `domain/promotion` |
+| `application` | commands, ports, use cases, result types, pure projections and codecs | `application/use_cases`, `application/ports`, `application/codecs` |
+| `composition` | construction of application services with concrete adapters | `composition/workflow.py`, `composition/verification.py`, `composition/promotion.py` |
+| `infra` | file, process, Git, provider, event, search, verification, and persistence adapters | `infra/persistence`, `infra/workspace`, `infra/verification`, `infra/evolution` |
+| `interfaces` | CLI/MCP/inbox/provider transport adaptation | `interfaces/cli`, `interfaces/mcp`, `interfaces/inbox` |
+| `evolution` | effect-free evolution plans, datasets, scoring, reports, and request contracts | `evolution/harness.py`, `evolution/fitness.py`, `evolution/report.py` |
+| `providers` | legacy-facing and local-model adapter surface | `providers/local_agent.py`, `providers/benchmark.py` |
+| `shared` | time, paths, coercion, serialization primitives | `shared/clock.py`, `shared/paths.py`, `shared/serialization.py` |
 
-- `local`: an artifact is internally valid
-- `cross`: relationships between artifacts are valid
-- `composite`: a higher-order artifact satisfies its intended obligation
+`providers` and `evolution` are bounded outer contexts, not additions to the
+domain core. Their effects are routed through infrastructure and composition.
 
-Higher-layer verification is not implied by lower-layer verification.
+## Authority Model
 
-Promotion is likewise not task completion. Artifact promotion is obligation closure for an artifact. A promoted artifact should have:
+### Canonical task authority
 
-- required slots filled
-- invariants satisfied
-- required verification claims passed
-- no stale dependencies
-- no unresolved conflicts
-- required approvals or evidence recorded
-
-Invalidation must precede operational change requests. When an input changes, the system first computes which composites or verification claims are stale, and only then decides whether to reverify, reassemble, replan, or issue a new change request.
-
-Repository promotion is a separate execution layer. `promotion.py` handles commit, push, PR, merge receipt, and changeset recording through `RepositoryPromotionExecution` and merge receipt outcomes. Artifact promotion decisions and repository promotion execution are connected, but they are not the same concept.
-
-## Authority Boundary For Intelligence
-
-Hermes-like agent runtimes remain useful, but they must stay outside the authoritative state boundary.
-
-Those runtimes usually carry hidden state through:
-
-- session accumulation
-- memory injection
-- summarization or compression
-- fallback and retry policy
-- autonomous loop decisions
-
-That is useful for general-purpose agent behavior, but it introduces drift if treated as the runtime authority.
-
-The architectural rule is therefore:
-
-- Sisyphus owns the authoritative runtime contract
-- external or embedded agent intelligence remains an optional cognition module
-- hard-state persistence, receipts, verification, promotion, and invalidation stay inside Sisyphus
-
-## Implemented Design Lock
-
-The first concrete protocol is now the feature-change composite. Common composition kernels and reusable graph machinery should be extracted only after this protocol continues to survive real task, verification, invalidation, and promotion pressure.
-
-### Feature-Change Protocol
-
-The locked first protocol is a repository-change composite for feature delivery.
-
-The protocol description lives in [docs/feature-change-artifact.md](./feature-change-artifact.md), and the executable declaration lives in `src/sisyphus/declarations/feature_change_protocol.json`.
-
-One practical shape is:
-
-- `FeatureChangeArtifact`
-  - `spec` slot
-  - `implementation_candidates[]` collection slot
-  - `selected_implementation` slot
-  - `test_obligations[]` collection slot
-  - `verification_claims[]` collection slot
-  - optional `approvals[]` collection slot
-
-This is the right first candidate because it matches the repository's current workflow shape while still forcing the system to define:
-
-- role-based slots and collection slots
-- cross-artifact invariants such as spec or implementation compatibility
-- layered verification from local checks to composite acceptance
-- promotion rules for when a change is actually ready
-- invalidation behavior when spec, implementation, or tests move independently
-- a reconstructable envelope that can later map to branch, PR, and merge decisions
-
-### Current Feature-Change Pipeline
+The canonical task record is:
 
 ```text
-Task record + task docs
--> project_feature_task_record()
--> persisted artifact snapshot
--> evaluate_feature_task_projection()
--> ObligationIntent
--> compile_feature_change_obligations()
--> compiled obligation queue
--> converge_feature_change_obligations()
--> verify execution receipts and refreshed projection snapshot
+.planning/tasks/<task-id>/task.json
 ```
 
-The persisted snapshot lives at:
+It owns lifecycle, planning, verification, conformance, subtask, and repository
+promotion state. Task documents and artifacts are referenced from this record.
+The record is accessed through application repository ports backed by
+`infra/persistence/task_records.py` and `task_repository.py`.
+
+### Durable supporting authority
+
+Important task-local artifacts include:
 
 ```text
-.planning/tasks/<task-id>/artifacts/projection/feature-change.json
+BRIEF.md
+PLAN.md or FIX_PLAN.md
+REPRO.md                    # issue tasks
+VERIFY.md
+LOG.md
+agents/*.json
+artifacts/spec-validation/latest.json
+artifacts/evidence/evidence-graph.json
+artifacts/projection/feature-change.json
+artifacts/obligations/compiled.json
+artifacts/promotion/*.json
 ```
 
-Snapshot fingerprints allow the daemon to detect stale projected inputs. When a persisted feature-change snapshot no longer matches the current projection, the obligation runtime emits a `reverify_stale_inputs` intent and recompiles a repair obligation against the current bound inputs.
-
-## System Shape
-
-At a high level, the current implementation is organized around responsibility boundaries rather than top-level file names:
-
-```text
-+--------------------------------------------------------------------+
-| Stable public and compatibility surfaces                           |
-| cli.py, state.py, workflow.py, planning.py, mcp_core.py, compat/   |
-+--------------------------------------------------------------------+
-| Interfaces                                                         |
-| interfaces/cli/{parser,dispatch,handlers}, interfaces/mcp/*, api.py |
-+--------------------------------------------------------------------+
-| Intake and runtime coordination                                    |
-| daemon.py, service.py, provider_wrapper.py, agent_runtime.py        |
-+--------------------------------------------------------------------+
-| Domain authority                                                   |
-| domain/{inbox,task,agent,lifecycle,planning,promotion,workflow}     |
-+--------------------------------------------------------------------+
-| Artifact, evaluation, and evolution services                       |
-| artifacts.py, dsl.py, obligation_runtime.py, eval/, evolution/      |
-+--------------------------------------------------------------------+
-| Infrastructure and shared primitives                               |
-| infra/{config,persistence}, shared/{clock,coerce,mappings,paths}     |
-+--------------------------------------------------------------------+
-| Repository workspace integration                                   |
-| templates.py, gitops.py, task docs, worktrees, .planning state      |
-+--------------------------------------------------------------------+
-```
-
-The top-level facades are intentionally stable. New business rules belong in `domain`; parsing and response shaping belong in `interfaces`; file/config mechanics belong in `infra`; dependency-light primitives belong in `shared`. A facade should delegate rather than reacquire implementation responsibility.
-
-## Layer Diagram
-
-The main dependency flow is downward. Upper layers coordinate lower layers and should not contain low-level persistence details unless needed for orchestration.
-
-```mermaid
-flowchart TD
-    P[Public facades and compat\ncli / state / workflow / mcp_core]
-    I[Interfaces\nCLI / API / MCP / Discord]
-    R[Intake and runtime\ndaemon / service / providers / agents]
-    D[Domain authority\ninbox / task / lifecycle / planning / promotion / workflow]
-    A[Artifact and evaluation\nDSL / obligations / eval / evolution]
-    F[Infrastructure\nconfig / persistence / shared primitives]
-    W[Repository workspace\nplanning state / docs / git worktrees]
-
-    P --> I
-    P --> D
-    I --> R
-    I --> D
-    R --> D
-    R --> F
-    D --> A
-    D --> F
-    A --> F
-    F --> W
-    R --> W
-    D --> W
-```
-
-## MCP Boundary
-
-MCP is the shared product interface for Codex, Claude, and any future agent client. To keep that interface stable while the orchestration core evolves, the codebase now treats MCP as a thin gateway over a repo-local core service.
-
-```mermaid
-flowchart LR
-    A[Codex / Claude / Other Client]
-    B[MCP Gateway\nmcp_server.py]
-    C[MCP Interface Service\ninterfaces/mcp/service.py]
-    R[Registries and adapters\ntools / resources / schemas]
-    D[Sisyphus Core\nworkflow / planning / audit / closeout]
-    E[State + Docs + Agents]
-    F[Event Bus]
-
-    A --> B
-    B --> C
-    C --> R
-    R --> D
-    R --> E
-    C --> D
-    C --> E
-    D --> F
-    C --> F
-```
-
-The current responsibilities are:
-
-- `mcp_server.py`: official MCP Python SDK server, stdio transport, tool/resource binding.
-- `interfaces/mcp/service.py`: repo-aware service composition and request dispatch.
-- `interfaces/mcp/registry.py`, `tools.py`, and `resources.py`: tool/resource registration and shared adapter contracts.
-- `interfaces/mcp/*_tools.py` and `*_resources.py`: bounded workflow, promotion, search, task, repository, and evolution surfaces.
-- `mcp_core.py` and `compat/mcp_core.py`: stable compatibility imports over the interface implementation.
-- `bus.py` and related modules: publication surface for visualization, monitoring, and other apps.
-- sisyphus core modules: workflow, conformance, verification, and persistence policy.
-
-## Observation and Action Boundary
-
-`task://<task-id>/observation` is the canonical compact agent-facing state. `observation.py` projects task, verification, conformance, evidence, document, subtask, and promotion state into one response with explicit allowed and forbidden next actions.
-
-The action boundary is split across:
-
-- `action_space.py`: action definitions and risk levels
-- `lifecycle_state.py` and `lifecycle_rules.py`: lifecycle actions, phases, and transition rules
-- `lifecycle_guard.py`: transition checks and gate projection
-- `interfaces/mcp/*_tools.py`: transport adapters that invoke guarded core operations
-
-Agents should choose from the observation rather than reconstructing lifecycle state from chat history. Human-only and review-gated actions remain operator decisions even when the transport can technically invoke them.
-
-## Evolution Control Plane
-
-The repository also contains a bounded evolution control plane in [`src/sisyphus/evolution/`](../src/sisyphus/evolution/). Evaluation remains isolated and append-only; review-gated bridge operations may request normal Sisyphus follow-up tasks without granting evolution lifecycle authority.
-
-The current implemented slices are:
-
-- target registry and run planning in `targets.py` and `runner.py`
-- stage and failure contracts in `stages.py`
-- artifact-cycle and handoff contracts in `artifacts.py` and `handoff.py`
-- dataset extraction from task records, conformance state, verify metadata, and event logs in `dataset.py`
-- baseline/candidate harness planning, isolated evaluation execution, and worktree-backed receipt capture in `harness.py`
-- bounded baseline/candidate materialization in `materialization.py`
-- hard-guard evaluation and weighted scoring in `constraints.py` and `fitness.py`
-- stable reporting projection in `report.py`
-- read-only orchestration and append-only run persistence in `orchestrator.py`
-- CLI execution and read views through `interfaces/cli/handlers/evolution.py` and `evolution/surface.py`
-- review-gated follow-up requests and task handoff in `followup.py`, `bridge.py`, and `operator.py`
-- promotion, verification, receipt projection, and invalidation contracts in `promotion.py`, `verification.py`, `receipts.py`, and `invalidation.py`
-- MCP evolution tools and resources through `interfaces/mcp/evolution.py`
-
-The following pieces remain intentionally bounded or future work:
-
-- broader artifact protocols beyond feature-change
-- agent/tool execution policies beyond the current local verifier runner
-- autonomous approval or promotion, which remains outside the evolution authority boundary
-- large-scale scheduling and distributed evaluation workers
-
-### Evolution Authority Boundary
-
-The control-plane boundary is strict:
-
-- evolution owns planning, candidate comparison, guard evaluation, fitness scoring, and report generation
-- evolution may write append-only run artifacts under `.planning/evolution/runs/<run_id>/`
-- evolution must not mutate live repository state, live task state, approval state, or promotion state
-- Sisyphus owns task creation, plan review, spec freeze, provider execution, verification, receipts, promotion, and invalidation
-
-In practical terms, an evolution run may recommend or request a follow-up task, but it may not approve, freeze, verify, or promote its own result.
-
-### Evolution System Diagram
-
-```mermaid
-flowchart LR
-    subgraph Runtime["Runtime orchestration plane"]
-        Clients[CLI / API / MCP clients]
-        MCP[MCP gateway and core]
-        Workflow[Workflow / planning / verify / closeout]
-        RepoState[Task records / task docs / conformance / event bus]
-
-        Clients --> MCP
-        Clients --> Workflow
-        MCP --> Workflow
-        Workflow --> RepoState
-        MCP --> RepoState
-    end
-
-    subgraph Evolution["Evolution control plane"]
-        Targets[Target registry]
-        Run[Run planner]
-        Stages[Stage contracts]
-        Artifacts[Artifact and handoff contracts]
-        Dataset[Dataset builder]
-        Harness[Harness planner]
-        Guards[Constraints]
-        Fitness[Fitness scorer]
-        Report[Report model]
-        Orchestrator[Read-only orchestrator]
-
-        Targets --> Run
-        Run --> Stages
-        Run --> Artifacts
-        Run --> Dataset
-        Dataset --> Harness
-        Harness --> Guards
-        Harness --> Fitness
-        Guards --> Report
-        Fitness --> Report
-        Report --> Orchestrator
-    end
-
-    RepoState --> Dataset
-    Report --> Bridge[Review-gated follow-up bridge]
-    Bridge --> Workflow
-    MCP --> Report
-```
-
-### Evolution Evaluation Loop
-
-```mermaid
-flowchart TD
-    A[Select evolution targets] --> B[Plan evolution run]
-    B --> C[Build dataset from task records, verify traces, conformance, and events]
-    C --> D[Plan baseline and candidate harness evaluations]
-    D --> E[Populate comparable metrics]
-    E --> F[Evaluate hard guards]
-    E --> G[Compute weighted fitness]
-    F --> H[Build reviewable report]
-    G --> H
-    H --> I[Append-only run artifacts]
-    I --> J[Review-gated follow-up request or MCP projection]
-```
-
-Today this loop includes planning, bounded candidate materialization, isolated worktree-backed evaluation, reviewable reporting, and review-gated follow-up task creation. It does not approve, freeze, verify, or promote its own results; those actions continue through the normal Sisyphus lifecycle.
-
-## Class Diagram
-
-The following diagram shows the main runtime objects and persistent artifacts, with emphasis on where data is stored and how it moves between modules.
-
-```mermaid
-classDiagram
-    class CLI {
-        +build_parser()
-        +handle_request()
-        +handle_verify()
-        +handle_close()
-    }
-
-    class API {
-        +queue_conversation()
-        +request_task()
-        +run_until_stable()
-    }
-
-    class Daemon {
-        +queue_conversation_event()
-        +process_inbox_event()
-        +run_daemon()
-    }
-
-    class Workflow {
-        +run_workflow_cycle()
-        +_advance_task()
-        +_run_subtask()
-    }
-
-    class Planning {
-        +enforce_plan_approved()
-        +freeze_task_spec()
-        +generate_subtasks()
-    }
-
-    class ProviderWrapper {
-        +run_provider_wrapper()
-        +_build_default_launch()
-    }
-
-    class Audit {
-        +run_verify()
-        +_run_verify_commands()
-    }
-
-    class Closeout {
-        +run_close()
-    }
-
-    class State {
-        +build_task_record()
-        +load_task_record()
-        +save_task_record()
-        +sync_task_support_files()
-    }
-
-    class Agents {
-        +register_agent()
-        +update_agent()
-        +list_agents()
-    }
-
-    class GitOps {
-        +create_task_branch_and_worktree()
-        +remove_task_branch_and_worktree()
-    }
-
-    class Strategy {
-        +sync_test_strategy_from_docs()
-    }
-
-    class TaskRecord {
-        +id
-        +type
-        +slug
-        +status
-        +stage
-        +workflow_phase
-        +plan_status
-        +spec_status
-        +verify_status
-        +subtasks
-        +gates
-        +meta
-    }
-
-    class ConversationEvent {
-        +id
-        +event_type
-        +status
-        +payload
-        +result
-        +error
-    }
-
-    class AgentRecord {
-        +agent_id
-        +parent_task_id
-        +role
-        +provider
-        +status
-        +last_heartbeat_at
-        +error
-    }
-
-    class TaskDocs {
-        +BRIEF.md
-        +PLAN.md or FIX_PLAN.md
-        +REPRO.md
-        +VERIFY.md
-        +LOG.md
-    }
-
-    class Worktree {
-        +branch
-        +path
-    }
-
-    CLI --> API : invokes
-    CLI --> Daemon : invokes
-    API --> Daemon : queues/processes
-    API --> Workflow : runs until stable
-    Daemon --> ConversationEvent : reads/writes
-    Daemon --> State : loads/saves task
-    Daemon --> GitOps : provisions workspace
-    Daemon --> Planning : enforces gates
-    Daemon --> ProviderWrapper : launches provider
-    Workflow --> State : reads/writes task
-    Workflow --> Planning : advances policy state
-    Workflow --> ProviderWrapper : launches subtask agent
-    Workflow --> Audit : verifies
-    Workflow --> Closeout : closes
-    Audit --> Strategy : derives test strategy
-    Audit --> State : reads/writes task
-    Closeout --> State : reads/writes task
-    State --> TaskRecord : persists
-    State --> TaskDocs : syncs
-    Agents --> AgentRecord : persists
-    GitOps --> Worktree : creates/removes
-    TaskRecord --> TaskDocs : references
-    TaskRecord --> Worktree : references
-```
-
-## Core Responsibilities
-
-### 1. Interfaces
-
-The interface layer exposes the system to operators and automation.
-
-- `interfaces/cli/parser.py` defines the command grammar, `dispatch.py` maps parsed paths to calls, and `handlers/` owns command-specific presentation and adaptation.
-- `cli.py` and `interfaces/cli/app.py` preserve the public function surface while delegating implementation to those split modules.
-- `interfaces/mcp/` owns MCP registration, schemas, tools, resources, and response shaping.
-- `api.py` provides a library-facing wrapper around queueing, processing, and running the workflow until stable.
-- `discord_bot.py` is an optional external integration path that feeds the same orchestration model.
-
-This layer should stay thin. It is mostly argument parsing, command dispatch, and result presentation.
-
-### 2. Intake and Service Loop
-
-This layer converts a user request into repository-local events and drives the orchestration loop.
-
-- `domain/inbox/models.py` validates typed conversation and pull-request event contracts before they cross the queue boundary.
-- `infra/persistence/inbox.py` atomically persists and claims events across pending, processing, processed, and failed folders.
-- `daemon.py` coordinates validated event routing, creates tasks, and isolates malformed or failed events without stopping the loop.
-- `service.py` wraps the daemon loop and can emit task notifications based on state changes.
-
-This is the operational backbone of the system. It separates request intake from workflow advancement.
-
-### 3. Workflow and Policy
-
-This layer contains the orchestration rules for task progression.
-
-- `domain/workflow/service.py` advances tasks through plan approval, spec freeze, subtask generation, subtask execution, verification, and closeout; `workflow.py` is its stable facade.
-- `domain/workflow/candidates.py` maintains a versioned, non-authoritative scheduling index and reparses only new or fingerprint-changed task records before delegating to the workflow service.
-- `domain/planning/service.py` defines plan/spec transitions and review rounds; `domain/planning/spec_validation.py` owns deterministic spec-quality rules and the atomic `artifacts/spec-validation/latest.json` report; top-level facades preserve public imports.
-- `domain/lifecycle/rules.py`, `lifecycle_state.py`, and `lifecycle_guard.py` centralize allowed transitions and gate projection.
-
-This layer acts as the state machine, even though it is implemented as direct field transitions rather than a formal state machine framework.
-
-### 4. Execution Adapters
-
-This layer is the boundary between Sisyphus and external coding agents.
-
-- `provider_wrapper.py` normalizes launch modes and constructs the default provider command.
-- `codex_prompt.py` builds the prompt for Codex execution in the task worktree.
-- `agent_runtime.py` runs tracked agents and updates their lifecycle state.
-- `wrappers/codex/run.py` and `wrappers/claude/run.py` are small provider launch shims.
-
-This layer is intentionally adapter-shaped. The orchestration logic does not need to know the full mechanics of each provider.
-
-### 5. Persistence and Workspace
-
-This layer stores state and provisions task workspaces.
-
-- `domain/task/models.py` defines task defaults and `domain/task/repository.py` persists task JSON; `state.py` re-exports the stable surface.
-- `domain/agent/models.py` and `domain/agent/repository.py` own agent records; `agents.py` is the stable facade.
-- `infra/persistence/` provides locked atomic JSON storage, file locks, and the inbox lifecycle repository.
-- `infra/config/loader.py` owns configuration loading; `config.py` re-exports it.
-- `shared/` contains dependency-light clock, coercion, mapping, and path primitives.
-- `templates.py` materializes task document templates into the task directory.
-
-The ignored `.planning/cache/workflow-candidates.json` file is derived scheduling data. Missing, malformed, or version-mismatched cache state is rebuilt from task records and never overrides `task.json` lifecycle authority.
-
-- `gitops.py` creates and removes task branches and worktrees.
-- `creation.py` combines task record creation, worktree setup, and rollback behavior.
-
-This is a file-first architecture. The source of truth is repository-local state, not an external database.
-
-### Task Worktree Baseline Rule
-
-Task worktrees are provisioned from the configured `base_branch`, not from the current root worktree's dirty state.
-
-- `creation.py` calls `gitops.create_task_branch_and_worktree()`.
-- `gitops.create_task_branch_and_worktree()` runs `git worktree add -b <branch> <target> <base_ref>`.
-- `base_ref` is resolved from `config.base_branch` by `gitops.resolve_base_ref()`.
-
-That means an in-progress root worktree migration or refactor is not automatically present in a newly created task worktree. The only supported escape hatch is direct-change adoption:
-
-- `daemon.py` can apply `adopt_current_changes` during task creation.
-- adoption copies the current root dirty paths into the new task worktree and records the overlay in `task.json -> meta.adopted_changes`.
-
-Operationally, when the root worktree becomes the authoritative source of truth, ongoing implementation should move to a freshly adopted task baseline. Older task worktrees should be treated as stale references until their scope is replayed or the tasks are closed.
-
-### 6. Verification and Closeout
-
-This layer converts planning intent into executable or inspectable evidence.
-
-- `strategy.py` parses structured testing and review intent out of `PLAN.md` or `FIX_PLAN.md`.
-- `audit.py` evaluates documentation completeness, strategy completeness, plan gates, and configured verify commands.
-- `closeout.py` enforces final gates such as verify completion and worktree cleanliness.
-
-This layer is policy-heavy. It is where the system translates "is this done?" into explicit checks.
-
-### 7. Integration Adapters
-
-This layer exposes Sisyphus to external consumers without moving the source of truth out of repository-local state.
-
-- `events.py` defines a domain-event envelope.
-- `bus.py` defines a pluggable publisher interface.
-- `bus_jsonl.py` provides a default JSONL publisher.
-- `interfaces/mcp/` exposes MCP-friendly tool and resource operations without moving lifecycle authority into the transport.
-- `mcp_adapter.py` remains a compatibility adapter for existing consumers.
-- `mcp_server.py` binds the interface service to the official MCP Python SDK stdio server entrypoint.
-
-This layer is intentionally replaceable. It is where web apps, bots, and MCP servers attach.
-
-The default MCP server entrypoint is:
-
-```bash
-sisyphus-mcp
-```
-
-By default it targets the current repository. To point it at a different repository root, set:
-
-```bash
-export SISYPHUS_REPO_ROOT=/path/to/repo
-```
-
-## Primary Runtime Flows
-
-### Request to Task
-
-```text
-Operator/API request
--> queue conversation event
--> daemon processes inbox event
--> create task workspace and task docs
--> apply initial gates
--> optionally auto-run worker/provider
--> run workflow until stable
-```
-
-Relevant modules:
-
-- `api.py`
-- `daemon.py`
-- `creation.py`
-- `planning.py`
-- `provider_wrapper.py`
-- `workflow.py`
-
-### Workflow Progression
-
-```text
-Task exists
--> plan approved?
--> spec frozen?
--> subtasks generated?
--> queued subtask run
--> all subtasks complete
--> verify
--> close
-```
-
-If any blocking gate appears, the task moves to a blocked or `needs_user_input` state instead of continuing automatically.
-
-### Verify and Close
-
-```text
-Sync test strategy from task docs
--> collect doc/spec/plan gates
--> run configured verify commands
--> write VERIFY.md
--> if no gates, allow close
--> if clean enough and verified, mark task closed
-```
-
-## Sequence Diagram
-
-The sequence below focuses on data transfer. It shows where payloads become events, where events become task records, where task records become provider input, and where execution results flow back into persistent state.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant CLI as CLI/API
-    participant Daemon as daemon.py
-    participant Inbox as typed inbox model + repository
-    participant Creation as creation.py + gitops.py
-    participant TaskDir as .planning/tasks/<task-id>/
-    participant State as state.py
-    participant Planning as planning.py
-    participant Provider as provider_wrapper.py
-    participant Agent as Codex or Claude
-    participant Workflow as workflow.py
-    participant Strategy as strategy.py
-    participant Audit as audit.py
-    participant Closeout as closeout.py
-
-    User->>CLI: request("Add an agent dashboard")
-    CLI->>Daemon: queue_conversation_event(message, title, task_type, provider, auto_run)
-    Daemon->>Inbox: validate and atomically enqueue pending JSON
-    CLI->>Daemon: process_inbox_event(event_path)
-    Daemon->>Inbox: claim pending JSON into processing and validate again
-    Daemon->>Creation: create_task_workspace(task_type, slug)
-    Creation->>Creation: create branch + git worktree
-    Creation->>TaskDir: create task directory
-    Creation->>TaskDir: materialize BRIEF/PLAN/VERIFY/LOG templates
-    Creation->>State: save initial task.json
-    Daemon->>TaskDir: write BRIEF.md and PLAN.md or REPRO.md/FIX_PLAN.md
-    Daemon->>State: load task.json
-    Daemon->>State: update meta.source_event_id, default_provider, source_context
-    State->>TaskDir: sync task.json and docs into worktree copy
-    Daemon->>Planning: enforce_plan_approved(action=auto-run)
-    Planning->>State: read/update task.json gates and status
-    Daemon->>Planning: enforce_spec_frozen(action=auto-run)
-    Planning->>State: read/update task.json gates and status
-
-    alt auto-run allowed
-        Daemon->>Provider: run_provider_wrapper(task_id, agent_id, role, instruction)
-        Provider->>State: load task context for prompt
-        Provider->>Agent: send prompt via stdin and run command
-        Agent-->>Provider: final message and exit code
-        Provider->>State: update agent/task metadata
-    else blocked by plan or spec gate
-        Daemon->>State: persist blocked status and gates
-    end
-
-    CLI->>Workflow: run_until_stable()
-    loop while progress exists
-        Workflow->>State: load task.json
-        Workflow->>Planning: inspect plan/spec status
-        alt subtasks missing
-            Workflow->>State: write generated subtasks to task.json
-        else queued subtask exists
-            Workflow->>Provider: run subtask agent
-            Provider->>Agent: execute in task worktree
-            Agent-->>Provider: exit code and last message
-            Provider->>State: update agent/task metadata
-            Workflow->>State: mark subtask completed or failed
-        else all subtasks completed
-            Workflow->>Audit: run_verify(task_id)
-            Audit->>State: load task.json
-            Audit->>Strategy: parse PLAN.md or FIX_PLAN.md
-            Strategy-->>Audit: test_strategy data
-            Audit->>TaskDir: read task docs
-            Audit->>TaskDir: run verify commands in task dir
-            Audit->>TaskDir: write VERIFY.md
-            Audit->>State: persist verify_status, gates, results
-            alt verify passed
-                Workflow->>Closeout: run_close(task_id)
-                Closeout->>TaskDir: inspect git status
-                Closeout->>State: persist closed status or close gates
-            else verify blocked
-                Workflow->>State: persist needs_user_input
-            end
-        end
-    end
-```
-
-## Data Transport Notes
-
-The main data handoff points are:
-
-- request payload to inbox event JSON
-- inbox event JSON to `task.json` plus task docs
-- `task.json` plus task docs to provider prompt input
-- provider result to agent record and subtask status
-- task docs to parsed `test_strategy`
-- verify command results to `VERIFY.md` and `task.json`
-- task state to the compact observation and action-registry decision surface
-- task and conformance changes to domain events on the event bus
-- repository-local state and task docs to MCP tool/resource responses
-
-The most important persistent channels are:
-
-- `.planning/inbox/pending`, `.planning/inbox/processing`, `.planning/inbox/processed`, `.planning/inbox/failed`
-- `.planning/tasks/<task-id>/task.json`
-- `.planning/tasks/<task-id>/*.md`
-- `.planning/tasks/<task-id>/agents/*.json`
-- task worktree copies synced from the main task directory
-
-## Data Model
-
-The central record is `task.json`. Important fields include:
-
-- identity: `id`, `type`, `slug`
-- execution state: `status`, `stage`, `workflow_phase`
-- review state: `plan_status`, `spec_status`, `plan_review_round`
-- workspace state: `task_dir`, `worktree_path`, `branch`, `base_branch`
-- verification state: `verify_profile`, `verify_commands`, `verify_status`, `audit_attempts`
-- policy state: `gates`, `test_strategy`, `subtasks`, `conformance`, `design`
-- delivery state: `promotion`, merge receipt, changeset, and retarget/reverify flags
-- metadata: `meta`
-
-Supporting artifacts live next to `task.json`:
-
-- `BRIEF.md`
-- `PLAN.md` or `FIX_PLAN.md`
-- `REPRO.md` for issue tasks
-- `VERIFY.md`
-- `LOG.md`
-- `agents/*.json`
-- `artifacts/projection/feature-change.json`
-- `artifacts/obligations/compiled.json`
-- `artifacts/evidence/evidence-graph.json`
-- `artifacts/promotion/*.json`
-
-## Architectural Characteristics
-
-### Strengths
-
-- Repository-local state makes tasks easy to inspect, diff, back up, and reason about.
-- Git worktrees provide strong isolation per task without needing a separate orchestration service.
-- The system leaves durable artifacts for planning, execution, and verification.
-- Provider integration is adapter-based, so orchestration is not hard-coded to a single agent runtime.
-
-### Tradeoffs
-
-- State transitions are distributed across modules through shared string fields in `task.json`.
-- Document parsing is format-sensitive. If plan templates drift, strategy extraction can degrade.
-- File-based event processing is simple and inspectable, but not designed for high-concurrency distributed workloads.
-- Verification policy is powerful, but tightly coupled to the task document conventions.
-
-## Boundary Guidelines
-
-The current architecture works best when module responsibilities stay disciplined:
-
-- top-level facade and `compat` modules should delegate and preserve imports, not accumulate new business rules.
-- `interfaces/cli` and `interfaces/mcp` should own parsing, dispatch, transport schemas, and presentation only.
-- `daemon.py` should own queue coordination and event routing, not persistence mechanics or detailed business policy.
-- `domain/workflow/service.py` should coordinate transitions, not absorb template parsing or low-level git logic.
-- workflow candidate indexes must remain derived hints; `_advance_task` and canonical task records retain transition authority.
-- domain planning, lifecycle, promotion, and task services should remain transport-independent.
-- `infra` should own configuration and persistence mechanics; `shared` should remain small and dependency-light.
-- provider-specific behavior should stay behind `provider_wrapper.py` and wrapper entrypoints.
-
-## Suggested Future Refactoring Directions
-
-These are not required for the current design, but they are the most likely pressure points as the project grows:
-
-- Continue moving residual implicit string transitions behind the action registry and lifecycle rules.
-- Separate verification policy from verify command execution more cleanly.
-- Add stronger schema validation for `task.json` and agent records.
-- Make task document parsing more resilient or move structured strategy data into a dedicated machine-readable file.
-- Isolate follow-up task logic and auto-loop policy from core daemon intake for simpler testing.
-
-## Summary
-
-Sisyphus is best understood as a repository-local orchestration kernel for AI-assisted task execution.
-
-Its architecture is centered on:
-
-- file-based state
-- git worktree provisioning
-- policy-driven workflow transitions
-- adapter-based agent execution
-- evidence-oriented verification and closeout
-
-That makes it pragmatic, inspectable, and easy to operate in a single repository context, with the main long-term risk being the growing complexity of implicit state transitions and document-driven policy parsing.
+Derived indexes such as `.planning/cache/workflow-candidates.json` and search
+JSONL files are rebuildable. They never override `task.json`.
+
+### Human authority
+
+Plan approval, spec freeze, close, promotion execution, and merged-PR recording
+remain judgment-gated actions. The compact resource
+`task://<task-id>/observation` projects allowed and forbidden next actions from
+canonical state; clients must not reconstruct lifecycle authority from chat.
+
+### Evolution authority
+
+Evolution can read task/evidence data, construct datasets, compare candidates,
+score fitness, persist append-only run artifacts, and request a normal follow-up
+task. It cannot approve, freeze, verify, activate, close, or promote canonical
+task state. Those effects are assembled by control-owned composition and pass
+through normal Sisyphus lifecycle gates.
+
+## Domain And Application Boundaries
+
+The domain layer is intentionally small and deterministic:
+
+- lifecycle snapshots and transition policy
+- task, planning, agent, verification, promotion, and artifact values
+- promotion defaults and base state
+- artifact DSL and evaluation values
+- workspace mutation/completion policy
+
+Application services coordinate these rules over ports. Major use cases include:
+
+- inbox queue and processing
+- task record and workspace creation
+- plan review, spec validation, and spec freeze
+- workflow advancement and subtask execution
+- obligation convergence
+- verification and evidence recording
+- head-bound external LLM review evidence recording
+- closeout
+- repository promotion execution and merged-PR recording
+- search, observation, lifecycle, artifact, and repository queries
+
+Application services decide effect order. Adapters do not decide lifecycle
+policy.
+
+## Composition Boundary
+
+The `composition` package is the only normal construction point that knows both
+application abstractions and concrete infrastructure. For example:
+
+- `composition/workflow.py` wires `WorkflowService` to task, planning,
+  obligation, provider, verification, closeout, event, and intervention adapters.
+- `composition/verification.py` wires command execution, documents, spec
+  validation, conformance, evidence, events, and clock.
+- `composition/external_review.py` wires task persistence to strict review
+  envelope/report inspection, Git HEAD and frozen-scope binding, digesting, and
+  time. Review metadata is content-derived; recording invalidates older verify
+  state, and successful verification stores an exact review binding.
+- `composition/promotion.py` wires Git, GitHub CLI, task records, artifacts,
+  external-review evidence, closeout, interventions, and time. Review-gated
+  promotion pushes the inspected reviewed commit without staging later changes.
+- `composition/repository_requests.py` wires inbox queue/processing to workflow
+  advancement and task queries.
+
+Composition functions may provide stable convenience entry points. They should
+not contain business policy that belongs in an application service.
+
+## Persistence And Mapping
+
+Canonical domain and application model definitions do not declare `to_dict`,
+`from_dict`, `to_json`, or `from_json`. Boundary shapes have explicit owners:
+
+- task and agent persisted records: `infra/persistence/*_mapper.py`
+- generic extension-preserving dataclass mapping:
+  `infra/persistence/record_mapper.py`
+- artifact, event, episode, search, snapshot, and execution-policy shapes:
+  `application/codecs/`
+- local provider and benchmark result shapes: `providers/codecs.py`
+- evaluation wire shapes: `eval/codecs.py` and `benchmark_codec.py`
+- strict inbound inbox shapes: `interfaces/inbox/parser.py` and `mapper.py`
+
+For previously published model classes, stable outer facades restore the legacy
+methods with `compat.serialization.install_serialization_compat`. Those methods
+delegate directly to the codecs above; they do not define a second wire shape or
+move serialization policy back into the canonical model source.
+
+`DataclassRecordMapper` retains unknown fields, omitted mapped fields, and input
+field order through a `RecordEnvelope`. This preserves legacy task/agent records
+without making domain entities a second schema authority.
+
+## Effects And Safety
+
+Concrete effects are isolated in infrastructure:
+
+- locked atomic JSON replacement with file and directory fsync
+- bounded, descriptor-relative support-file mirroring into task worktrees
+- descriptor-relative no-follow workspace reads and writes
+- path containment and symlink rejection
+- bounded subprocess output, process-group timeout, and strict command parsing
+- Git patch tree hashing and postcondition checks
+- provider request/receipt digest verification
+- append-only, bounded evolution run storage
+- durable JSONL event appends
+
+The verifier executes through `VerificationCommandPort`; verification policy and
+gate ordering remain in `VerificationService`. Workspace mutation policy is
+domain-owned, while Git and test subprocesses are infrastructure adapters.
+
+## Public Compatibility
+
+Stable top-level modules remain for Python consumers and tests. Most are
+import-only facades or thin delegates; facades for formerly model-owned
+serialization may additionally install codec-delegating legacy methods through
+the single compatibility helper. Two outward imports remain inside domain only
+for import compatibility:
+
+| Legacy import | Canonical implementation |
+| --- | --- |
+| `sisyphus.domain.agent.repository` | `sisyphus.infra.persistence.agent_repository` |
+| `sisyphus.domain.task.repository` | `sisyphus.infra.persistence.task_repository` |
+
+They contain no behavior. Their exact allowlist and retirement conditions are in
+[clean-architecture-implementation-debt.md](./clean-architecture-implementation-debt.md).
+
+## Conformance Semantics
+
+Conformance colors are canonical and shared across task, workflow, and evolution
+projections:
+
+- `green`: aligned with the frozen spec; execution may continue if other gates pass
+- `yellow`: unresolved warning or clarification; final verify and close are blocked
+- `red`: blocking drift; execution must stop until reconciled
+
+The color is a policy result, not a UI decoration.
+
+## Architecture Decisions
+
+The migration decision, mapper ownership, compatibility lifetime, and Evolution
+authority are recorded in
+[ADR 0001](./adr/0001-clean-architecture-boundaries.md).
+
+The remaining implementation and release work is tracked in
+[clean-architecture-implementation-debt.md](./clean-architecture-implementation-debt.md).
+The migration review is recorded in
+[clean-architecture-final-review-2026-07-20.md](./reviews/clean-architecture-final-review-2026-07-20.md).
+The immutable evidence schema, scope digest, and verification binding for
+required external reviews are defined in
+[external-review-evidence.md](./external-review-evidence.md).
+
+## Scope Boundary
+
+This repository contains the Sisyphus control plane and a bounded local-agent
+adapter. The separate Sisyphus Harness roadmap for Docker service separation,
+Hermes agent evolution, GEPA, and real 30.5B model benchmark evidence is not part
+of this core architecture migration.

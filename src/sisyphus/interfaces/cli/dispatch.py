@@ -48,6 +48,20 @@ COMMAND_SPECS: tuple[CliCommandSpec, ...] = (
         ),
     ),
     CliCommandSpec(("verify",), "handle_verify", ("task_id",)),
+    CliCommandSpec(
+        ("review", "scope"),
+        "handle_review_scope",
+        ("task_id", ("json", "as_json")),
+    ),
+    CliCommandSpec(
+        ("review", "record"),
+        "handle_review_record",
+        (
+            "task_id",
+            "envelope_path",
+            ("json", "as_json"),
+        ),
+    ),
     CliCommandSpec(("close",), "handle_close", ("task_id", "allow_dirty")),
     CliCommandSpec(("observe",), "handle_observe", ("task_id", ("json", "as_json"))),
     CliCommandSpec(("episode", "check"), "handle_episode_check", ("task_id", "episode_id", ("json", "as_json"))),
@@ -174,6 +188,8 @@ def command_path(args: Namespace) -> tuple[str, ...]:
     command = getattr(args, "command", None)
     if command == "plan":
         return (command, getattr(args, "plan_command", None))
+    if command == "review":
+        return (command, getattr(args, "review_command", None))
     if command == "spec":
         return (command, getattr(args, "spec_command", None))
     if command == "subtasks":

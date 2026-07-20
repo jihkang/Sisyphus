@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 
-from ...agents import AGENT_STATUSES, DEFAULT_STALE_AFTER_SECONDS
+from ...domain.agent import AGENT_STATUSES, DEFAULT_STALE_AFTER_SECONDS
 from ...dataset_export import DATASET_FORMATS
 from ...providers.local_openai import LOCAL_OPENAI_PROVIDERS
 
@@ -23,6 +23,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("task_id")
+
+    review_parser = subparsers.add_parser("review")
+    review_subparsers = review_parser.add_subparsers(dest="review_command", required=True)
+    review_scope_parser = review_subparsers.add_parser("scope")
+    review_scope_parser.add_argument("task_id")
+    review_scope_parser.add_argument("--json", action="store_true")
+    review_record_parser = review_subparsers.add_parser("record")
+    review_record_parser.add_argument("task_id")
+    review_record_parser.add_argument("--envelope", dest="envelope_path", required=True)
+    review_record_parser.add_argument("--json", action="store_true")
 
     close_parser = subparsers.add_parser("close")
     close_parser.add_argument("task_id")

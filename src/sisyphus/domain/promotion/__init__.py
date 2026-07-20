@@ -1,3 +1,29 @@
 from __future__ import annotations
 
-from .service import *  # noqa: F403
+from .models import PromotionBaseResolution
+from .state import (
+    PROMOTION_STATUS_COMMITTED,
+    PROMOTION_STATUS_MERGED,
+    PROMOTION_STATUS_NOT_REQUIRED,
+    PROMOTION_STATUS_PENDING,
+    PROMOTION_STATUS_PR_OPEN,
+    PROMOTION_STATUS_PUSHED,
+    PROMOTION_STATUS_RECORDED,
+    PROMOTION_STRATEGY_DIRECT,
+    PROMOTION_STRATEGY_STACKED,
+    ensure_task_promotion_defaults,
+)
+
+__all__ = [
+    "PromotionBaseResolution",
+    "PROMOTION_STATUS_COMMITTED",
+    "PROMOTION_STATUS_MERGED",
+    "PROMOTION_STATUS_NOT_REQUIRED",
+    "PROMOTION_STATUS_PENDING",
+    "PROMOTION_STATUS_PR_OPEN",
+    "PROMOTION_STATUS_PUSHED",
+    "PROMOTION_STATUS_RECORDED",
+    "PROMOTION_STRATEGY_DIRECT",
+    "PROMOTION_STRATEGY_STACKED",
+    "ensure_task_promotion_defaults",
+]

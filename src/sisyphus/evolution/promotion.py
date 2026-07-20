@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
-from ..config import SisyphusConfig
+from ..application.ports.evolution import EvolutionEventPort
 from .artifacts import (
     EvolutionArtifactRef,
     EvolutionFollowupRequestArtifact,
@@ -11,7 +10,7 @@ from .artifacts import (
     dedupe_artifact_refs,
 )
 from .constraints import EvolutionConstraintResult
-from .event_bus import EVOLUTION_EVENT_DECISION_RECORDED, publish_evolution_event
+from ..application.evolution_events import EVOLUTION_EVENT_DECISION_RECORDED
 from .fitness import EvolutionFitnessResult
 from .receipts import EvolutionFollowupExecutionProjection
 from .runner import EvolutionInvalidationRecord
@@ -202,8 +201,7 @@ def record_evolution_decision_envelope(
     gate_result: EvolutionPromotionGateResult,
     *,
     claim: str,
-    repo_root: Path | None = None,
-    config: SisyphusConfig | None = None,
+    events: EvolutionEventPort | None = None,
 ) -> EvolutionDecisionEnvelope:
     run_id = str(gate_result.run_id).strip()
     candidate_id = str(gate_result.candidate_id).strip()
@@ -251,8 +249,7 @@ def record_evolution_decision_envelope(
         )
         _publish_decision_event(
             envelope,
-            repo_root=repo_root,
-            config=config,
+            events=events,
             gate_result=gate_result,
         )
         return envelope
@@ -277,8 +274,7 @@ def record_evolution_decision_envelope(
         )
         _publish_decision_event(
             envelope,
-            repo_root=repo_root,
-            config=config,
+            events=events,
             gate_result=gate_result,
         )
         return envelope
@@ -335,11 +331,10 @@ def _invalidation_record_id(*, run_id: str, candidate_id: str) -> str:
 def _publish_decision_event(
     envelope: EvolutionDecisionEnvelope,
     *,
-    repo_root: Path | None,
-    config: SisyphusConfig | None,
+    events: EvolutionEventPort | None,
     gate_result: EvolutionPromotionGateResult,
 ) -> None:
-    if repo_root is None:
+    if events is None:
         return
 
     promotion_decision_id = (
@@ -352,9 +347,7 @@ def _publish_decision_event(
         if envelope.invalidation_record is not None
         else None
     )
-    publish_evolution_event(
-        repo_root,
-        config=config,
+    events.publish(
         event_type=EVOLUTION_EVENT_DECISION_RECORDED,
         source_module="evolution.promotion",
         data={

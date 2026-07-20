@@ -5,11 +5,16 @@ from pathlib import Path
 
 from ...config import load_config
 from ...discovery import detect_repo_root
-from ...evolution.operator import evaluate_evolution_followup_decision, request_evolution_followup
-from ...evolution.surface import (
-    compare_evolution_runs,
+from ...composition.evolution_operator import (
+    evaluate_evolution_followup_decision,
+    request_evolution_followup,
+)
+from ...composition.evolution_surface import (
     execute_evolution_surface,
     load_evolution_run_artifacts,
+)
+from ...evolution.presentation import (
+    compare_evolution_runs,
     render_evolution_run_compare,
     render_evolution_run_overview,
     render_evolution_run_report,
@@ -44,6 +49,38 @@ def handle_verify(task_id: str, repo_root: str | Path | None = None) -> int:
     repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
     return verification_handlers.handle_verify(repo_root=repo_root, config=config, task_id=task_id)
+
+
+def handle_review_scope(
+    task_id: str,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    return verification_handlers.handle_review_scope(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        as_json=as_json,
+    )
+
+
+def handle_review_record(
+    task_id: str,
+    envelope_path: str,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    return verification_handlers.handle_review_record(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        envelope_path=envelope_path,
+        as_json=as_json,
+    )
 
 
 def handle_close(task_id: str, allow_dirty: bool, repo_root: str | Path | None = None) -> int:
@@ -721,6 +758,8 @@ CLI_HANDLERS = {
     "handle_new": handle_new,
     "handle_request": handle_request,
     "handle_verify": handle_verify,
+    "handle_review_scope": handle_review_scope,
+    "handle_review_record": handle_review_record,
     "handle_close": handle_close,
     "handle_observe": handle_observe,
     "handle_episode_check": handle_episode_check,

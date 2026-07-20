@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from . import inbox as _inbox
 from .api import (
     MergeRecordResult,
     PromotionExecutionResult,

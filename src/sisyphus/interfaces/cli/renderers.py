@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ...service import extract_conformance_summary
+from ..conformance_presenter import extract_conformance_summary
 
 
 def project_task_for_status_output(task: dict) -> dict:

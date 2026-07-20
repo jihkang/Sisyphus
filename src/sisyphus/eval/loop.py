@@ -1,24 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
+from ..compat.serialization import install_serialization_compat
 from ..config import SisyphusConfig
-from ..episode_trace import read_episode_steps
-from ..observation import build_task_observation
+from ..composition.episode_trace import read_episode_steps
+from ..composition.observation import build_task_observation
 from ..reward import RewardBreakdown, reward_breakdown_metrics, score_task_outcome
 from ..state import load_task_record
 from ..test_first import TEST_FIRST_LOOP_PHASES, TestFirstEvaluation, evaluate_test_first_loop
+from .codecs import EVAL_LOOP_SCHEMA_VERSION, EVAL_LOOP_SHAPE, encode_eval_loop_result
 
 
-EVAL_LOOP_SCHEMA_VERSION = "sisyphus.eval_loop.v1"
-EVAL_LOOP_SHAPE = (
-    "observation_t",
-    "action_t",
-    "transition_result_t",
-    "observation_t_plus_1",
-    "reward_t",
-)
 @dataclass(frozen=True, slots=True)
 class EvalLoopResult:
     task_id: str
@@ -35,38 +29,10 @@ class EvalLoopResult:
     actions: tuple[dict[str, object], ...]
     test_first: TestFirstEvaluation
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "schema_version": EVAL_LOOP_SCHEMA_VERSION,
-            "task_id": self.task_id,
-            "mode": self.mode,
-            "loop": {
-                "shape": list(EVAL_LOOP_SHAPE),
-                "test_first": self.test_first.to_dict(),
-            },
-            "observation": {
-                "ref": self.observation_ref,
-                "initial_hash": self.initial_observation_hash,
-                "final_hash": self.final_observation_hash,
-            },
-            "episode": {
-                "episode_id": self.episode_id,
-                "step_count": self.step_count,
-                "action_count": self.action_count,
-            },
-            "actions": list(self.actions),
-            "outcome": {
-                "terminal_status": self.terminal_status,
-                "facts": asdict(self.reward.facts),
-            },
-            "reward": {
-                "total": self.reward.total,
-                "components": self.metrics,
-                "penalties": dict(self.reward.penalties),
-            },
-            "metrics": self.metrics,
-        }
-
+install_serialization_compat(
+    EvalLoopResult,
+    encode_mapping=encode_eval_loop_result,
+)
 
 def run_task_eval_loop(
     repo_root: Path,

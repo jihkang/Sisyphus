@@ -1,0 +1,1112 @@
+from __future__ import annotations
+
+import ast
+from collections.abc import Iterable
+from dataclasses import dataclass
+import importlib.util
+from pathlib import Path
+import unittest
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
+PACKAGE_ROOT = SRC_ROOT / "sisyphus"
+
+DOMAIN_IMPORT_COMPATIBILITY_SHIMS = frozenset(
+    {
+        (
+            "src/sisyphus/domain/agent/repository.py",
+            "sisyphus.infra.persistence.agent_repository",
+        ),
+        (
+            "src/sisyphus/domain/task/repository.py",
+            "sisyphus.infra.persistence.task_repository",
+        ),
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ModuleSource:
+    name: str
+    path: Path
+    package: str
+
+
+class ArchitectureDependencyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.modules = _module_sources()
+        cls.dependencies = {
+            module.name: _internal_dependencies(module, cls.modules)
+            for module in cls.modules.values()
+        }
+
+    def test_domain_has_no_outward_dependencies(self) -> None:
+        actual: set[tuple[str, str]] = set()
+        for module in self.modules.values():
+            if not module.name.startswith("sisyphus.domain"):
+                continue
+            for dependency in _declared_imports(module):
+                if not dependency.startswith("sisyphus."):
+                    continue
+                if dependency.startswith(("sisyphus.domain", "sisyphus.shared")):
+                    continue
+                relative_path = module.path.relative_to(PROJECT_ROOT).as_posix()
+                actual.add((relative_path, dependency))
+
+        self.assertEqual(
+            actual,
+            DOMAIN_IMPORT_COMPATIBILITY_SHIMS,
+            "domain outward dependencies must be exactly the two documented import-compatibility "
+            "shims:\n" + _format_pairs(actual),
+        )
+
+    def test_domain_compatibility_allowlist_contains_import_only_shims(self) -> None:
+        for relative_path, _dependency in DOMAIN_IMPORT_COMPATIBILITY_SHIMS:
+            path = PROJECT_ROOT / relative_path
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom):
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    self.assertIsInstance(node.value.value, str, f"{relative_path} has executable code")
+                    continue
+                if isinstance(node, ast.Assign):
+                    self.assertEqual(
+                        [target.id for target in node.targets if isinstance(target, ast.Name)],
+                        ["__all__"],
+                        f"{relative_path} may assign only __all__",
+                    )
+                    self.assertTrue(
+                        isinstance(node.value, (ast.List, ast.Tuple))
+                        and all(
+                            isinstance(item, ast.Constant) and isinstance(item.value, str)
+                            for item in node.value.elts
+                        ),
+                        f"{relative_path} __all__ must be a literal string list",
+                    )
+                    continue
+                self.fail(
+                    f"{relative_path} contains {type(node).__name__}; compatibility shims must remain import-only"
+                )
+
+    def test_application_only_depends_on_inward_packages(self) -> None:
+        forbidden: set[tuple[str, str]] = set()
+        for module in self.modules.values():
+            if not module.name.startswith("sisyphus.application"):
+                continue
+            for dependency in _declared_imports(module):
+                if not dependency.startswith("sisyphus."):
+                    continue
+                if dependency.startswith(
+                    ("sisyphus.application", "sisyphus.domain", "sisyphus.shared")
+                ):
+                    continue
+                forbidden.add((module.name, dependency))
+
+        self.assertFalse(forbidden, "application has outward dependencies:\n" + _format_pairs(forbidden))
+
+    def test_interfaces_do_not_import_infrastructure_directly(self) -> None:
+        forbidden = _dependencies_from_prefix(
+            self.modules.values(),
+            source_prefix="sisyphus.interfaces",
+            dependency_prefixes=("sisyphus.infra",),
+        )
+
+        self.assertFalse(forbidden, "interfaces bypass application ports:\n" + _format_pairs(forbidden))
+
+    def test_compat_modules_only_delegate_to_interfaces(self) -> None:
+        forbidden: set[tuple[str, str]] = set()
+        for module in self.modules.values():
+            if not module.name.startswith("sisyphus.compat"):
+                continue
+            for dependency in _declared_imports(module):
+                if dependency.startswith("sisyphus.") and not dependency.startswith("sisyphus.interfaces"):
+                    forbidden.add((module.name, dependency))
+
+        self.assertFalse(forbidden, "compat modules gained business dependencies:\n" + _format_pairs(forbidden))
+
+    def test_internal_import_graph_is_acyclic(self) -> None:
+        actual = frozenset(_strongly_connected_components(self.dependencies))
+
+        self.assertFalse(
+            actual,
+            "import cycles detected:\n"
+            + "\n".join(" -> ".join(sorted(cycle)) for cycle in sorted(actual, key=sorted)),
+        )
+
+    def test_removed_planning_lifecycle_cycle_stays_removed(self) -> None:
+        cycle_members = {
+            "sisyphus.infra.orchestration.planning",
+            "sisyphus.lifecycle_guard",
+            "sisyphus.lifecycle_rules",
+            "sisyphus.planning",
+        }
+
+        self.assertFalse(
+            any(cycle_members <= cycle for cycle in _strongly_connected_components(self.dependencies)),
+            "planning and lifecycle modules formed their previous import cycle",
+        )
+
+    def test_provider_wrapper_does_not_depend_on_cli(self) -> None:
+        module = self.modules["sisyphus.provider_wrapper"]
+        forbidden = {
+            dependency
+            for dependency in _declared_imports(module)
+            if dependency in {"sisyphus.cli", "sisyphus.interfaces.cli"}
+            or dependency.startswith("sisyphus.interfaces.cli.")
+        }
+
+        self.assertFalse(
+            forbidden,
+            "provider wrapper regained a CLI dependency: " + ", ".join(sorted(forbidden)),
+        )
+
+    def test_provider_wrapper_does_not_reabsorb_boundary_mechanics(self) -> None:
+        module = self.modules["sisyphus.provider_wrapper"]
+        tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+        forbidden_modules = {"argparse", "json", "shutil", "subprocess", "tempfile"}
+        actual: set[str] = set()
+        for node in tree.body:
+            if isinstance(node, ast.Import):
+                actual.update(alias.name.split(".", 1)[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                actual.add(node.module.split(".", 1)[0])
+
+        self.assertFalse(
+            actual.intersection(forbidden_modules),
+            "provider wrapper reabsorbed parser/process/receipt mechanics: "
+            + ", ".join(sorted(actual.intersection(forbidden_modules))),
+        )
+
+    def test_conversation_provider_does_not_dispatch_through_daemon(self) -> None:
+        module = self.modules["sisyphus.infra.providers.conversation"]
+        dependencies = _declared_imports(module)
+
+        self.assertNotIn(
+            "sisyphus.daemon",
+            dependencies,
+            "conversation provider regained a daemon facade dependency",
+        )
+        tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+        dynamic_imports = {
+            alias.name
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom) and node.module == "importlib"
+            for alias in node.names
+        }
+        self.assertFalse(
+            dynamic_imports.intersection({"import_module"}),
+            "conversation provider regained dynamic daemon dispatch",
+        )
+
+    def test_daemon_facade_does_not_reabsorb_concrete_effects(self) -> None:
+        module = self.modules["sisyphus.daemon"]
+        forbidden = {
+            dependency
+            for dependency in _declared_imports(module)
+            if dependency
+            in {
+                "sisyphus.creation",
+                "sisyphus.gitops",
+                "sisyphus.infra.persistence",
+                "sisyphus.promotion",
+                "sisyphus.state",
+            }
+        }
+
+        self.assertFalse(
+            forbidden,
+            "daemon facade regained concrete orchestration effects: "
+            + ", ".join(sorted(forbidden)),
+        )
+
+    def test_repository_request_surfaces_do_not_reabsorb_root_orchestration(self) -> None:
+        forbidden_by_module = {
+            "sisyphus.api": {
+                "sisyphus.daemon",
+                "sisyphus.state",
+                "sisyphus.workflow",
+            },
+            "sisyphus.interfaces.cli.handlers.ingest": {"sisyphus.api"},
+            "sisyphus.interfaces.mcp.task_tools": {"sisyphus.api"},
+        }
+        forbidden = {
+            (name, dependency)
+            for name, disallowed in forbidden_by_module.items()
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in disallowed
+        }
+
+        self.assertFalse(
+            forbidden,
+            "repository request surfaces regained root orchestration dependencies:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_migrated_command_interfaces_do_not_reabsorb_root_facades(self) -> None:
+        forbidden_by_module = {
+            "sisyphus.interfaces.cli.handlers.planning": {
+                "sisyphus.planning",
+                "sisyphus.spec_validation",
+            },
+            "sisyphus.interfaces.cli.handlers.runtime": {
+                "sisyphus.creation",
+                "sisyphus.daemon",
+                "sisyphus.service",
+            },
+            "sisyphus.interfaces.cli.handlers.status": {
+                "sisyphus.agents",
+                "sisyphus.service",
+                "sisyphus.state",
+            },
+            "sisyphus.interfaces.cli.handlers.verification": {
+                "sisyphus.audit",
+                "sisyphus.closeout",
+            },
+            "sisyphus.interfaces.cli.renderers": {"sisyphus.service"},
+            "sisyphus.interfaces.mcp.promotion_tools": {"sisyphus.api"},
+            "sisyphus.interfaces.mcp.workflow_tools": {
+                "sisyphus.audit",
+                "sisyphus.closeout",
+                "sisyphus.daemon",
+                "sisyphus.planning",
+                "sisyphus.spec_validation",
+            },
+            "sisyphus.interfaces.mcp.service": {
+                "sisyphus.api",
+                "sisyphus.audit",
+                "sisyphus.closeout",
+                "sisyphus.daemon",
+                "sisyphus.planning",
+                "sisyphus.spec_validation",
+            },
+        }
+        forbidden = {
+            (name, dependency)
+            for name, disallowed in forbidden_by_module.items()
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in disallowed
+        }
+
+        self.assertFalse(
+            forbidden,
+            "migrated command interfaces regained root facade dependencies:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_search_interfaces_do_not_reabsorb_flat_implementation_facades(self) -> None:
+        source_modules = {
+            "sisyphus.interfaces.cli.handlers.search",
+            "sisyphus.interfaces.mcp.repo_resources",
+            "sisyphus.interfaces.mcp.search_tools",
+            "sisyphus.interfaces.mcp.service",
+        }
+        facade_modules = {
+            "sisyphus.context_pack",
+            "sisyphus.retrieval",
+            "sisyphus.search_document",
+            "sisyphus.search_index",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in facade_modules
+        }
+
+        self.assertFalse(
+            forbidden,
+            "search interfaces regained flat implementation dependencies:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_search_compatibility_facades_remain_compatibility_only(self) -> None:
+        for name in (
+            "sisyphus.context_pack",
+            "sisyphus.retrieval",
+            "sisyphus.search_document",
+            "sisyphus.search_index",
+        ):
+            module = self.modules[name]
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom):
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    self.assertIsInstance(node.value.value, str, f"{name} has executable code")
+                    continue
+                if isinstance(node, ast.Assign):
+                    self.assertEqual(
+                        [target.id for target in node.targets if isinstance(target, ast.Name)],
+                        ["__all__"],
+                        f"{name} may assign only __all__",
+                    )
+                    continue
+                if _is_serialization_compat_install(node):
+                    continue
+                self.fail(
+                    f"{name} contains {type(node).__name__}; compatibility facades may only "
+                    "import, export, or install legacy serialization methods"
+                )
+
+    def test_service_facade_does_not_reabsorb_daemon_or_task_persistence(self) -> None:
+        dependencies = _declared_imports(self.modules["sisyphus.service"])
+        forbidden = dependencies.intersection({"sisyphus.daemon", "sisyphus.state"})
+
+        self.assertFalse(
+            forbidden,
+            "service facade regained daemon/task persistence orchestration: "
+            + ", ".join(sorted(forbidden)),
+        )
+
+    def test_infrastructure_does_not_import_config_or_event_facades(self) -> None:
+        forbidden: set[tuple[str, str]] = set()
+        facade_modules = {
+            "sisyphus.bus",
+            "sisyphus.bus_jsonl",
+            "sisyphus.config",
+            "sisyphus.events",
+            "sisyphus.metrics",
+        }
+        for module in self.modules.values():
+            if not module.name.startswith("sisyphus.infra"):
+                continue
+            for dependency in _declared_imports(module):
+                if dependency in facade_modules:
+                    forbidden.add((module.name, dependency))
+
+        self.assertFalse(
+            forbidden,
+            "infrastructure imports public config/event facades:\n" + _format_pairs(forbidden),
+        )
+
+    def test_repository_resource_interface_uses_composed_status_queries(self) -> None:
+        source_modules = {
+            "sisyphus.interfaces.mcp.repo_resources",
+            "sisyphus.interfaces.mcp.service",
+        }
+        facade_modules = {
+            "sisyphus.bus_jsonl",
+            "sisyphus.metrics",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in facade_modules
+        }
+
+        self.assertFalse(
+            forbidden,
+            "repository resources regained flat event/metric dependencies:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_event_and_metric_facades_remain_compatibility_only(self) -> None:
+        for name in ("sisyphus.events", "sisyphus.metrics"):
+            module = self.modules[name]
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom):
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    self.assertIsInstance(node.value.value, str, f"{name} has executable code")
+                    continue
+                if isinstance(node, ast.Assign):
+                    self.assertEqual(
+                        [target.id for target in node.targets if isinstance(target, ast.Name)],
+                        ["__all__"],
+                        f"{name} may assign only __all__",
+                    )
+                    continue
+                if _is_serialization_compat_install(node):
+                    continue
+                self.fail(
+                    f"{name} contains {type(node).__name__}; compatibility facades may only "
+                    "import, export, or install legacy serialization methods"
+                )
+
+    def test_observation_resource_interfaces_use_composed_queries(self) -> None:
+        source_modules = {
+            "sisyphus.interfaces.cli.handlers.operations",
+            "sisyphus.interfaces.mcp.service",
+            "sisyphus.interfaces.mcp.task_resources",
+        }
+        facade_modules = {
+            "sisyphus.action_space",
+            "sisyphus.evidence_graph",
+            "sisyphus.lifecycle_rules",
+            "sisyphus.lifecycle_state",
+            "sisyphus.observation",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in facade_modules
+        }
+
+        self.assertFalse(
+            forbidden,
+            "observation/resource interfaces regained flat implementation dependencies:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_lifecycle_observation_and_evidence_facades_remain_compatibility_only(self) -> None:
+        for name in (
+            "sisyphus.action_space",
+            "sisyphus.evidence_graph",
+            "sisyphus.lifecycle_rules",
+            "sisyphus.lifecycle_state",
+            "sisyphus.observation",
+        ):
+            module = self.modules[name]
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom):
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    self.assertIsInstance(node.value.value, str, f"{name} has executable code")
+                    continue
+                if isinstance(node, ast.Assign):
+                    self.assertEqual(
+                        [target.id for target in node.targets if isinstance(target, ast.Name)],
+                        ["__all__"],
+                        f"{name} may assign only __all__",
+                    )
+                    continue
+                if _is_serialization_compat_install(node):
+                    continue
+                self.fail(
+                    f"{name} contains {type(node).__name__}; compatibility facades may only "
+                    "import, export, or install legacy serialization methods"
+                )
+
+    def test_lifecycle_guard_uses_canonical_composition_and_result_types(self) -> None:
+        dependencies = _declared_imports(self.modules["sisyphus.lifecycle_guard"])
+        self.assertFalse(
+            dependencies.intersection({"sisyphus.lifecycle_rules", "sisyphus.lifecycle_state"}),
+            "lifecycle guard regained flat lifecycle dependencies",
+        )
+
+    def test_episode_interfaces_use_composed_trace_service(self) -> None:
+        source_modules = {
+            "sisyphus.interfaces.cli.handlers.operations",
+            "sisyphus.interfaces.mcp.service",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency == "sisyphus.episode_trace"
+        }
+
+        self.assertFalse(
+            forbidden,
+            "episode interfaces regained the flat trace implementation:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_episode_trace_facade_remains_compatibility_only(self) -> None:
+        module = self.modules["sisyphus.episode_trace"]
+        tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                continue
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                self.assertIsInstance(node.value.value, str, "episode trace facade has executable code")
+                continue
+            if _is_serialization_compat_install(node):
+                continue
+            self.fail(
+                f"episode trace facade contains {type(node).__name__}; it may only import "
+                "or install legacy serialization methods"
+            )
+
+    def test_artifact_resource_interfaces_use_composed_queries(self) -> None:
+        source_modules = {
+            "sisyphus.interfaces.mcp.service",
+            "sisyphus.interfaces.mcp.task_resources",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency == "sisyphus.artifact_resources"
+        }
+
+        self.assertFalse(
+            forbidden,
+            "artifact resources regained the flat query implementation:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_artifact_resources_facade_remains_import_only(self) -> None:
+        module = self.modules["sisyphus.artifact_resources"]
+        tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                continue
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                self.assertIsInstance(node.value.value, str, "artifact resource facade has executable code")
+                continue
+            if isinstance(node, ast.Assign):
+                self.assertEqual(
+                    [target.id for target in node.targets if isinstance(target, ast.Name)],
+                    ["__all__"],
+                    "artifact resource facade may assign only __all__",
+                )
+                continue
+            self.fail(
+                f"artifact resource facade contains {type(node).__name__}; it must remain import-only"
+            )
+
+    def test_artifact_policy_facades_remain_compatibility_only(self) -> None:
+        for name in (
+            "sisyphus.artifact_evaluator",
+            "sisyphus.artifact_projection",
+            "sisyphus.artifact_snapshot",
+            "sisyphus.artifacts",
+            "sisyphus.dsl",
+            "sisyphus.execution_policy",
+            "sisyphus.feature_change_dsl",
+        ):
+            module = self.modules[name]
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom):
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    self.assertIsInstance(node.value.value, str, f"{name} has executable code")
+                    continue
+                if isinstance(node, ast.Assign):
+                    self.assertEqual(
+                        [target.id for target in node.targets if isinstance(target, ast.Name)],
+                        ["__all__"],
+                        f"{name} may assign only __all__",
+                    )
+                    self.assertTrue(
+                        isinstance(node.value, (ast.List, ast.Tuple))
+                        and all(
+                            isinstance(item, ast.Constant) and isinstance(item.value, str)
+                            for item in node.value.elts
+                        ),
+                        f"{name} __all__ must be a literal string list",
+                    )
+                    continue
+                if _is_serialization_compat_install(node):
+                    continue
+                self.fail(
+                    f"{name} contains {type(node).__name__}; compatibility facade may only "
+                    "import, export, or install legacy serialization methods"
+                )
+
+    def test_artifact_adapters_do_not_import_flat_policy_facades(self) -> None:
+        facade_modules = {
+            "sisyphus.artifact_evaluator",
+            "sisyphus.artifact_projection",
+            "sisyphus.artifact_snapshot",
+            "sisyphus.artifacts",
+            "sisyphus.dsl",
+            "sisyphus.execution_policy",
+            "sisyphus.feature_change_dsl",
+        }
+        forbidden = {
+            (module.name, dependency)
+            for module in self.modules.values()
+            if module.name.startswith("sisyphus.infra")
+            for dependency in _declared_imports(module)
+            if dependency in facade_modules
+        }
+
+        self.assertFalse(
+            forbidden,
+            "artifact adapters import flat policy facades:\n" + _format_pairs(forbidden),
+        )
+
+    def test_migrated_evolution_core_has_no_canonical_authority_imports(self) -> None:
+        source_modules = {
+            "sisyphus.evolution.bridge",
+            "sisyphus.evolution.dataset",
+            "sisyphus.evolution.harness",
+            "sisyphus.evolution.materialization",
+            "sisyphus.evolution.operator",
+            "sisyphus.evolution.orchestrator",
+            "sisyphus.evolution.presentation",
+            "sisyphus.evolution.promotion",
+            "sisyphus.evolution.receipts",
+            "sisyphus.evolution.verification",
+        }
+        forbidden_prefixes = (
+            "sisyphus.api",
+            "sisyphus.bus",
+            "sisyphus.closeout",
+            "sisyphus.composition",
+            "sisyphus.config",
+            "sisyphus.planning",
+            "sisyphus.promotion",
+            "sisyphus.provider_wrapper",
+            "sisyphus.state",
+            "sisyphus.verification",
+        )
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency.startswith(forbidden_prefixes)
+        }
+
+        self.assertFalse(
+            forbidden,
+            "Evolution core regained canonical lifecycle authority imports:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_evolution_harness_and_materialization_are_effect_free(self) -> None:
+        forbidden_modules = {"json", "os", "pathlib", "subprocess"}
+        forbidden_functions = {
+            "execute_sisyphus_evaluation",
+            "execute_worktree_backed_evaluation",
+            "materialize_evolution_evaluation",
+        }
+        for name in ("sisyphus.evolution.harness", "sisyphus.evolution.materialization"):
+            module = self.modules[name]
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            imported_roots: set[str] = set()
+            for node in tree.body:
+                if isinstance(node, ast.Import):
+                    imported_roots.update(alias.name.split(".", 1)[0] for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imported_roots.add(node.module.split(".", 1)[0])
+            declared_functions = {
+                node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            self.assertFalse(
+                imported_roots.intersection(forbidden_modules),
+                f"{name} regained process or filesystem implementation imports",
+            )
+            self.assertFalse(
+                declared_functions.intersection(forbidden_functions),
+                f"{name} regained Control-owned evaluation effects",
+            )
+
+    def test_evolution_ports_expose_no_lifecycle_authority_verbs(self) -> None:
+        module = self.modules["sisyphus.application.ports.evolution"]
+        tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+        method_names = {
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        forbidden = {
+            "approve",
+            "approve_plan",
+            "freeze",
+            "freeze_spec",
+            "verify",
+            "activate",
+            "promote",
+            "execute_promotion",
+            "close",
+            "record_merge",
+        }
+
+        self.assertFalse(
+            method_names.intersection(forbidden),
+            "Evolution ports expose canonical lifecycle authority: "
+            + ", ".join(sorted(method_names.intersection(forbidden))),
+        )
+
+    def test_evolution_surface_and_event_facades_remain_import_only(self) -> None:
+        for name in ("sisyphus.evolution.event_bus", "sisyphus.evolution.surface"):
+            module = self.modules[name]
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom):
+                    continue
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                    self.assertIsInstance(node.value.value, str, f"{name} has executable code")
+                    continue
+                if isinstance(node, ast.Assign):
+                    self.assertEqual(
+                        [target.id for target in node.targets if isinstance(target, ast.Name)],
+                        ["__all__"],
+                        f"{name} may assign only __all__",
+                    )
+                    continue
+                self.fail(f"{name} contains {type(node).__name__}; facade must remain import-only")
+
+    def test_evolution_interfaces_use_composition_and_presentation(self) -> None:
+        source_modules = {
+            "sisyphus.interfaces.cli.app",
+            "sisyphus.interfaces.cli.handlers.evolution",
+            "sisyphus.interfaces.mcp.evolution",
+            "sisyphus.interfaces.mcp.service",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in {"sisyphus.evolution.operator", "sisyphus.evolution.surface"}
+        }
+
+        self.assertFalse(
+            forbidden,
+            "Evolution interfaces regained effectful bounded-context facades:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_verification_and_lifecycle_adapters_do_not_import_public_facades(self) -> None:
+        source_modules = {
+            "sisyphus.infra.persistence.lifecycle_mapper",
+            "sisyphus.infra.verification.adapters",
+        }
+        facade_modules = {
+            "sisyphus.conformance",
+            "sisyphus.evidence_graph",
+            "sisyphus.gates",
+            "sisyphus.promotion_state",
+            "sisyphus.state",
+        }
+        forbidden: set[tuple[str, str]] = set()
+        for name in source_modules:
+            for dependency in _declared_imports(self.modules[name]):
+                if dependency in facade_modules:
+                    forbidden.add((name, dependency))
+
+        self.assertFalse(
+            forbidden,
+            "verification/lifecycle adapters import public facades:\n" + _format_pairs(forbidden),
+        )
+
+    def test_spec_validation_adapters_do_not_import_public_facades(self) -> None:
+        source_modules = {
+            "sisyphus.infra.orchestration.planning_adapters",
+            "sisyphus.infra.validation.spec_validation",
+        }
+        facade_modules = {
+            "sisyphus.conformance",
+            "sisyphus.design",
+            "sisyphus.gates",
+            "sisyphus.state",
+            "sisyphus.strategy",
+        }
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency in facade_modules
+        }
+
+        self.assertFalse(
+            forbidden,
+            "spec-validation adapters import public facades:\n" + _format_pairs(forbidden),
+        )
+
+    def test_reviewed_hotspots_keep_their_extracted_responsibilities(self) -> None:
+        promotion_facade = _declared_imports(
+            self.modules["sisyphus.application.use_cases.promotion"]
+        )
+        self.assertTrue(
+            {
+                "sisyphus.application.use_cases.promotion_execution",
+                "sisyphus.application.use_cases.promotion_merge",
+            }
+            <= promotion_facade
+        )
+        self.assertNotIn("sisyphus.domain.lifecycle", promotion_facade)
+        self.assertNotIn("sisyphus.application.promotion_records", promotion_facade)
+
+        spec_adapter = self.modules["sisyphus.infra.validation.spec_validation"]
+        spec_tree = ast.parse(
+            spec_adapter.path.read_text(encoding="utf-8"),
+            filename=str(spec_adapter.path),
+        )
+        self.assertFalse(
+            {
+                node.name
+                for node in spec_tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name.startswith("_validate_")
+            },
+            "spec-validation IO adapter reabsorbed pure validation rules",
+        )
+
+        fixture_dependencies = _declared_imports(
+            self.modules["sisyphus.providers.benchmark_fixtures"]
+        )
+        rendering_dependencies = _declared_imports(
+            self.modules["sisyphus.providers.benchmark_rendering"]
+        )
+        self.assertFalse(
+            fixture_dependencies.intersection(
+                {
+                    "sisyphus.providers.local_agent",
+                    "sisyphus.providers.local_openai",
+                }
+            ),
+            "benchmark fixture parsing regained agent execution dependencies",
+        )
+        self.assertFalse(
+            any(
+                dependency.startswith("sisyphus.infra")
+                or dependency == "sisyphus.providers.local_agent"
+                for dependency in rendering_dependencies
+            ),
+            "benchmark rendering regained execution or infrastructure dependencies",
+        )
+
+        verification_use_case = self.modules[
+            "sisyphus.application.use_cases.verification"
+        ]
+        verification_tree = ast.parse(
+            verification_use_case.path.read_text(encoding="utf-8"),
+            filename=str(verification_use_case.path),
+        )
+        self.assertFalse(
+            {
+                node.name
+                for node in verification_tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name in {"_render_verify_markdown", "_looks_like_unfilled_template"}
+            },
+            "verification use case reabsorbed document projection",
+        )
+
+    def test_provider_launch_and_receipt_adapters_do_not_import_public_facades(self) -> None:
+        source_modules = {
+            "sisyphus.infra.providers.launch",
+            "sisyphus.infra.providers.local_config",
+            "sisyphus.infra.providers.receipt_schema",
+            "sisyphus.infra.providers.receipts",
+        }
+        forbidden_prefixes = (
+            "sisyphus.codex_prompt",
+            "sisyphus.providers",
+            "sisyphus.state",
+        )
+        forbidden = {
+            (name, dependency)
+            for name in source_modules
+            for dependency in _declared_imports(self.modules[name])
+            if dependency.startswith(forbidden_prefixes)
+        }
+
+        self.assertFalse(
+            forbidden,
+            "provider launch/receipt adapters import public facades:\n"
+            + _format_pairs(forbidden),
+        )
+
+    def test_workflow_adapter_has_no_root_facade_dependencies(self) -> None:
+        module = self.modules["sisyphus.infra.orchestration.workflow_adapters"]
+        dependencies = _declared_imports(module)
+        outward = {
+            dependency
+            for dependency in dependencies
+            if dependency.startswith("sisyphus.")
+            and not dependency.startswith(
+                (
+                    "sisyphus.application",
+                    "sisyphus.domain",
+                    "sisyphus.infra",
+                    "sisyphus.shared",
+                )
+            )
+        }
+
+        self.assertFalse(
+            outward,
+            "workflow adapter imports root facades:\n" + "\n".join(sorted(outward)),
+        )
+
+    def test_domain_models_do_not_own_boundary_mapping_methods(self) -> None:
+        violations: set[tuple[str, str]] = set()
+        for module in self.modules.values():
+            if not module.name.startswith("sisyphus.domain"):
+                continue
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                for member in node.body:
+                    if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) and member.name in {
+                        "from_dict",
+                        "to_dict",
+                    }:
+                        violations.add((f"{module.name}.{node.name}", member.name))
+
+        self.assertFalse(
+            violations,
+            "domain models own persistence/transport mapping:\n" + _format_pairs(violations),
+        )
+
+    def test_application_models_do_not_own_boundary_mapping_methods(self) -> None:
+        violations: set[tuple[str, str]] = set()
+        boundary_method_names = {"from_dict", "from_json", "to_dict", "to_json"}
+        for module in self.modules.values():
+            if not module.name.startswith("sisyphus.application"):
+                continue
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                for member in node.body:
+                    if (
+                        isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and member.name in boundary_method_names
+                    ):
+                        violations.add((f"{module.name}.{node.name}", member.name))
+
+        self.assertFalse(
+            violations,
+            "application models own persistence/transport mapping:\n"
+            + _format_pairs(violations),
+        )
+
+    def test_models_do_not_reintroduce_generic_mapping_methods(self) -> None:
+        violations: set[tuple[str, str]] = set()
+        for module in self.modules.values():
+            tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+            for node in tree.body:
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                for member in node.body:
+                    if (
+                        isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and member.name in {"from_dict", "to_dict"}
+                    ):
+                        violations.add((f"{module.name}.{node.name}", member.name))
+
+        self.assertFalse(
+            violations,
+            "models regained generic boundary mapping methods:\n" + _format_pairs(violations),
+        )
+
+
+def _module_sources() -> dict[str, ModuleSource]:
+    result: dict[str, ModuleSource] = {}
+    for path in PACKAGE_ROOT.rglob("*.py"):
+        parts = list(path.relative_to(SRC_ROOT).with_suffix("").parts)
+        is_package = parts[-1] == "__init__"
+        if is_package:
+            parts.pop()
+        name = ".".join(parts)
+        package = name if is_package else name.rpartition(".")[0]
+        result[name] = ModuleSource(name=name, path=path, package=package)
+    return result
+
+
+def _is_serialization_compat_install(node: ast.stmt) -> bool:
+    if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
+        return False
+    call = node.value
+    if not isinstance(call.func, ast.Name) or call.func.id != "install_serialization_compat":
+        return False
+    if len(call.args) != 1 or not isinstance(call.args[0], ast.Name):
+        return False
+    allowed_keywords = {"encode_mapping", "decode_mapping", "encode_json"}
+    return bool(call.keywords) and all(
+        keyword.arg in allowed_keywords
+        and isinstance(keyword.value, ast.Name)
+        for keyword in call.keywords
+    )
+
+
+def _declared_imports(module: ModuleSource) -> set[str]:
+    tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
+    imports: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.update(alias.name for alias in node.names)
+            continue
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.level:
+            dependency = importlib.util.resolve_name(
+                "." * node.level + (node.module or ""),
+                module.package,
+            )
+        else:
+            dependency = node.module or ""
+        if dependency:
+            imports.add(dependency)
+        if node.module is None:
+            imports.update(f"{dependency}.{alias.name}" for alias in node.names)
+    return imports
+
+
+def _internal_dependencies(
+    module: ModuleSource,
+    modules: dict[str, ModuleSource],
+) -> set[str]:
+    return {dependency for dependency in _declared_imports(module) if dependency in modules}
+
+
+def _dependencies_from_prefix(
+    modules: Iterable[ModuleSource],
+    *,
+    source_prefix: str,
+    dependency_prefixes: tuple[str, ...],
+) -> set[tuple[str, str]]:
+    forbidden: set[tuple[str, str]] = set()
+    for module in modules:
+        if not module.name.startswith(source_prefix):
+            continue
+        for dependency in _declared_imports(module):
+            if dependency.startswith(dependency_prefixes):
+                forbidden.add((module.name, dependency))
+    return forbidden
+
+
+def _strongly_connected_components(
+    graph: dict[str, set[str]],
+) -> set[frozenset[str]]:
+    index = 0
+    indices: dict[str, int] = {}
+    lowlinks: dict[str, int] = {}
+    stack: list[str] = []
+    on_stack: set[str] = set()
+    components: set[frozenset[str]] = set()
+
+    def visit(node: str) -> None:
+        nonlocal index
+        index += 1
+        indices[node] = index
+        lowlinks[node] = index
+        stack.append(node)
+        on_stack.add(node)
+
+        for dependency in graph[node]:
+            if dependency not in indices:
+                visit(dependency)
+                lowlinks[node] = min(lowlinks[node], lowlinks[dependency])
+            elif dependency in on_stack:
+                lowlinks[node] = min(lowlinks[node], indices[dependency])
+
+        if lowlinks[node] != indices[node]:
+            return
+        component: set[str] = set()
+        while stack:
+            member = stack.pop()
+            on_stack.remove(member)
+            component.add(member)
+            if member == node:
+                break
+        if len(component) > 1:
+            components.add(frozenset(component))
+
+    for node in graph:
+        if node not in indices:
+            visit(node)
+    return components
+
+
+def _format_pairs(items: set[tuple[str, str]]) -> str:
+    return "\n".join(f"{source} -> {dependency}" for source, dependency in sorted(items))
+
+
+if __name__ == "__main__":
+    unittest.main()

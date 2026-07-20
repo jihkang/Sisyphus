@@ -5,12 +5,20 @@ from pathlib import Path
 import json
 import sys
 
-from ....benchmark import BenchmarkFixtureError, default_benchmark_fixture_dir, render_benchmark_markdown, run_benchmark_suite
+from ....benchmark import (
+    BenchmarkFixtureError,
+    default_benchmark_fixture_dir,
+    encode_benchmark_run_result,
+    render_benchmark_markdown,
+    run_benchmark_suite,
+)
 from ....config import SisyphusConfig
+from ....composition.episode_trace import check_episode_trace, read_episode_steps
+from ....composition.repository_requests import load_task_record_with_path
 from ....dataset_export import export_dataset
-from ....episode_trace import check_episode_trace, read_episode_steps
+from ....eval.codecs import encode_eval_loop_result, encode_test_first_evaluation
 from ....eval.loop import run_task_eval_loop
-from ....observation import render_task_observation
+from ....composition.observation import render_task_observation
 from ....providers.benchmark import (
     LocalAgentBenchmarkFixtureError,
     default_local_agent_benchmark_fixture_file,
@@ -18,12 +26,12 @@ from ....providers.benchmark import (
     render_local_agent_benchmark_markdown,
     run_local_agent_benchmark,
 )
+from ....providers.codecs import encode_local_agent_benchmark_run_result
 from ....providers.local_openai import (
     LocalProviderConfigError,
     is_local_openai_provider,
     parse_local_provider_args,
 )
-from ....state import load_task_record
 from ....test_first import evaluate_test_first_loop
 
 
@@ -65,7 +73,7 @@ def handle_episode_check(
     episode_id: str | None,
     as_json: bool,
 ) -> int:
-    _task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+    _task, task_file = load_task_record_with_path(repo_root, config, task_id)
     summary = check_episode_trace(task_file.parent, task_id=task_id, episode_id=episode_id)
     if as_json:
         print(json.dumps(summary, indent=2))
@@ -107,7 +115,7 @@ def handle_eval_loop(
         episode_id=episode_id,
         max_action_count=max_action_count,
     )
-    payload = result.to_dict()
+    payload = encode_eval_loop_result(result)
     if as_json:
         print(json.dumps(payload, indent=2))
         return 0
@@ -133,13 +141,13 @@ def handle_eval_test_first(
     episode_id: str | None,
     as_json: bool,
 ) -> int:
-    _task, task_file = load_task_record(repo_root=repo_root, task_dir_name=config.task_dir, task_id=task_id)
+    _task, task_file = load_task_record_with_path(repo_root, config, task_id)
     steps = read_episode_steps(task_file.parent, episode_id=episode_id)
     evaluation = evaluate_test_first_loop(steps)
     payload = {
         "task_id": task_id,
         "episode_id": episode_id,
-        "test_first": evaluation.to_dict(),
+        "test_first": encode_test_first_evaluation(evaluation),
     }
     if as_json:
         print(json.dumps(payload, indent=2))
@@ -170,7 +178,7 @@ def handle_benchmark_run(*, repo_root: Path, fixtures_dir: str | None, as_json: 
         print(f"error: {exc}", file=sys.stderr)
         return 1
     if as_json:
-        print(json.dumps(result.to_dict(), indent=2))
+        print(json.dumps(encode_benchmark_run_result(result), indent=2))
     else:
         print(render_benchmark_markdown(result), end="")
     return 0
@@ -208,7 +216,7 @@ def handle_local_agent_benchmark(
         fixtures = load_local_agent_benchmark_fixtures(fixture_path)
         result = run_local_agent_benchmark(fixtures, config)
         rendered = (
-            json.dumps(result.to_dict(), indent=2) + "\n"
+            json.dumps(encode_local_agent_benchmark_run_result(result), indent=2) + "\n"
             if as_json
             else render_local_agent_benchmark_markdown(result)
         )

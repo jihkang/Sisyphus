@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 import re
 
-from ..api import request_task
-from ..config import SisyphusConfig
-from ..utils import optional_str
+from ..application.commands.evolution import RequestEvolutionFollowupCommand
+from ..application.ports.evolution import EvolutionEventPort, EvolutionFollowupRequestPort
+from ..shared.coerce import optional_str
 from .artifacts import EVOLUTION_ARTIFACT_STATUS_RECORDED, EvolutionFollowupRequestArtifact
-from .event_bus import EVOLUTION_EVENT_FOLLOWUP_REQUESTED, publish_evolution_event
+from ..application.evolution_events import EVOLUTION_EVENT_FOLLOWUP_REQUESTED
 from .followup import EVOLUTION_FOLLOWUP_SOURCE_CONTEXT_KIND
 from .handoff import (
     EVOLUTION_DEFAULT_REVIEW_GATES,
@@ -25,6 +24,13 @@ EVOLUTION_FOLLOWUP_PROHIBITED_FLAGS = (
     "permits_promotion",
 )
 
+# Legacy test/integration patch point. Production composition leaves this unset.
+request_task = None
+
+
+def get_legacy_request_task():
+    return request_task
+
 
 @dataclass(frozen=True, slots=True)
 class EvolutionBridgedFollowupTask:
@@ -39,11 +45,11 @@ class EvolutionBridgedFollowupTask:
     artifact: EvolutionFollowupRequestArtifact
 
 
-def bridge_evolution_followup_request(
-    repo_root: Path,
+def bridge_evolution_followup_request_from_ports(
+    followups: EvolutionFollowupRequestPort,
+    events: EvolutionEventPort,
     followup_request: EvolutionFollowupRequest,
     *,
-    config: SisyphusConfig | None = None,
     slug: str | None = None,
 ) -> EvolutionBridgedFollowupTask:
     _validate_followup_request(followup_request)
@@ -67,17 +73,16 @@ def bridge_evolution_followup_request(
         evidence_summary=normalized_evidence,
     )
 
-    result = request_task(
-        repo_root=repo_root,
-        config=config,
+    result = followups.request(
+        RequestEvolutionFollowupCommand(
         message=followup_request.summary,
         title=followup_request.title,
         task_type=followup_request.requested_task_type,
         slug=normalized_slug,
         instruction=_render_followup_instruction(followup_request),
-        owned_paths=list(normalized_owned_paths),
+        owned_paths=normalized_owned_paths,
         source_context=source_context,
-        auto_run=False,
+        )
     )
     if not result.ok or not result.task_id or not result.task:
         raise RuntimeError(result.error or "failed to create evolution follow-up task")
@@ -96,9 +101,7 @@ def bridge_evolution_followup_request(
         required_review_gates=normalized_review_gates,
         followup_task_id=str(result.task_id),
     )
-    publish_evolution_event(
-        repo_root,
-        config=config,
+    events.publish(
         event_type=EVOLUTION_EVENT_FOLLOWUP_REQUESTED,
         source_module="evolution.bridge",
         data={
@@ -121,6 +124,14 @@ def bridge_evolution_followup_request(
         source_context=source_context,
         artifact=artifact,
     )
+
+
+__all__ = [
+    "EVOLUTION_FOLLOWUP_PROHIBITED_FLAGS",
+    "EvolutionBridgedFollowupTask",
+    "bridge_evolution_followup_request_from_ports",
+    "get_legacy_request_task",
+]
 
 
 def _validate_followup_request(followup_request: EvolutionFollowupRequest) -> None:

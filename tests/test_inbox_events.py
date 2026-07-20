@@ -36,6 +36,7 @@ from sisyphus.domain.task.documents import (
     render_issue_repro,
 )
 from sisyphus.infra.persistence.inbox import InboxRepository, write_json_file
+from sisyphus.interfaces.inbox import inbox_event_to_record, parse_inbox_event
 from sisyphus.shared.paths import (
     inbox_failed_dir,
     inbox_pending_dir,
@@ -110,15 +111,20 @@ def pull_request_event() -> dict[str, object]:
 
 
 class InboxEventModelTests(unittest.TestCase):
-    def test_conversation_round_trip_preserves_current_shape(self) -> None:
+    def test_legacy_serialization_methods_delegate_to_boundary_codecs(self) -> None:
         raw = conversation_event()
 
         self.assertEqual(InboxEvent.from_dict(raw).to_dict(), raw)
 
+    def test_conversation_round_trip_preserves_current_shape(self) -> None:
+        raw = conversation_event()
+
+        self.assertEqual(inbox_event_to_record(parse_inbox_event(raw)), raw)
+
     def test_pull_request_round_trip_preserves_current_shape(self) -> None:
         raw = pull_request_event()
 
-        self.assertEqual(InboxEvent.from_dict(raw).to_dict(), raw)
+        self.assertEqual(inbox_event_to_record(parse_inbox_event(raw)), raw)
 
     def test_unknown_and_missing_fields_are_rejected(self) -> None:
         unknown = conversation_event()
@@ -131,7 +137,7 @@ class InboxEventModelTests(unittest.TestCase):
         for raw in (unknown, missing, unknown_payload):
             with self.subTest(raw=raw):
                 with self.assertRaises(InboxValidationError):
-                    InboxEvent.from_dict(raw)
+                    parse_inbox_event(raw)
 
     def test_exact_scalar_and_container_types_are_enforced(self) -> None:
         cases: list[tuple[str, dict[str, object]]] = []
@@ -151,7 +157,7 @@ class InboxEventModelTests(unittest.TestCase):
         for label, raw in cases:
             with self.subTest(label=label):
                 with self.assertRaises(InboxValidationError):
-                    InboxEvent.from_dict(raw)
+                    parse_inbox_event(raw)
 
     def test_bounded_strings_and_collections_are_enforced(self) -> None:
         oversized_message = conversation_event()
@@ -162,7 +168,7 @@ class InboxEventModelTests(unittest.TestCase):
         for raw in (oversized_message, oversized_list):
             with self.subTest(kind="bounded"):
                 with self.assertRaises(InboxValidationError) as raised:
-                    InboxEvent.from_dict(raw)
+                    parse_inbox_event(raw)
                 self.assertEqual(raised.exception.code, "value_too_large")
 
     def test_unsafe_repository_paths_are_rejected(self) -> None:
@@ -174,7 +180,7 @@ class InboxEventModelTests(unittest.TestCase):
         for raw in (owned_path, changed_file):
             with self.subTest(kind="path"):
                 with self.assertRaises(InboxValidationError) as raised:
-                    InboxEvent.from_dict(raw)
+                    parse_inbox_event(raw)
                 self.assertEqual(raised.exception.code, "unsafe_path")
 
     def test_source_context_must_be_strict_json(self) -> None:
@@ -186,14 +192,14 @@ class InboxEventModelTests(unittest.TestCase):
         for raw in (unsupported, non_finite):
             with self.subTest(kind="json"):
                 with self.assertRaises(InboxValidationError):
-                    InboxEvent.from_dict(raw)
+                    parse_inbox_event(raw)
 
     def test_merge_counts_must_be_non_negative(self) -> None:
         raw = pull_request_event()
         raw["payload"]["changed_files"][0]["deletions"] = -1
 
         with self.assertRaises(InboxValidationError) as raised:
-            InboxEvent.from_dict(raw)
+            parse_inbox_event(raw)
 
         self.assertEqual(raised.exception.code, "invalid_value")
 

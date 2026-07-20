@@ -26,7 +26,7 @@ class InterfaceStructureTests(unittest.TestCase):
 
     def test_state_module_reexports_task_repository_surface(self) -> None:
         import sisyphus.state as public_state
-        from sisyphus.domain.task import repository
+        from sisyphus.infra.persistence import task_repository as repository
 
         self.assertIs(public_state.ensure_task_record_defaults, repository.ensure_task_record_defaults)
         self.assertIs(public_state.list_task_records, repository.list_task_records)
@@ -35,9 +35,83 @@ class InterfaceStructureTests(unittest.TestCase):
         self.assertIs(public_state.save_task_record, repository.save_task_record)
         self.assertIs(public_state.sync_task_support_files, repository.sync_task_support_files)
 
+    def test_common_task_record_adapter_preserves_canonical_identity(self) -> None:
+        from sisyphus.infra.orchestration import common_adapters
+        from sisyphus.infra.persistence.task_records import FileTaskRecordAdapter
+
+        self.assertIs(common_adapters.FileTaskRecordAdapter, FileTaskRecordAdapter)
+
+    def test_legacy_domain_task_repository_is_an_identity_preserving_shim(self) -> None:
+        from sisyphus.domain.task import repository as legacy
+        from sisyphus.infra.persistence import task_repository as canonical
+
+        for name in legacy.__all__:
+            with self.subTest(name=name):
+                self.assertIs(getattr(legacy, name), getattr(canonical, name))
+
+    def test_legacy_domain_agent_repository_is_an_identity_preserving_shim(self) -> None:
+        from sisyphus.domain.agent import repository as legacy
+        from sisyphus.infra.persistence import agent_repository as canonical
+
+        for name in legacy.__all__:
+            with self.subTest(name=name):
+                self.assertIs(getattr(legacy, name), getattr(canonical, name))
+
+    def test_provider_workspace_is_an_identity_preserving_shim(self) -> None:
+        from sisyphus.infra import workspace as canonical
+        from sisyphus.providers import workspace as legacy
+
+        for name in legacy.__all__:
+            with self.subTest(name=name):
+                self.assertIs(getattr(legacy, name), getattr(canonical, name))
+
+    def test_artifact_policy_facades_preserve_canonical_identity(self) -> None:
+        import sisyphus.artifact_evaluator as public_evaluator
+        import sisyphus.artifact_projection as public_projection
+        import sisyphus.artifact_snapshot as public_snapshot
+        import sisyphus.artifacts as public_artifacts
+        import sisyphus.dsl as public_dsl
+        import sisyphus.execution_policy as public_execution_policy
+        import sisyphus.feature_change_dsl as public_feature_dsl
+        from sisyphus.application.artifacts import evaluation, obligations, projection, snapshot
+        from sisyphus.application.codecs import artifacts as artifact_codecs
+        from sisyphus.composition import execution_policy, feature_change_dsl
+        from sisyphus.domain.artifact import dsl, models
+        from sisyphus.infra.artifacts import projection as projection_adapter
+        from sisyphus.infra.artifacts import snapshot as snapshot_adapter
+
+        self.assertIs(public_artifacts.ArtifactRecord, models.ArtifactRecord)
+        self.assertIs(public_artifacts.load_artifact_record, artifact_codecs.decode_artifact_record)
+        self.assertIs(public_dsl.ProtocolSpec, dsl.ProtocolSpec)
+        self.assertIs(
+            public_projection.FeatureTaskArtifactProjection,
+            projection.FeatureTaskArtifactProjection,
+        )
+        self.assertIs(public_projection.project_feature_task, projection_adapter.project_feature_task)
+        self.assertIs(
+            public_evaluator.evaluate_feature_task_projection,
+            evaluation.evaluate_feature_task_projection,
+        )
+        self.assertIs(
+            public_snapshot.materialize_feature_task_artifact_snapshot,
+            snapshot_adapter.materialize_feature_task_artifact_snapshot,
+        )
+        self.assertIs(
+            public_feature_dsl.compile_feature_change_obligations,
+            feature_change_dsl.compile_feature_change_obligations,
+        )
+        self.assertIs(
+            public_feature_dsl.fingerprint_materialized_inputs,
+            obligations.fingerprint_materialized_inputs,
+        )
+        self.assertIs(
+            public_execution_policy.resolve_execution_policy,
+            execution_policy.resolve_execution_policy,
+        )
+
     def test_planning_module_reexports_domain_service_surface(self) -> None:
         import sisyphus.planning as public_planning
-        from sisyphus.domain.planning import service
+        from sisyphus.infra.orchestration import planning as service
 
         self.assertIs(public_planning.approve_task_plan, service.approve_task_plan)
         self.assertIs(public_planning.freeze_task_spec, service.freeze_task_spec)
@@ -45,7 +119,7 @@ class InterfaceStructureTests(unittest.TestCase):
 
     def test_workflow_module_delegates_to_domain_service_and_preserves_provider_patch(self) -> None:
         import sisyphus.workflow as public_workflow
-        from sisyphus.domain.workflow import service
+        from sisyphus.infra.orchestration import workflow as service
 
         repo_root = Path("/tmp/repo")
         config = object()
@@ -54,7 +128,10 @@ class InterfaceStructureTests(unittest.TestCase):
         patched_wrapper = object()
         try:
             public_workflow.run_provider_wrapper = patched_wrapper
-            with mock.patch("sisyphus.domain.workflow.service.run_workflow_cycle", return_value=2) as delegated:
+            with mock.patch(
+                "sisyphus.infra.orchestration.workflow.run_workflow_cycle",
+                return_value=2,
+            ) as delegated:
                 self.assertEqual(public_workflow.run_workflow_cycle(repo_root, config), 2)
             delegated.assert_called_once_with(repo_root=repo_root, config=config)
             self.assertIs(service.run_provider_wrapper, patched_wrapper)
@@ -64,7 +141,7 @@ class InterfaceStructureTests(unittest.TestCase):
 
     def test_promotion_module_delegates_to_domain_service_and_preserves_gh_patch(self) -> None:
         import sisyphus.promotion as public_promotion
-        from sisyphus.domain.promotion import service
+        from sisyphus.infra.orchestration import promotion as service
 
         original_public_run_gh = public_promotion._run_gh
         original_service_run_gh = service._run_gh
@@ -72,13 +149,25 @@ class InterfaceStructureTests(unittest.TestCase):
         config = object()
         try:
             public_promotion._run_gh = patched_run_gh
-            with mock.patch("sisyphus.domain.promotion.service.execute_promotion", return_value="ok") as delegated:
+            with mock.patch(
+                "sisyphus.infra.orchestration.promotion.execute_promotion",
+                return_value="ok",
+            ) as delegated:
                 self.assertEqual(public_promotion.execute_promotion("repo", config, task_id="TF-1"), "ok")
             delegated.assert_called_once_with("repo", config, task_id="TF-1")
             self.assertIs(service._run_gh, patched_run_gh)
         finally:
             public_promotion._run_gh = original_public_run_gh
             service._run_gh = original_service_run_gh
+
+    def test_provider_wrapper_uses_application_path_and_honors_explicit_cli_override(self) -> None:
+        import sisyphus.cli as cli
+        import sisyphus.provider_wrapper as wrapper
+
+        self.assertIs(wrapper._agent_runner_override(), wrapper._run_agent_application)
+        replacement = mock.Mock(return_value=0)
+        with mock.patch.object(cli, "handle_agent_run", replacement):
+            self.assertIs(wrapper._agent_runner_override(), replacement)
 
     def test_cli_public_parser_comes_from_parser_module(self) -> None:
         import sisyphus.cli as cli
@@ -158,6 +247,14 @@ class InterfaceStructureTests(unittest.TestCase):
             ["new", "feature", "add-dashboard"],
             ["request", "create task"],
             ["verify", "TF-1"],
+            ["review", "scope", "TF-1"],
+            [
+                "review",
+                "record",
+                "TF-1",
+                "--envelope",
+                ".planning/tasks/TF-1/artifacts/reviews/review.json",
+            ],
             ["close", "TF-1"],
             ["observe", "TF-1"],
             ["episode", "check", "TF-1"],
@@ -750,7 +847,7 @@ class InterfaceStructureTests(unittest.TestCase):
             self.assertEqual(list(path.parent.glob("*.tmp")), [])
 
     def test_agent_repository_round_trips_agent_records(self) -> None:
-        from sisyphus.domain.agent import repository
+        from sisyphus.infra.persistence import agent_repository as repository
 
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

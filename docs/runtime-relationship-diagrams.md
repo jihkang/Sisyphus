@@ -1,310 +1,263 @@
 # Sisyphus Runtime Relationship Diagrams
 
-This document complements [architecture.md](./architecture.md) with diagrams that make runtime boundaries explicit.
+Last verified against code: 2026-07-20
 
-The main ambiguity to avoid is treating agent execution, task records, artifact projections, and repository promotion as one layer. They are related, but they have different authority.
+This document complements [architecture.md](./architecture.md) and
+[architecture-and-data-pipeline.md](./architecture-and-data-pipeline.md). The
+diagrams show implemented authority and dependency direction, not a future
+service decomposition.
 
-The diagrams below split:
-
-1. current runtime authority
-2. artifact-governed feature-change path
-3. target artifact authority
-4. main and evolution loop
-5. turn-to-contract materialization
-6. artifact state machine
-7. adapter contract boundary
-
-## 1. Current Runtime Authority
-
-The operator-facing control surface is still task-shaped. Feature work now also materializes artifact snapshots and compiled obligations.
+## 1. Dependency And Wiring Boundary
 
 ```mermaid
-flowchart LR
-    subgraph Request["Request Surface"]
-        User[User request]
-        CLI[CLI / API / MCP / Discord]
-    end
+flowchart TB
+    Client["CLI / MCP / API / inbox client"]
+    Interface["interfaces: parse, dispatch, render"]
+    Compose["composition: select concrete adapters"]
+    UseCase["application: commands, ports, use cases"]
+    Domain["domain: deterministic values and policy"]
+    Adapter["infra: files, Git, process, provider, events"]
+    Repository["repository-local records and artifacts"]
 
-    subgraph TaskRuntime["Task Runtime Authority"]
-        TaskState[task.json]
-        TaskDocs[BRIEF / PLAN / VERIFY / LOG]
-        Worktree[task branch and worktree]
-        Agents[agent records]
-        Verify[verify receipts]
-        Events[event log]
-    end
-
-    subgraph ArtifactRuntime["Artifact-Governed Runtime"]
-        Projection[FeatureChangeArtifact projection]
-        Snapshot[persisted projection snapshot]
-        Evaluation[FeatureChange evaluation]
-        Intents[ObligationIntent records]
-        Queue[CompiledObligation queue]
-        Receipts[obligation execution receipts]
-    end
-
-    subgraph Promotion["Promotion Boundary"]
-        ArtifactDecision[ArtifactPromotionDecision]
-        RepoExecution[RepositoryPromotionExecution]
-        MergeReceipt[merge receipt and changeset]
-    end
-
-    User --> CLI
-    CLI --> TaskState
-    CLI --> TaskDocs
-    CLI --> Worktree
-    TaskState --> Projection
-    TaskDocs --> Projection
-    Verify --> Projection
-    Projection --> Snapshot
-    Projection --> Evaluation
-    Snapshot --> Evaluation
-    Evaluation --> Intents
-    Intents --> Queue
-    Queue --> Receipts
-    Receipts --> Verify
-    Evaluation --> ArtifactDecision
-    ArtifactDecision --> RepoExecution
-    RepoExecution --> MergeReceipt
-    MergeReceipt --> TaskState
+    Client --> Interface
+    Interface --> Compose
+    Interface --> UseCase
+    Compose --> UseCase
+    Compose --> Adapter
+    UseCase --> Domain
+    Adapter --> UseCase
+    Adapter --> Domain
+    Adapter --> Repository
 ```
 
-## 2. Feature-Change Obligation Path
+The infrastructure arrows point inward because adapters implement
+application-owned ports and consume domain values. Application services never
+look up concrete adapters. Public compatibility facades delegate into interfaces
+or composition and do not own policy.
 
-The DSL defines meaning. Execution policy defines how an obligation is run.
+## 2. Request To Task Record
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Surface as CLI / MCP / API
+    participant Root as composition.repository_requests
+    participant Request as RepositoryRequestService
+    participant Queue as InboxQueueService
+    participant Inbox as InboxRepository
+    participant Process as InboxProcessingService
+    participant Handler as ConversationEventService
+    participant Create as TaskWorkspaceCreationService
+    participant Store as TaskRecordPort
+
+    User->>Surface: repository request
+    Surface->>Root: parsed request
+    Root->>Request: composed command
+    Request->>Queue: validate and enqueue
+    Queue->>Inbox: pending JSON record
+    Request->>Process: process queued record
+    Process->>Inbox: claim into processing
+    Process->>Handler: strict parsed event
+    Handler->>Create: create task and worktree
+    Create->>Store: save canonical task record
+    Process->>Inbox: complete or quarantine
+```
+
+The interface never writes `task.json` directly. Input is strictly parsed before
+enqueue and after claim. Workspace creation and task persistence are ordered by
+the application service, with rollback on template materialization failure.
+
+## 3. Planning And Workflow Authority
 
 ```mermaid
 flowchart TD
-    A[Feature task record and docs]
-    B[project_feature_task_record]
-    C[FeatureChangeArtifact projection]
-    D[persist artifacts/projection/feature-change.json]
-    E[evaluate_feature_task_projection]
-    F[ObligationIntent]
-    G[ProtocolSpec + ObligationSpec + InputContract]
-    H[compile_feature_change_obligations]
-    I[CompiledObligation]
-    J[MaterializedInputSet fingerprint]
-    K[persist artifacts/obligations/compiled.json]
-    L[ExecutionPolicy]
-    M[execute_next_feature_change_obligation]
-    N[verification or blocked receipt]
-    O[refresh projection snapshot]
+    Observation["canonical observation"]
+    Action["operator or daemon action"]
+    Planning["PlanningService"]
+    Validation["SpecValidationPort"]
+    Rules["application spec-validation rules"]
+    Workflow["WorkflowService"]
+    Conformance["pre/post conformance"]
+    Provider["ProviderExecutionPort"]
+    Verify["VerificationPort"]
+    Close["CloseoutPort"]
+    Record["TaskRecordPort"]
 
-    A --> B
-    B --> C
-    C --> D
-    C --> E
-    D --> E
-    E --> F
-    F --> H
-    G --> H
-    H --> I
-    I --> J
-    I --> K
-    J --> K
-    K --> M
-    L --> M
-    M --> N
-    N --> O
-    O --> D
+    Record --> Observation
+    Observation --> Action
+    Action --> Planning
+    Planning --> Validation
+    Validation --> Rules
+    Action --> Workflow
+    Workflow --> Conformance
+    Conformance --> Provider
+    Provider --> Conformance
+    Workflow --> Verify
+    Verify --> Close
+    Planning --> Record
+    Workflow --> Record
 ```
 
-The important invariant is that a compiled obligation is keyed by its materialized input fingerprint. A changed input creates a new obligation instance rather than silently changing the meaning of an old verdict.
+`task://<task-id>/observation` projects allowed and forbidden next actions. Plan
+approval and spec freeze are operator gates. The workflow stops on review,
+clarification, red conformance, failed execution, pending promotion, or retarget
+requirements rather than reconstructing authority from an agent response.
 
-## 3. Target Artifact Authority
+## 4. Artifact And Obligation Path
 
-The intended long-term center is a typed artifact graph. Tasks remain operators, but they should not be the only durable source of truth.
+```mermaid
+flowchart TD
+    Task["task record, docs, verification"]
+    Project["FeatureChange projection"]
+    Snapshot["persisted projection snapshot"]
+    Evaluate["application artifact evaluation"]
+    Intent["ObligationIntent"]
+    Compile["obligation compiler"]
+    Queue["CompiledObligation queue"]
+    Policy["ExecutionPolicy"]
+    Runtime["infra obligation runtime"]
+    Receipt["bounded execution receipt"]
+    Refresh["refresh projection"]
+
+    Task --> Project
+    Project --> Snapshot
+    Project --> Evaluate
+    Evaluate --> Intent
+    Intent --> Compile
+    Compile --> Queue
+    Policy --> Runtime
+    Queue --> Runtime
+    Runtime --> Receipt
+    Receipt --> Refresh
+    Refresh --> Project
+```
+
+Artifact and DSL meanings are domain-owned. Projection, evaluation, obligation
+identity, snapshot decisions, and execution-policy selection are application
+policy. Infrastructure owns declarations and repository IO. A materialized-input
+fingerprint is part of compiled obligation identity, so changed inputs cannot
+silently reuse an earlier verdict.
+
+## 5. Verification And Promotion
 
 ```mermaid
 flowchart LR
-    subgraph Runtime["Deterministic Runtime Operations"]
-        Intake[intake]
-        Execute[execute]
-        Verify[verify]
-        Promote[promote]
-        Invalidate[invalidate]
-    end
+    VerifyCommand["Verify command"]
+    VerifyService["VerificationService"]
+    VerifyPorts["spec, command, document, evidence ports"]
+    VerifyReceipt["VERIFY.md + evidence + task state"]
+    PromotionCommand["ExecutePromotionCommand"]
+    PromotionFacade["PromotionService"]
+    Execute["PromotionExecutionService"]
+    GitHub["Git and pull-request ports"]
+    MergeEvent["merged-PR command"]
+    Recorder["MergedPromotionRecorder"]
+    MergeReceipt["merge receipt + CHANGESET.md"]
+    Close["CloseoutService"]
 
-    subgraph Graph["Typed Artifact Graph"]
-        Specs[TaskSpec]
-        Runs[TaskRun]
-        Artifacts[ArtifactRecord]
-        Composite[CompositeArtifactRecord]
-        Claims[VerificationClaimRecord]
-        Decisions[ArtifactPromotionDecision]
-        Edges[typed edges and slot bindings]
-    end
-
-    subgraph Policy["Replaceable Execution Policy"]
-        Agent[agent/provider selection]
-        Tool[tool runner]
-        Budget[budget / retry / timeout]
-    end
-
-    Intake --> Specs
-    Execute --> Runs
-    Execute --> Artifacts
-    Verify --> Claims
-    Promote --> Decisions
-    Invalidate --> Edges
-
-    Specs --> Composite
-    Artifacts --> Composite
-    Claims --> Composite
-    Edges --> Composite
-
-    Policy -. configures execution .-> Execute
-    Policy -. does not define artifact meaning .-> Graph
+    VerifyCommand --> VerifyService
+    VerifyService --> VerifyPorts
+    VerifyPorts --> VerifyReceipt
+    VerifyReceipt --> PromotionCommand
+    PromotionCommand --> PromotionFacade
+    PromotionFacade --> Execute
+    Execute --> GitHub
+    MergeEvent --> PromotionFacade
+    PromotionFacade --> Recorder
+    Recorder --> MergeReceipt
+    Recorder --> Close
 ```
 
-## 4. Main And Evolution Loop
+Verification owns gate and command ordering, while adapters execute bounded
+effects. Promotion execution and merged-PR recording are distinct commands. A PR
+URL is not a merge receipt, and closeout still checks evidence, conformance,
+worktree, and promotion gates.
 
-The main runtime is live and authoritative. Evolution is adjacent: it can read, evaluate, and request follow-up work, but it must route changes through Sisyphus lifecycle gates.
+## 6. Main And Evolution Loops
 
 ```mermaid
 flowchart LR
-    subgraph Main["Main Runtime"]
-        Requests[operator requests]
-        TaskLoop[workflow / daemon loop]
-        TaskState[task records and docs]
-        ArtifactState[artifact snapshots and obligations]
-        Promotion[promotion receipts]
+    subgraph Control["Authoritative Sisyphus control"]
+        Requests["normal task request"]
+        Plan["plan approval"]
+        Freeze["spec freeze"]
+        Agent["provider execution"]
+        Verify["verification"]
+        Promote["promotion and close"]
     end
 
-    subgraph Evolution["Evolution Control Plane"]
-        Dataset[dataset extraction]
-        Harness[harness evaluation]
-        Fitness[constraints and fitness]
-        Report[reviewable report]
-        Followup[follow-up request bridge]
+    subgraph Evolution["Bounded Evolution context"]
+        Dataset["read-only dataset projection"]
+        Harness["effect-free evaluation plan"]
+        Effects["isolated infra execution"]
+        Fitness["constraints and fitness"]
+        Report["append-only report"]
+        Followup["request-only follow-up"]
     end
 
-    subgraph Gates["Sisyphus Gates"]
-        Plan[plan approval]
-        Spec[spec freeze]
-        Verify[verification]
-        Close[close / promotion]
-    end
-
-    Requests --> TaskLoop
-    TaskLoop --> TaskState
-    TaskLoop --> ArtifactState
-    TaskLoop --> Promotion
-
-    TaskState --> Dataset
-    ArtifactState --> Dataset
-    Promotion --> Dataset
+    Agent --> Dataset
+    Verify --> Dataset
+    Promote --> Dataset
     Dataset --> Harness
-    Harness --> Fitness
+    Harness --> Effects
+    Effects --> Fitness
     Fitness --> Report
     Report --> Followup
-
-    Followup --> Plan
-    Plan --> Spec
-    Spec --> Verify
-    Verify --> Close
-    Close --> TaskLoop
+    Followup --> Requests
+    Requests --> Plan
+    Plan --> Freeze
+    Freeze --> Agent
+    Agent --> Verify
+    Verify --> Promote
 ```
 
-## 5. Turn-To-Contract Materialization
+Evolution can observe, evaluate, score, report, and request. It cannot approve,
+freeze, verify, activate, close, or promote. The control-side composition root
+owns task creation and provider sequencing; Evolution effects remain in
+`infra/evolution`.
 
-Agent reasoning may be stochastic. The persisted contract must be deterministic enough to replay.
+## 7. External Agent Contract
 
 ```mermaid
-flowchart TD
-    Input[user input and repository state]
-    Retrieval[retrieval and context selection]
-    Agent[agent reasoning]
-    Slots[structured slots]
-    Contract[contractual fields]
-    Info[informational fields]
-    Persist[repo-local persistence]
-    Projection[artifact projection]
-    Queue[obligation queue]
+flowchart LR
+    External["external or local coding agent"]
+    Adapter["provider adapter"]
+    Request["typed request + digest"]
+    Worktree["contained task worktree"]
+    Receipt["bounded receipt + artifact references"]
+    Application["application workflow"]
+    Gates["conformance and verification gates"]
 
-    Input --> Retrieval
-    Retrieval --> Agent
-    Input --> Agent
-    Agent --> Slots
-    Slots --> Contract
-    Slots --> Info
-    Contract --> Persist
-    Info --> Persist
-    Persist --> Projection
-    Projection --> Queue
+    Application --> Request
+    Request --> Adapter
+    Adapter --> Worktree
+    Worktree --> Adapter
+    Adapter --> Receipt
+    Receipt --> Application
+    Application --> Gates
 ```
 
-Contractual fields are the governance boundary. Informational fields can help retrieval and review, but they must not weaken deterministic replay of the contract.
+An adapter may launch a different model or tool, but it never owns canonical
+task state. Request/receipt digests, path containment, output limits, deadlines,
+and verification gates form the deterministic boundary around stochastic agent
+execution.
 
-## 6. Artifact State Machine
-
-The feature-change evaluator currently derives states through `promotable`. Repository merge and merge receipt recording are handled by the separate repository promotion execution path.
+## 8. Conformance Colors
 
 ```mermaid
 stateDiagram-v2
-    [*] --> draft
-    draft --> candidate: required starting slots exist
-    candidate --> verified: required claims pass
-    verified --> promotable: freshness, invariants, approvals
-    promotable --> promoted: repository promotion recorded
-
-    draft --> invalid: malformed contract
-    candidate --> invalid: invariant or claim failure
-    verified --> invalid: invariant or claim failure
-    promotable --> invalid: broken obligation
-
-    verified --> stale: dependency changed
-    promotable --> stale: dependency changed
-    stale --> candidate: recompose
-    stale --> verified: reverify
-    invalid --> candidate: repair inputs
+    [*] --> green: aligned with frozen spec
+    green --> yellow: unresolved warning or clarification
+    yellow --> green: reconciled and checkpointed
+    green --> red: blocking drift
+    yellow --> red: blocking drift
+    red --> green: reconciled against frozen spec
 ```
 
-## 7. Adapter Contract Boundary
+- `green` permits progression when all other lifecycle gates pass.
+- `yellow` blocks final verification and close until resolved.
+- `red` stops execution until drift is reconciled.
 
-External agents should connect through a narrow adapter contract rather than owning Sisyphus state directly.
-
-```mermaid
-flowchart LR
-    subgraph External["External Runtime"]
-        Codex[Codex]
-        Claude[Claude]
-        Other[other agent/tool]
-    end
-
-    subgraph Adapter["Adapter Layer"]
-        Prompt[prompt and input materialization]
-        ToolRunner[tool/provider runner]
-        ReceiptWriter[receipt writer]
-    end
-
-    subgraph Contract["Deterministic Contract Boundary"]
-        InputContract[InputContract]
-        MaterializedInputs[MaterializedInputSet]
-        ProducedArtifacts[produced artifacts / claims]
-        Receipts[execution receipts]
-    end
-
-    subgraph Runtime["Sisyphus Runtime"]
-        TaskRuntime[task runtime]
-        ArtifactRuntime[artifact projection and queue]
-        Gates[verification and promotion gates]
-    end
-
-    Codex --> Prompt
-    Claude --> Prompt
-    Other --> ToolRunner
-    Prompt --> InputContract
-    ToolRunner --> MaterializedInputs
-    ToolRunner --> ProducedArtifacts
-    ReceiptWriter --> Receipts
-    InputContract --> ArtifactRuntime
-    MaterializedInputs --> ArtifactRuntime
-    ProducedArtifacts --> ArtifactRuntime
-    Receipts --> Gates
-    TaskRuntime --> ArtifactRuntime
-    Gates --> TaskRuntime
-```
-
-The adapter may vary by agent or provider. The contract boundary may not.
+These colors are policy outcomes shared by observation, workflow, and Evolution
+projections. They are not presentation-only status labels.

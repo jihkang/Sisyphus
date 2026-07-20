@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import SisyphusConfig
-from .episode_trace import read_episode_steps
+from .composition.episode_trace import read_episode_steps
+from .eval.codecs import encode_eval_loop_result
 from .eval.loop import build_task_eval_loop_result
 from .state import list_task_records, load_task_record
 
@@ -124,9 +125,9 @@ def build_task_dataset_records(
         )
         for step in _episode_action_steps(steps, episode_id):
             if format == DATASET_FORMAT_SFT:
-                records.append(_sft_record(task, step, eval_result.to_dict()))
+                records.append(_sft_record(task, step, encode_eval_loop_result(eval_result)))
             else:
-                records.append(_rl_record(task, step, eval_result.to_dict()))
+                records.append(_rl_record(task, step, encode_eval_loop_result(eval_result)))
     return tuple(records)
 
 

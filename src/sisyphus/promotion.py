@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from .domain.promotion import service as _service
-from .domain.promotion.service import *  # noqa: F403
+from .infra.orchestration import promotion as _service
+from .infra.orchestration.promotion import *  # noqa: F403
 
 _run_gh = _service._run_gh
 

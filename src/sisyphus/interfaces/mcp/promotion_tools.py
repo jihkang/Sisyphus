@@ -3,7 +3,8 @@ from __future__ import annotations
 from types import MappingProxyType
 from pathlib import Path
 
-from ...api import execute_promotion, record_merged_pull_request
+from ...composition.repository_promotion import execute_promotion
+from ...composition.repository_requests import record_merged_pull_request
 from ...config import SisyphusConfig
 from ...shared.coerce import optional_str
 from .coercion import dict_list

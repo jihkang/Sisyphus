@@ -4,19 +4,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..artifacts import TaskRunRef
-from ..config import SisyphusConfig
-from ..promotion_state import (
+from ..application.ports.evolution import EvolutionEventPort, EvolutionTaskQueryPort
+from ..domain.promotion.state import (
     PROMOTION_STATUS_MERGED,
     PROMOTION_STATUS_RECORDED,
     promotion_summary,
 )
-from ..state import load_task_record
-from ..utils import required_str
+from ..shared.coerce import required_str
 from .artifacts import (
     EVOLUTION_ARTIFACT_STATUS_RECORDED,
     ExecutionReceiptArtifact,
 )
-from .event_bus import EVOLUTION_EVENT_EXECUTION_PROJECTED, publish_evolution_event
+from ..application.evolution_events import EVOLUTION_EVENT_EXECUTION_PROJECTED
 from .followup import extract_followup_source_context, relative_task_locator
 
 
@@ -29,20 +28,14 @@ class EvolutionFollowupExecutionProjection:
     task_runs: tuple[TaskRunRef, ...]
 
 
-def project_followup_execution(
-    repo_root: Path,
-    config: SisyphusConfig,
+def project_followup_execution_from_ports(
+    tasks: EvolutionTaskQueryPort,
+    events: EvolutionEventPort,
     task_id: str,
 ) -> EvolutionFollowupExecutionProjection:
-    task, task_file = load_task_record(
-        repo_root=repo_root,
-        task_dir_name=config.task_dir,
-        task_id=task_id,
-    )
+    task, task_file = tasks.load_with_path(task_id)
     projection = project_followup_execution_record(task=task, task_dir=task_file.parent)
-    publish_evolution_event(
-        repo_root,
-        config=config,
+    events.publish(
         event_type=EVOLUTION_EVENT_EXECUTION_PROJECTED,
         source_module="evolution.receipts",
         data={

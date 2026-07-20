@@ -24,6 +24,7 @@ from sisyphus.planning import approve_task_plan, freeze_task_spec
 from sisyphus.audit import run_verify
 from sisyphus.state import create_task_record, load_task_record, save_task_record
 from sisyphus.templates import materialize_task_templates
+from sisyphus.infra.workspace.errors import WorkspaceFileSafetyError
 
 
 class ArtifactProjectionTests(unittest.TestCase):
@@ -264,6 +265,45 @@ class ArtifactProjectionTests(unittest.TestCase):
 
         with self.assertRaisesRegex(FileNotFoundError, "requires existing PLAN.md"):
             project_feature_task(self.repo_root, self.config, feature_task["id"])
+
+    def test_projection_rejects_symlinked_task_document(self) -> None:
+        task = self._new_feature_task("artifact-projection-symlinked-doc")
+        self._fill_feature_docs(task)
+        task_dir = self.repo_root / task["task_dir"]
+        outside = self.repo_root / "outside-brief.md"
+        outside.write_text("# Outside\n", encoding="utf-8")
+        brief = task_dir / "BRIEF.md"
+        brief.unlink()
+        self._symlink_file(brief, outside)
+
+        with self.assertRaisesRegex(WorkspaceFileSafetyError, "symlink"):
+            project_feature_task(self.repo_root, self.config, task["id"])
+
+    def test_snapshot_read_and_materialization_reject_symlinked_output(self) -> None:
+        task = self._new_feature_task("artifact-snapshot-symlinked-output")
+        self._fill_feature_docs(task)
+        task_dir = self.repo_root / task["task_dir"]
+        outside = self.repo_root / "outside-snapshot.json"
+        outside.write_text('{"outside": true}\n', encoding="utf-8")
+        snapshot = task_dir / DEFAULT_FEATURE_TASK_ARTIFACT_SNAPSHOT_PATH
+        snapshot.parent.mkdir(parents=True, exist_ok=True)
+        self._symlink_file(snapshot, outside)
+
+        with self.assertRaisesRegex(WorkspaceFileSafetyError, "symlink"):
+            read_feature_task_artifact_snapshot(task_dir)
+        with self.assertRaisesRegex(WorkspaceFileSafetyError, "regular file"):
+            materialize_feature_task_artifact_snapshot(
+                self.repo_root,
+                self.config,
+                task["id"],
+            )
+        self.assertEqual(outside.read_text(encoding="utf-8"), '{"outside": true}\n')
+
+    def _symlink_file(self, link: Path, target: Path) -> None:
+        try:
+            link.symlink_to(target)
+        except OSError as exc:
+            self.skipTest(f"file symlinks are unavailable: {exc}")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-from ..utils import required_str
+from ..shared.coerce import required_str
 
 
 EVOLUTION_FOLLOWUP_SOURCE_CONTEXT_KIND = "evolution_followup"

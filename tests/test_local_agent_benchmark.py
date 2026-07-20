@@ -21,6 +21,7 @@ from sisyphus.providers.benchmark import (
     render_local_agent_benchmark_markdown,
     run_local_agent_benchmark,
 )
+from sisyphus.providers.codecs import encode_local_agent_benchmark_run_result
 from sisyphus.providers.local_openai import LocalProviderConfig
 
 
@@ -188,7 +189,7 @@ class LocalAgentBenchmarkRunTests(unittest.TestCase):
         self.assertEqual(result.cases[1].status, "failed")
         self.assertTrue(result.cases[1].terminal_finish)
         self.assertEqual(result.cases[1].actual_changed_paths, ())
-        payload = result.to_dict()
+        payload = encode_local_agent_benchmark_run_result(result)
         self.assertEqual(payload["summary"]["coding_success_rate"], 1.0)
         self.assertEqual(payload["summary"]["safety_success_rate"], 1.0)
         self.assertNotIn("secret", json.dumps(payload))

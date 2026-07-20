@@ -112,6 +112,10 @@ class SearchContextTests(unittest.TestCase):
 
         self.assertTrue((self.repo_root / DEFAULT_SEARCH_INDEX_PATH).is_file())
         self.assertTrue(path.is_file())
+        self.assertEqual(
+            path.read_text(encoding="utf-8"),
+            json.dumps(pack, indent=2, sort_keys=True) + "\n",
+        )
         self.assertEqual(pack["fingerprint"], rebuilt_pack["fingerprint"])
         self.assertEqual(pack["pack_id"], rebuilt_pack["pack_id"])
         self.assertGreater(pack["result_count"], 0)
@@ -234,6 +238,10 @@ class SearchContextTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "context pack schema_version"):
             read_context_pack(self.repo_root, "context-pack-invalid")
+
+    def test_empty_context_pack_id_preserves_public_error(self) -> None:
+        with self.assertRaisesRegex(ValueError, "context pack id must be non-empty"):
+            read_context_pack(self.repo_root, "   ")
 
     def test_cli_commands_parse_and_execute(self) -> None:
         self._verified_feature_task("cli-search")

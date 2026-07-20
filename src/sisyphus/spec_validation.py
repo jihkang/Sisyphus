@@ -1,3 +1,3 @@
 from __future__ import annotations
 
-from .domain.planning.spec_validation import *  # noqa: F403
+from .infra.validation.spec_validation import *  # noqa: F403

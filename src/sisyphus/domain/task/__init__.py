@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from .factory import build_task_record, task_id_for
 from .documents import render_brief, render_feature_plan, render_issue_fix_plan, render_issue_repro
-from .models import DEFAULT_CHANGESET_PATH, DEFAULT_PROMOTION_RECEIPT_PATH, default_task_docs
+from .design import (
+    default_task_design,
+    ensure_task_design_defaults,
+    evaluate_design_adequacy,
+    freeze_design_anchor,
+)
+from .models import DEFAULT_CHANGESET_PATH, DEFAULT_PROMOTION_RECEIPT_PATH, Task, default_task_docs
 from .repository import (
     ConcurrentTaskUpdateError,
     ensure_task_record_defaults,
@@ -18,9 +23,13 @@ __all__ = [
     "ConcurrentTaskUpdateError",
     "DEFAULT_CHANGESET_PATH",
     "DEFAULT_PROMOTION_RECEIPT_PATH",
-    "build_task_record",
+    "Task",
+    "default_task_design",
     "default_task_docs",
+    "ensure_task_design_defaults",
     "ensure_task_record_defaults",
+    "evaluate_design_adequacy",
+    "freeze_design_anchor",
     "list_task_records",
     "load_task_record",
     "normalize_task_projection",
@@ -30,6 +39,5 @@ __all__ = [
     "render_issue_repro",
     "save_task_record",
     "sync_task_support_files",
-    "task_id_for",
     "update_task_record",
 ]

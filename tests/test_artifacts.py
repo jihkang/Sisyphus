@@ -29,6 +29,16 @@ from sisyphus.artifacts import (
     VerificationClaimRecord,
     load_artifact_record,
 )
+from sisyphus.application.codecs.artifacts import (
+    decode_atomic_artifact_record,
+    decode_composite_artifact_record,
+    decode_feature_change_slot_bindings,
+    decode_named_slot_binding,
+    decode_verification_claim,
+    encode_artifact_record,
+    encode_feature_change_slot_bindings,
+    encode_verification_claim,
+)
 
 
 class ArtifactRecordTests(unittest.TestCase):
@@ -54,8 +64,8 @@ class ArtifactRecordTests(unittest.TestCase):
             ),
         )
 
-        serialized = record.to_dict()
-        restored = ArtifactRecord.from_dict(serialized)
+        serialized = encode_artifact_record(record)
+        restored = decode_atomic_artifact_record(serialized)
         generic = load_artifact_record(serialized)
 
         self.assertEqual(serialized["record_kind"], ARTIFACT_RECORD_KIND_ATOMIC)
@@ -103,8 +113,8 @@ class ArtifactRecordTests(unittest.TestCase):
             ),
         )
 
-        serialized = record.to_dict()
-        restored = CompositeArtifactRecord.from_dict(serialized)
+        serialized = encode_artifact_record(record)
+        restored = decode_composite_artifact_record(serialized)
         generic = load_artifact_record(serialized)
 
         self.assertEqual(serialized["record_kind"], ARTIFACT_RECORD_KIND_COMPOSITE)
@@ -121,8 +131,8 @@ class ArtifactRecordTests(unittest.TestCase):
             state=ARTIFACT_STATE_DRAFT,
         )
 
-        serialized = record.to_dict()
-        restored = ArtifactRecord.from_dict(serialized)
+        serialized = encode_artifact_record(record)
+        restored = decode_atomic_artifact_record(serialized)
 
         self.assertEqual(serialized["payload"], {})
         self.assertEqual(serialized["evidence_refs"], [])
@@ -155,7 +165,7 @@ class ArtifactRecordTests(unittest.TestCase):
             ),
         )
 
-        serialized = record.to_dict()
+        serialized = encode_artifact_record(record)
 
         self.assertEqual(list(serialized["payload"].keys()), ["a_key", "z_key"])
         self.assertEqual([item["artifact_id"] for item in serialized["child_artifacts"]], ["artifact-child-b", "artifact-child-a"])
@@ -164,7 +174,7 @@ class ArtifactRecordTests(unittest.TestCase):
 
     def test_invalid_identity_and_malformed_reconstruction_data_raise_actionable_errors(self) -> None:
         with self.assertRaisesRegex(ValueError, "artifact_record.artifact_id is required"):
-            ArtifactRecord.from_dict(
+            decode_atomic_artifact_record(
                 {
                     "record_kind": ARTIFACT_RECORD_KIND_ATOMIC,
                     "artifact_type": "feature_spec",
@@ -202,8 +212,8 @@ class ArtifactRecordTests(unittest.TestCase):
             ),
         )
 
-        serialized = bindings.to_dict()
-        restored = FeatureChangeSlotBindings.from_dict(serialized)
+        serialized = encode_feature_change_slot_bindings(bindings)
+        restored = decode_feature_change_slot_bindings(serialized)
 
         self.assertEqual(serialized["spec"]["slot_name"], "spec")
         self.assertEqual(
@@ -227,8 +237,8 @@ class ArtifactRecordTests(unittest.TestCase):
             ),
         )
 
-        serialized = claim.to_dict()
-        restored = VerificationClaimRecord.from_dict(serialized)
+        serialized = encode_verification_claim(claim)
+        restored = decode_verification_claim(serialized)
 
         self.assertEqual([item["artifact_id"] for item in serialized["dependency_refs"]], ["artifact-spec-123", "artifact-impl-202"])
         self.assertEqual([item["artifact_id"] for item in serialized["evidence_refs"]], ["artifact-verify-401", "artifact-receipt-601"])
@@ -243,8 +253,8 @@ class ArtifactRecordTests(unittest.TestCase):
             implementation_candidates=CollectionSlotBinding(slot_name="implementation_candidates"),
         )
 
-        serialized = bindings.to_dict()
-        restored = FeatureChangeSlotBindings.from_dict(serialized)
+        serialized = encode_feature_change_slot_bindings(bindings)
+        restored = decode_feature_change_slot_bindings(serialized)
 
         self.assertEqual(serialized["implementation_candidates"]["artifacts"], [])
         self.assertEqual(serialized["tests"]["artifacts"], [])
@@ -283,8 +293,8 @@ class ArtifactRecordTests(unittest.TestCase):
             ),
         )
 
-        serialized_bindings = bindings.to_dict()
-        serialized_claim = claim.to_dict()
+        serialized_bindings = encode_feature_change_slot_bindings(bindings)
+        serialized_claim = encode_verification_claim(claim)
 
         self.assertEqual(
             [item["artifact_id"] for item in serialized_bindings["implementation_candidates"]["artifacts"]],
@@ -297,14 +307,14 @@ class ArtifactRecordTests(unittest.TestCase):
 
     def test_invalid_slot_binding_and_verification_claim_payloads_raise_actionable_errors(self) -> None:
         with self.assertRaisesRegex(ValueError, "named_slot_binding.slot_name is required"):
-            NamedSlotBinding.from_dict(
+            decode_named_slot_binding(
                 {
                     "artifact": {"artifact_id": "artifact-spec-123", "artifact_type": "feature_spec"},
                 }
             )
 
         with self.assertRaisesRegex(TypeError, "verification_claim.dependency_refs must be a list, got str"):
-            VerificationClaimRecord.from_dict(
+            decode_verification_claim(
                 {
                     "claim_id": "claim-bad-001",
                     "claim": "bad dependency payload",
@@ -314,7 +324,7 @@ class ArtifactRecordTests(unittest.TestCase):
             )
 
         with self.assertRaisesRegex(TypeError, "artifact_record.child_artifacts must be a list, got str"):
-            CompositeArtifactRecord.from_dict(
+            decode_composite_artifact_record(
                 {
                     "record_kind": ARTIFACT_RECORD_KIND_COMPOSITE,
                     "artifact_id": "artifact-bad-001",

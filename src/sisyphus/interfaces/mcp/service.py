@@ -3,45 +3,71 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import urlparse
 
-from ...agents import list_agents
-from ...artifact_resources import is_feature_task_artifact_resource, read_feature_task_artifact_resource
-from ...api import execute_promotion, get_task, list_tasks, record_merged_pull_request, request_task
-from ...audit import run_verify
-from ...bus_jsonl import read_jsonl_events, resolve_event_bus_path
-from ...closeout import run_close
+from ...composition.artifact_resources import (
+    is_feature_task_artifact_resource,
+    read_feature_task_artifact_resource,
+)
+from ...composition.closeout import close_task as run_close
+from ...composition.episode_trace import default_episode_id, record_episode_step
+from ...composition.repository_status import (
+    build_value_metrics_report,
+    repository_board_status,
+    repository_conformance_status,
+    repository_events_status,
+    repository_tasks_status,
+)
+from ...composition.runtime import run_daemon
+from ...composition.search import (
+    build_and_persist_context_pack,
+    read_context_pack,
+    read_search_index,
+    rebuild_search_index,
+    search_index_status,
+)
 from ...config import load_config
-from ...context_pack import build_and_persist_context_pack, read_context_pack
-from ...daemon import run_daemon
-from ...episode_trace import append_episode_step, build_episode_step, default_episode_id, next_episode_step
-from ...evolution.operator import (
+from ...composition.evolution_operator import (
     evaluate_evolution_followup_decision,
     request_evolution_followup,
 )
-from ...evolution.surface import (
-    compare_evolution_runs,
+from ...composition.evolution_surface import (
     execute_evolution_surface,
     load_evolution_run_artifacts,
+)
+from ...evolution.presentation import (
+    compare_evolution_runs,
     render_evolution_run_compare,
     render_evolution_run_overview,
     render_evolution_run_report,
     render_evolution_run_status,
 )
-from ...planning import (
+from ...composition.planning import (
     approve_task_plan,
     freeze_task_spec,
     generate_subtasks,
     request_plan_changes,
     revise_task_plan,
+    validate_task_spec,
 )
-from ...metrics import build_value_metrics_report
-from ...observation import build_task_observation
-from ...retrieval import retrieve_documents
-from ...search_index import read_search_index, rebuild_search_index, search_index_status
-from ...spec_validation import validate_task_spec
-from ...state import load_task_record
-from . import evolution as evolution_handlers
-from . import promotion_tools, search_tools, task_tools, workflow_tools
-from . import repo_resources, task_resources
+from ...composition.observation import build_task_observation
+from ...application.search.retrieval import retrieve_documents
+from ...composition.repository_requests import (
+    get_task,
+    list_tasks,
+    load_task_record_with_path as load_task_record,
+    request_task,
+)
+from ...composition.repository_requests import record_merged_pull_request
+from ...composition.repository_promotion import execute_promotion
+from ...composition.external_review import record_external_review
+from ...composition.verification import verify_task as run_verify
+import sisyphus.interfaces.mcp.evolution as evolution_handlers
+import sisyphus.interfaces.mcp.promotion_tools as promotion_tools
+import sisyphus.interfaces.mcp.repo_resources as repo_resources
+import sisyphus.interfaces.mcp.search_tools as search_tools
+import sisyphus.interfaces.mcp.task_resources as task_resources
+import sisyphus.interfaces.mcp.task_tools as task_tools
+import sisyphus.interfaces.mcp.workflow_tools as workflow_tools
+from ..agent_queries import list_agents
 from .registry import tool_group_for
 from .resources import mcp_resource_definitions
 from .schemas import _mcp_schema_markdown
@@ -86,7 +112,7 @@ class SisyphusMcpCoreService:
         try:
             state_before, task_file = load_task_record(
                 repo_root=self.repo_root,
-                task_dir_name=task_dir_name,
+                config=config,
                 task_id=task_id,
             )
             task_dir = task_file.parent
@@ -111,7 +137,7 @@ class SisyphusMcpCoreService:
             try:
                 state_after, _ = load_task_record(
                     repo_root=self.repo_root,
-                    task_dir_name=task_dir_name,
+                    config=config,
                     task_id=task_id,
                 )
             except FileNotFoundError:
@@ -121,20 +147,17 @@ class SisyphusMcpCoreService:
             trace_result = dict(result or {})
             if error is not None:
                 trace_result.setdefault("ok", False)
-            append_episode_step(
+            record_episode_step(
                 task_dir,
-                build_episode_step(
-                    episode_id=episode_id,
-                    task_id=task_id,
-                    step=next_episode_step(task_dir, episode_id),
-                    observation=observation_before,
-                    action_name=tool_name,
-                    arguments=args,
-                    result=trace_result,
-                    state_before=state_before,
-                    state_after=state_after,
-                    actor=actor,
-                ),
+                episode_id=episode_id,
+                task_id=task_id,
+                observation=observation_before,
+                action_name=tool_name,
+                arguments=_trace_arguments(tool_name, args),
+                result=trace_result,
+                state_before=state_before,
+                state_after=state_after,
+                actor=actor,
             )
 
     def _call_tool_inner(self, tool_name: str, args: dict[str, object], config: object) -> dict[str, object]:
@@ -200,6 +223,7 @@ class SisyphusMcpCoreService:
                 freeze_spec=freeze_task_spec,
                 validate_spec_fn=validate_task_spec,
                 generate_subtasks_fn=generate_subtasks,
+                record_review=record_external_review,
                 verify_task=run_verify,
                 close_task=run_close,
                 list_agents_fn=list_agents,
@@ -217,10 +241,11 @@ class SisyphusMcpCoreService:
             repo_root=self.repo_root,
             config=config,
             parsed=parsed,
-            list_tasks_fn=list_tasks,
-            resolve_event_bus=resolve_event_bus_path,
-            read_events=read_jsonl_events,
-            build_metrics=build_value_metrics_report,
+            tasks_status=repository_tasks_status,
+            conformance_status=repository_conformance_status,
+            board_status=repository_board_status,
+            events_status=repository_events_status,
+            metrics_status=build_value_metrics_report,
             search_status=search_index_status,
             schema_markdown=_mcp_schema_markdown,
         )
@@ -272,6 +297,13 @@ _TRACEABLE_TASK_TOOLS = {
 
 def _trace_tool_enabled(tool_name: str) -> bool:
     return tool_name in _TRACEABLE_TASK_TOOLS
+
+
+def _trace_arguments(tool_name: str, args: dict[str, object]) -> dict[str, object]:
+    rendered = dict(args)
+    if tool_name == "sisyphus.record_external_review" and "operator_capability" in rendered:
+        rendered["operator_capability"] = "<redacted>"
+    return rendered
 
 
 def _trace_task_id(tool_name: str, args: dict[str, object]) -> str | None:
