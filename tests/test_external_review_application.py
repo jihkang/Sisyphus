@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -331,6 +332,34 @@ class ExternalReviewApplicationTests(unittest.TestCase):
 
 
 class GitExternalReviewEvidenceAdapterTests(unittest.TestCase):
+    def test_scope_normalizes_repo_identity_before_promotion_persists_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            task = _initialize_review_repo(root)
+            adapter = GitExternalReviewEvidenceAdapter()
+            github_remote = "git@github.com:jihkang/Sisyphus.git"
+            base_sha = _git(root, "rev-parse", "main")
+
+            with (
+                mock.patch(
+                    "sisyphus.infra.verification.external_review.remote_url",
+                    return_value=github_remote,
+                ),
+                mock.patch(
+                    "sisyphus.infra.verification.external_review.remote_push_urls",
+                    return_value=(github_remote,),
+                ),
+                mock.patch(
+                    "sisyphus.infra.verification.external_review.remote_branch_sha",
+                    return_value=base_sha,
+                ),
+            ):
+                before = adapter.scope(str(root), task)
+                task["promotion"]["repo_full_name"] = "jihkang/Sisyphus"
+                after = adapter.scope(str(root), task)
+
+            self.assertEqual(after.scope_digest, before.scope_digest)
+
     def test_inspects_strict_envelope_report_scope_head_and_dirty_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

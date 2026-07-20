@@ -12,6 +12,7 @@ from ...application.ports.review import (
     ExternalReviewFinding,
     ExternalReviewScopeEvidence,
 )
+from ...application.promotion_projection import repo_full_name_from_remote_url
 from ...application.review_scope import (
     external_review_artifact_prefix,
     external_review_scope_digest,
@@ -106,6 +107,10 @@ class GitExternalReviewEvidenceAdapter:
                         )
                         if configured_push_urls
                         else None
+                    ),
+                    effective_repo_full_name=(
+                        str(promotion_mapping.get("repo_full_name") or "").strip()
+                        or repo_full_name_from_remote_url(configured_remote_url)
                     ),
                 ),
                 document_digests=tuple(sorted(document_digests.items())),

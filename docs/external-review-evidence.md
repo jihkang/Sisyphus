@@ -25,7 +25,8 @@ The result contains:
   commands, test strategy, promotion policy, exact service-generated output
   paths, owned paths, authority-document digests, the immutable live-remote base
   commit, a digest of the exact configured fetch URL, and a canonical digest of
-  every effective push URL
+  every effective push URL. Repository identity is normalized from an explicit
+  `repo_full_name` or derived from that configured URL before hashing.
 - `document_digests`: the BRIEF, PLAN or issue documents, frozen design
   artifacts, and spec-validation report used by the scope digest
 
@@ -34,6 +35,8 @@ live query and fails closed instead of accepting a stale local tracking ref.
 Any change to the reviewed Git HEAD, fetch identity, push destination set,
 integration-base revision, or canonical scope makes the review stale. A
 configured remote without a resolvable push destination fails closed.
+Persisting the same derived repository identity during promotion does not make
+the review stale; changing the effective identity still does.
 
 ## Artifact Location
 

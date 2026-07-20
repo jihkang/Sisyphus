@@ -61,6 +61,7 @@ def build_external_review_scope_payload(
     base_revision_sha: str | None = None,
     remote_url_digest: str | None = None,
     remote_push_urls_digest: str | None = None,
+    effective_repo_full_name: str | None = None,
 ) -> dict[str, object]:
     strategy = task.get("test_strategy")
     strategy_mapping = strategy if isinstance(strategy, Mapping) else {}
@@ -123,6 +124,11 @@ def build_external_review_scope_payload(
                     "repo_full_name",
                 ),
             ),
+            "repo_full_name": (
+                str(effective_repo_full_name).strip()
+                if effective_repo_full_name
+                else _json_value(promotion_mapping.get("repo_full_name"))
+            ),
             "remote_name": str(promotion_mapping.get("remote_name") or "origin"),
             "head_branch": (
                 promotion_mapping.get("head_branch") or task.get("branch")
@@ -167,6 +173,7 @@ def external_review_scope_digest(
     base_revision_sha: str | None = None,
     remote_url_digest: str | None = None,
     remote_push_urls_digest: str | None = None,
+    effective_repo_full_name: str | None = None,
 ) -> str:
     payload = build_external_review_scope_payload(
         task,
@@ -174,6 +181,7 @@ def external_review_scope_digest(
         base_revision_sha=base_revision_sha,
         remote_url_digest=remote_url_digest,
         remote_push_urls_digest=remote_push_urls_digest,
+        effective_repo_full_name=effective_repo_full_name,
     )
     canonical = json.dumps(
         payload,

@@ -13,6 +13,26 @@ No known unresolved High or Medium implementation defect remains in the current
 working tree. The independent challenge findings described below are implemented
 locally but still require re-review against an immutable commit.
 
+### Pre-merge challenge round 7: effective repository normalization
+
+The immutable round-7 reviewer passed commit `7ff5c28` with no P0-P2 findings,
+and PR #64 passed all six GitHub CI jobs. The implementing agent then stopped
+the merge because the mandatory pre-merge scope check changed after promotion:
+the effective repository remained `jihkang/Sisyphus`, but promotion persisted
+that remote-derived value over the previously absent `repo_full_name` field.
+The scope had bound the raw representation instead of the effective identity.
+
+Current remediation:
+
+- external-review scope resolves repository identity from the explicit policy
+  value or, when absent, from the already-bound configured remote URL
+- the normalized effective `owner/repository` value replaces the raw nullable
+  field in the scope payload
+- a regression proves scope equality before and after promotion persists the
+  same derived repository identity
+- an integration probe against the live task proves the two representations now
+  produce the same digest
+
 ### Independent challenge round 6: effective push destination
 
 The independent reviewer rejected commit `e8fd9c8` because review scope bound
@@ -236,12 +256,12 @@ The final local evidence after review fixes is:
 | Gate | Result |
 | --- | --- |
 | lock consistency | `uv lock --check` passed |
-| review/security/architecture target | 195 tests passed |
+| review/security/architecture target | 196 tests passed |
 | directly affected external-review/promotion target | 46 tests passed |
 | persistence/path/inbox/lifecycle/spec/workflow target | 71 tests passed before the focused security additions |
 | Python/MCP/Evolution target | 238 tests passed |
-| supported Python matrix | 814 tests passed on each of Python 3.11, 3.12, 3.13, and 3.14 |
-| final full suite | 814 tests passed after round-6 remediation |
+| supported Python matrix | 815 tests passed on each of Python 3.11, 3.12, 3.13, and 3.14 |
+| final full suite | 815 tests passed after round-7 remediation |
 | branch coverage | 85.2%, threshold 80% |
 | standard build | sdist and wheel passed |
 | offline build | cached sdist and wheel build passed |
@@ -262,7 +282,8 @@ The implementation debt ledger is authoritative. At this review point:
   retirement conditions
 - mutable-record and Evolution-coordinator watch points are future migration
   triggers, not additional authority exceptions
-- immutable-commit independent round-6 re-review, Sisyphus verify, GitHub CI, PR merge,
+- immutable-commit independent round-8 re-review, Sisyphus verify, renewed GitHub CI,
+  PR merge,
   merge receipt, and merged-main revalidation remain release gates
 
 The separate Sisyphus Harness work for Docker service separation, Hermes agent

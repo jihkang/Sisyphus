@@ -98,6 +98,10 @@
 - 2026-07-20: Added retry classification for exact task-state and receipt outputs; 813 full tests, 194 focused review/security/architecture tests, and 85.2% branch coverage pass after round-5 remediation.
 - 2026-07-20: The sixth independent review found that scope bound the fetch URL but not a distinct Git `pushurl`, allowing the effective push destination to change without invalidating review evidence.
 - 2026-07-20: Bound the canonical effective push-URL set into external-review scope and added a regression that changes only `remote.origin.pushurl`; 814 tests pass on Python 3.11-3.14 with 85.2% branch coverage.
+- 2026-07-20: Immutable round-7 review passed commit `7ff5c28`, Sisyphus verification passed through the latest composition, PR #64 opened, and all six GitHub CI jobs passed.
+- 2026-07-20: The required pre-merge scope check stopped the merge because promotion persisted the unchanged remote-derived `repo_full_name`, exposing raw nullable representation in the review scope.
+- 2026-07-20: Normalized scope to the effective explicit-or-derived repository identity and added a regression proving pre-promotion and persisted representations remain equivalent.
+- 2026-07-20: Passed 815 tests on each supported Python 3.11-3.14, 196 focused review/security/architecture tests, and 85.2% branch coverage after repository-identity normalization.
 
 ## Notes
 
@@ -108,6 +112,6 @@
 
 ## Follow-ups
 
-- Commit the round-6 remediation and obtain an independent review against that immutable commit.
+- Commit the repository-identity normalization and obtain round-8 independent review against that immutable commit.
 - Record the resulting strict review envelope and run Sisyphus verification.
 - Push the branch, open the PR, wait for CI, merge, record the merge receipt, and revalidate the updated `main` worktree.

@@ -316,6 +316,10 @@ a remote exists, the adapter performs a bounded,
 non-interactive live remote query and does not trust a stale tracking ref. A
 configured remote that cannot be queried, or whose push destination cannot be
 resolved, blocks review evidence collection.
+The repository identity in that payload is the effective explicit-or-derived
+`owner/repository` value, not the nullable persistence representation. Promotion
+may therefore persist the already-reviewed derived identity without invalidating
+its own evidence.
 Only the two review artifacts may be dirty when a review is recorded.
 
 Recording any new review atomically invalidates prior verification and marks
