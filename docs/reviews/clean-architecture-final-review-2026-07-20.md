@@ -4,14 +4,34 @@
 - Branch: `feat/migrate-core-to-clean-architecture`
 - Base: current `origin/main` at review time
 - Task: `TF-20260718-feature-migrate-core-to-clean-architecture`
-- Review type: implementation self-review; the frozen independent-review gate is
-  tracked separately and is not satisfied by this document
+- Review type: implementation self-review plus immutable independent review
+- Closure: PR #64, squash merge `6330966885d33cece124f0dcfb23a0b78c47e66d`
 
 ## Findings
 
-No known unresolved High or Medium implementation defect remains in the current
-working tree. The independent challenge findings described below are implemented
-locally but still require re-review against an immutable commit.
+No unresolved High or Medium implementation defect remains. Independent review
+round 8 passed the final immutable commit with no P0-P2 findings, and all release
+gates described below completed before or immediately after the squash merge.
+
+### Post-merge closure: immutable round 8 and PR #64
+
+The independent reviewer passed commit
+`89c2102450f8f945d19468ca6049b225b16d1f66` with scope digest
+`sha256:e24b3c8443c0193e49e7715eedf24a7c73e0fd5cf97d4b60857d1b8685c55107`.
+The reviewer reproduced repository-identity, fetch URL, push destination,
+missing push destination, live base, inaccessible remote, and repository
+redirection probes; 96 directly affected tests passed. The immutable
+[round-8 report](../../.planning/tasks/TF-20260718-feature-migrate-core-to-clean-architecture/artifacts/reviews/independent-review-round-8.md)
+and its strict
+[review envelope](../../.planning/tasks/TF-20260718-feature-migrate-core-to-clean-architecture/artifacts/reviews/independent-review-round-8.json)
+are retained with the task evidence.
+
+Sisyphus verification then passed with canonical conformance `green`, zero
+drift, complete evidence, and no gates. All six renewed GitHub CI jobs passed.
+PR #64 was squash-merged at `2026-07-20T18:01:11Z` as
+`6330966885d33cece124f0dcfb23a0b78c47e66d`; the merge recorder persisted the
+receipt and closed the task. Updated `main` was fetched and fast-forwarded before
+the merged-main checks below.
 
 ### Pre-merge challenge round 7: effective repository normalization
 
@@ -261,11 +281,14 @@ The final local evidence after review fixes is:
 | persistence/path/inbox/lifecycle/spec/workflow target | 71 tests passed before the focused security additions |
 | Python/MCP/Evolution target | 238 tests passed |
 | supported Python matrix | 815 tests passed on each of Python 3.11, 3.12, 3.13, and 3.14 |
-| final full suite | 815 tests passed after round-7 remediation |
+| immutable independent review | round 8 passed with no P0-P2 findings; 96 directly affected tests passed |
+| final full suite | 815 tests passed on the merged `main` commit |
 | branch coverage | 85.2%, threshold 80% |
 | standard build | sdist and wheel passed |
 | offline build | cached sdist and wheel build passed |
 | installed wheel | Python 3.11 import, all inbox compatibility methods, CLI/review help, 26 MCP tools, and 32 MCP resources passed outside the source tree |
+| Sisyphus lifecycle | verify passed, conformance green, evidence complete, merge recorded, task closed |
+| GitHub promotion | all six CI jobs passed; PR #64 squash-merged as `6330966` |
 | diff integrity | `git diff --check` passed after review documentation |
 
 The suite covers public import identity, CLI dispatch, MCP schemas/resources,
@@ -275,16 +298,14 @@ Evolution authority, and promotion receipts.
 
 ## Remaining Debt And Gates
 
-The implementation debt ledger is authoritative. At this review point:
+The implementation debt ledger is authoritative. After post-merge closure:
 
 - no High or Medium implementation item remains
 - exactly two import-only domain compatibility shims remain with explicit
   retirement conditions
 - mutable-record and Evolution-coordinator watch points are future migration
   triggers, not additional authority exceptions
-- immutable-commit independent round-8 re-review, Sisyphus verify, renewed GitHub CI,
-  PR merge,
-  merge receipt, and merged-main revalidation remain release gates
+- no release gate remains open for the Clean Architecture migration
 
 The separate Sisyphus Harness work for Docker service separation, Hermes agent
 evolution, GEPA, and a real 30.5B benchmark remains outside this repository task.

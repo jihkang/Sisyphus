@@ -1,0 +1,13 @@
+{
+  "schema_version": "sisyphus.external_review.v1",
+  "provider": "independent Codex reviewer",
+  "reviewer": "019f8031-edaa-7a92-9aad-d752d2293d71",
+  "reviewed_head_sha": "89c2102450f8f945d19468ca6049b225b16d1f66",
+  "scope_digest": "sha256:e24b3c8443c0193e49e7715eedf24a7c73e0fd5cf97d4b60857d1b8685c55107",
+  "report": {
+    "path": ".planning/tasks/TF-20260718-feature-migrate-core-to-clean-architecture/artifacts/reviews/independent-review-round-8.md",
+    "digest": "sha256:17f7b38f3ae1bd0b126b279ae59ca38042a95820a97bc8d1c7f6b3456249f73b"
+  },
+  "summary": "PASS: no P0-P2 findings; effective repository identity is scope-stable while real target changes remain detectable.",
+  "findings": []
+}
