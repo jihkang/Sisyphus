@@ -258,21 +258,38 @@ def push_revision(
     )
 
 
-def remote_url(repo_root: Path, remote_name: str) -> str | None:
+def _remote_urls(
+    repo_root: Path,
+    remote_name: str,
+    *,
+    push: bool,
+) -> tuple[str, ...]:
     normalized_remote = remote_name.strip()
     if not normalized_remote:
-        return None
+        return ()
+    args = ["git", "remote", "get-url"]
+    if push:
+        args.append("--push")
+    args.extend(["--all", normalized_remote])
     completed = subprocess.run(
-        ["git", "remote", "get-url", normalized_remote],
+        args,
         cwd=repo_root,
         capture_output=True,
         text=True,
         check=False,
     )
     if completed.returncode != 0:
-        return None
-    value = completed.stdout.strip()
-    return value or None
+        return ()
+    return tuple(line.strip() for line in completed.stdout.splitlines() if line.strip())
+
+
+def remote_url(repo_root: Path, remote_name: str) -> str | None:
+    urls = _remote_urls(repo_root, remote_name, push=False)
+    return urls[0] if urls else None
+
+
+def remote_push_urls(repo_root: Path, remote_name: str) -> tuple[str, ...]:
+    return _remote_urls(repo_root, remote_name, push=True)
 
 
 def copy_relative_path(source_root: Path, target_root: Path, relative_path: str) -> None:

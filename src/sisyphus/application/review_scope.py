@@ -60,6 +60,7 @@ def build_external_review_scope_payload(
     *,
     base_revision_sha: str | None = None,
     remote_url_digest: str | None = None,
+    remote_push_urls_digest: str | None = None,
 ) -> dict[str, object]:
     strategy = task.get("test_strategy")
     strategy_mapping = strategy if isinstance(strategy, Mapping) else {}
@@ -132,6 +133,11 @@ def build_external_review_scope_payload(
             "remote_url_digest": (
                 str(remote_url_digest).strip().lower() if remote_url_digest else None
             ),
+            "remote_push_urls_digest": (
+                str(remote_push_urls_digest).strip().lower()
+                if remote_push_urls_digest
+                else None
+            ),
             "execution_receipt_path": (
                 _normalized_relative_path(
                     promotion_mapping.get("execution_receipt_path")
@@ -160,12 +166,14 @@ def external_review_scope_digest(
     *,
     base_revision_sha: str | None = None,
     remote_url_digest: str | None = None,
+    remote_push_urls_digest: str | None = None,
 ) -> str:
     payload = build_external_review_scope_payload(
         task,
         document_digests,
         base_revision_sha=base_revision_sha,
         remote_url_digest=remote_url_digest,
+        remote_push_urls_digest=remote_push_urls_digest,
     )
     canonical = json.dumps(
         payload,

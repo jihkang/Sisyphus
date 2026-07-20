@@ -310,10 +310,12 @@ only a task ID and a JSON envelope path under that task's
 derives reviewer, findings, and pass/fail status from its contents, verifies the
 bounded no-follow Markdown report and both SHA-256 digests, and binds it to the
 exact Git HEAD plus a normalized task/spec/verification-policy scope digest.
-That digest includes the immutable integration-base commit and a digest of the
-configured remote URL. When a remote exists, the adapter performs a bounded,
+That digest includes the immutable integration-base commit, a digest of the
+configured fetch URL, and a canonical digest of every effective push URL. When
+a remote exists, the adapter performs a bounded,
 non-interactive live remote query and does not trust a stale tracking ref. A
-configured remote that cannot be queried blocks review evidence collection.
+configured remote that cannot be queried, or whose push destination cannot be
+resolved, blocks review evidence collection.
 Only the two review artifacts may be dirty when a review is recorded.
 
 Recording any new review atomically invalidates prior verification and marks

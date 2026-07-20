@@ -22,6 +22,7 @@ from ...gitops import (
     current_head_sha,
     list_dirty_paths,
     remote_branch_sha,
+    remote_push_urls,
     remote_url,
     revision_sha,
 )
@@ -74,6 +75,11 @@ class GitExternalReviewEvidenceAdapter:
             promotion_mapping = promotion if isinstance(promotion, Mapping) else {}
             remote_name = str(promotion_mapping.get("remote_name") or "origin").strip()
             configured_remote_url = remote_url(root, remote_name)
+            configured_push_urls = remote_push_urls(root, remote_name)
+            if configured_remote_url is not None and not configured_push_urls:
+                raise ExternalReviewEvidenceError(
+                    f"failed to resolve push destination for remote `{remote_name}`"
+                )
             return ExternalReviewScopeEvidence(
                 current_head_sha=current_head_sha(root).lower(),
                 scope_digest=external_review_scope_digest(
@@ -88,6 +94,17 @@ class GitExternalReviewEvidenceAdapter:
                     remote_url_digest=(
                         _digest(configured_remote_url.encode("utf-8"))
                         if configured_remote_url is not None
+                        else None
+                    ),
+                    remote_push_urls_digest=(
+                        _digest(
+                            json.dumps(
+                                sorted(set(configured_push_urls)),
+                                ensure_ascii=True,
+                                separators=(",", ":"),
+                            ).encode("utf-8")
+                        )
+                        if configured_push_urls
                         else None
                     ),
                 ),

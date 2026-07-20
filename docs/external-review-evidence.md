@@ -24,14 +24,16 @@ The result contains:
   and design policy, complete task-document mapping, verification profile and
   commands, test strategy, promotion policy, exact service-generated output
   paths, owned paths, authority-document digests, the immutable live-remote base
-  commit, and a digest of the exact configured remote URL
+  commit, a digest of the exact configured fetch URL, and a canonical digest of
+  every effective push URL
 - `document_digests`: the BRIEF, PLAN or issue documents, frozen design
   artifacts, and spec-validation report used by the scope digest
 
 When a remote is configured, base resolution uses a bounded, non-interactive
 live query and fails closed instead of accepting a stale local tracking ref.
-Any change to the reviewed Git HEAD, remote identity, integration-base revision,
-or canonical scope makes the review stale.
+Any change to the reviewed Git HEAD, fetch identity, push destination set,
+integration-base revision, or canonical scope makes the review stale. A
+configured remote without a resolvable push destination fails closed.
 
 ## Artifact Location
 

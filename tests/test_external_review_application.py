@@ -445,6 +445,47 @@ class GitExternalReviewEvidenceAdapterTests(unittest.TestCase):
 
             self.assertNotEqual(changed.scope_digest, original.scope_digest)
 
+    def test_scope_binds_push_url_even_when_fetch_url_and_base_are_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            root = directory / "worktree"
+            fetch_remote = directory / "fetch.git"
+            push_remote = directory / "push.git"
+            additional_push_remote = directory / "additional-push.git"
+            root.mkdir()
+            fetch_remote.mkdir()
+            push_remote.mkdir()
+            additional_push_remote.mkdir()
+            task = _initialize_review_repo(root)
+            _git(fetch_remote, "init", "--bare")
+            _git(push_remote, "init", "--bare")
+            _git(additional_push_remote, "init", "--bare")
+            _git(root, "remote", "add", "origin", str(fetch_remote))
+            _git(root, "push", "origin", "main")
+            _git(root, "push", str(push_remote), "main")
+            adapter = GitExternalReviewEvidenceAdapter()
+            original = adapter.scope(str(root), task)
+
+            _git(root, "remote", "set-url", "--push", "origin", str(push_remote))
+            changed = adapter.scope(str(root), task)
+            _git(
+                root,
+                "remote",
+                "set-url",
+                "--add",
+                "--push",
+                "origin",
+                str(additional_push_remote),
+            )
+            expanded = adapter.scope(str(root), task)
+
+            self.assertEqual(
+                _git(root, "remote", "get-url", "origin"),
+                str(fetch_remote),
+            )
+            self.assertNotEqual(changed.scope_digest, original.scope_digest)
+            self.assertNotEqual(expanded.scope_digest, changed.scope_digest)
+
     def test_scope_fails_closed_when_configured_remote_cannot_be_queried(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)
