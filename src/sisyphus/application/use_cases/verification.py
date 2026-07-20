@@ -18,6 +18,7 @@ from ..planning_records import (
 )
 from ..ports.clock import ClockPort
 from ..ports.planning import PlanningDocumentPort, SpecValidationPort
+from ..ports.review import ExternalReviewEvidenceError, ExternalReviewEvidencePort
 from ..ports.verification import (
     VerificationCommandPort,
     VerificationConformancePort,
@@ -49,6 +50,7 @@ VERIFY_GATE_CODES = {
     "AUDIT_LIMIT_REACHED",
     "TEST_STRATEGY_MISSING",
     "EXTERNAL_LLM_REVIEW_REQUIRED",
+    "EXTERNAL_LLM_REVIEW_STALE",
     "PLAN_APPROVAL_REQUIRED",
     "PLAN_CHANGES_REQUESTED",
     "DESIGN_REPLAN_REQUIRED",
@@ -79,6 +81,7 @@ class VerificationService:
     conformance: VerificationConformancePort
     commands: VerificationCommandPort
     evidence: VerificationEvidencePort
+    external_reviews: ExternalReviewEvidencePort
     events: EventPublisherPort
     clock: ClockPort
 
@@ -351,7 +354,71 @@ class VerificationService:
                     "strategy",
                 )
             )
+        elif external_llm.get("required"):
+            gates.extend(self._collect_external_review_evidence_gates(task, external_llm))
         return gates
+
+    def _collect_external_review_evidence_gates(
+        self,
+        task: TaskRecord,
+        review: dict,
+    ) -> list[dict]:
+        report_path = str(review.get("report_path") or "").strip()
+        reviewed_head_sha = str(review.get("reviewed_head_sha") or "").strip().lower()
+        report_digest = str(review.get("report_digest") or "").strip().lower()
+        workspace = str(task.get("worktree_path") or "").strip()
+        if not report_path or not reviewed_head_sha or not report_digest or not workspace:
+            return [
+                self._gate(
+                    "EXTERNAL_LLM_REVIEW_STALE",
+                    "external LLM review is missing head-bound evidence metadata",
+                    "strategy",
+                )
+            ]
+        try:
+            inspected = self.external_reviews.inspect(workspace, report_path)
+        except ExternalReviewEvidenceError as exc:
+            return [
+                self._gate(
+                    "EXTERNAL_LLM_REVIEW_STALE",
+                    f"external LLM review evidence is unavailable: {exc}",
+                    "strategy",
+                )
+            ]
+        if inspected.current_head_sha.lower() != reviewed_head_sha:
+            return [
+                self._gate(
+                    "EXTERNAL_LLM_REVIEW_STALE",
+                    "external LLM review does not cover the current Git HEAD",
+                    "strategy",
+                )
+            ]
+        if inspected.digest.lower() != report_digest:
+            return [
+                self._gate(
+                    "EXTERNAL_LLM_REVIEW_STALE",
+                    "external LLM review report digest no longer matches",
+                    "strategy",
+                )
+            ]
+
+        task_dir = str(task.get("task_dir") or "").strip().rstrip("/")
+        unrelated = [
+            path
+            for path in inspected.dirty_paths
+            if path != inspected.relative_path
+            and not (task_dir and (path == task_dir or path.startswith(f"{task_dir}/")))
+        ]
+        if unrelated:
+            detail = ", ".join(unrelated[:5])
+            return [
+                self._gate(
+                    "EXTERNAL_LLM_REVIEW_STALE",
+                    f"external LLM review does not cover workspace changes: {detail}",
+                    "strategy",
+                )
+            ]
+        return []
 
     def _evaluate_and_record_design(self, task: TaskRecord) -> None:
         ensure_task_design_defaults(task)

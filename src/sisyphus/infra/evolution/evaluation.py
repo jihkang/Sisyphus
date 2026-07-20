@@ -3,14 +3,30 @@ from __future__ import annotations
 from collections.abc import Sequence
 import json
 from pathlib import Path, PurePosixPath
-import subprocess
-from time import perf_counter
 
 from ...evolution.harness import EvolutionWorktreeCommand, EvolutionWorktreeCommandResult
+from ..execution.bounded_shell import BoundedShellProcessRunner
 from ..workspace.secure_files import SecureWorkspaceFiles
 
 
+DEFAULT_EVOLUTION_COMMAND_TIMEOUT_SECONDS = 300.0
+DEFAULT_EVOLUTION_COMMAND_OUTPUT_BYTES = 64_000
+
+
 class RepositoryEvolutionCommandRunner:
+    def __init__(
+        self,
+        *,
+        timeout_seconds: float = DEFAULT_EVOLUTION_COMMAND_TIMEOUT_SECONDS,
+        max_output_bytes: int = DEFAULT_EVOLUTION_COMMAND_OUTPUT_BYTES,
+    ) -> None:
+        self.timeout_seconds = max(float(timeout_seconds), 0.1)
+        self.max_output_bytes = max(int(max_output_bytes), 256)
+        self._runner = BoundedShellProcessRunner(
+            timeout_seconds=self.timeout_seconds,
+            max_output_bytes=self.max_output_bytes,
+        )
+
     def run(
         self,
         *,
@@ -31,33 +47,48 @@ class RepositoryEvolutionCommandRunner:
         files = SecureWorkspaceFiles(resolved_root)
         results: list[EvolutionWorktreeCommandResult] = []
         for index, command in enumerate(commands, start=1):
-            started = perf_counter()
-            completed = subprocess.run(
+            completed = self._runner.run(
                 command.normalized_command,
                 cwd=resolved_root,
-                shell=True,
-                capture_output=True,
-                text=True,
-                check=False,
             )
-            runtime_ms = _elapsed_ms(started)
             stdout_path = execution_root / f"command-{index:03d}.stdout.txt"
             stderr_path = execution_root / f"command-{index:03d}.stderr.txt"
-            files.write_text_atomic(stdout_path, completed.stdout or "")
-            files.write_text_atomic(stderr_path, completed.stderr or "")
-            output_excerpt = (completed.stdout or completed.stderr or "").strip().splitlines()
+            files.write_text_atomic(
+                stdout_path,
+                _render_captured_output(
+                    completed.stdout_tail,
+                    truncated_bytes=completed.stdout_truncated_bytes,
+                ),
+            )
+            files.write_text_atomic(
+                stderr_path,
+                _render_captured_output(
+                    completed.stderr_tail,
+                    truncated_bytes=completed.stderr_truncated_bytes,
+                ),
+            )
+            output_excerpt = (
+                completed.stdout_tail
+                or completed.stderr_tail
+                or completed.error
+                or ""
+            ).strip().splitlines()
             results.append(
                 EvolutionWorktreeCommandResult(
                     source_task_id=command.source_task_id,
                     source=command.source,
                     original_command=command.original_command,
                     normalized_command=command.normalized_command,
-                    status="passed" if completed.returncode == 0 else "failed",
-                    exit_code=completed.returncode,
-                    runtime_ms=runtime_ms,
+                    status="passed" if completed.exit_code == 0 else "failed",
+                    exit_code=completed.exit_code,
+                    runtime_ms=max(1, completed.duration_ms),
                     stdout_path=stdout_path.as_posix(),
                     stderr_path=stderr_path.as_posix(),
                     output_excerpt=output_excerpt[-1][:200] if output_excerpt else None,
+                    timed_out=completed.timed_out,
+                    stdout_truncated_bytes=completed.stdout_truncated_bytes,
+                    stderr_truncated_bytes=completed.stderr_truncated_bytes,
+                    error=completed.error,
                 )
             )
 
@@ -70,6 +101,8 @@ class RepositoryEvolutionCommandRunner:
                     "passed_command_count": sum(
                         1 for result in results if result.status == "passed"
                     ),
+                    "command_timeout_seconds": self.timeout_seconds,
+                    "max_output_bytes": self.max_output_bytes,
                     "results": [_result_payload(result) for result in results],
                     "recorded_at": recorded_at,
                 },
@@ -103,11 +136,21 @@ def _result_payload(result: EvolutionWorktreeCommandResult) -> dict[str, object]
         "stdout_path": result.stdout_path,
         "stderr_path": result.stderr_path,
         "output_excerpt": result.output_excerpt,
+        "timed_out": result.timed_out,
+        "stdout_truncated_bytes": result.stdout_truncated_bytes,
+        "stderr_truncated_bytes": result.stderr_truncated_bytes,
+        "error": result.error,
     }
 
 
-def _elapsed_ms(started: float) -> int:
-    return max(1, int((perf_counter() - started) * 1000))
+def _render_captured_output(value: str, *, truncated_bytes: int) -> str:
+    if truncated_bytes <= 0:
+        return value
+    return f"[sisyphus truncated {truncated_bytes} leading bytes]\n{value}"
 
 
-__all__ = ["RepositoryEvolutionCommandRunner"]
+__all__ = [
+    "DEFAULT_EVOLUTION_COMMAND_OUTPUT_BYTES",
+    "DEFAULT_EVOLUTION_COMMAND_TIMEOUT_SECONDS",
+    "RepositoryEvolutionCommandRunner",
+]

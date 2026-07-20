@@ -127,6 +127,10 @@ class EvolutionWorktreeCommandResult:
     stdout_path: str
     stderr_path: str
     output_excerpt: str | None
+    timed_out: bool
+    stdout_truncated_bytes: int
+    stderr_truncated_bytes: int
+    error: str | None
 
 
 @dataclass(frozen=True, slots=True)

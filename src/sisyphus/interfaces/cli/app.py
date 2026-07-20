@@ -51,6 +51,35 @@ def handle_verify(task_id: str, repo_root: str | Path | None = None) -> int:
     return verification_handlers.handle_verify(repo_root=repo_root, config=config, task_id=task_id)
 
 
+def handle_review_record(
+    task_id: str,
+    reviewer: str,
+    verdict: str,
+    report_path: str,
+    reviewed_head_sha: str,
+    finding_count: int,
+    blocking_finding_count: int,
+    summary: str | None,
+    as_json: bool,
+    repo_root: str | Path | None = None,
+) -> int:
+    repo_root = _resolve_repo_root(repo_root)
+    config = load_config(repo_root)
+    return verification_handlers.handle_review_record(
+        repo_root=repo_root,
+        config=config,
+        task_id=task_id,
+        reviewer=reviewer,
+        verdict=verdict,
+        report_path=report_path,
+        reviewed_head_sha=reviewed_head_sha,
+        finding_count=finding_count,
+        blocking_finding_count=blocking_finding_count,
+        summary=summary,
+        as_json=as_json,
+    )
+
+
 def handle_close(task_id: str, allow_dirty: bool, repo_root: str | Path | None = None) -> int:
     repo_root = _resolve_repo_root(repo_root)
     config = load_config(repo_root)
@@ -726,6 +755,7 @@ CLI_HANDLERS = {
     "handle_new": handle_new,
     "handle_request": handle_request,
     "handle_verify": handle_verify,
+    "handle_review_record": handle_review_record,
     "handle_close": handle_close,
     "handle_observe": handle_observe,
     "handle_episode_check": handle_episode_check,

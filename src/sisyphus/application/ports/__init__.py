@@ -36,6 +36,11 @@ from .promotion import (
     VersionControlPort,
 )
 from .repositories import AgentRepository, TaskRepository
+from .review import (
+    ExternalReviewEvidence,
+    ExternalReviewEvidenceError,
+    ExternalReviewEvidencePort,
+)
 from .search import ContextPackStorePort, SearchIndexPort
 from .task_creation import (
     TaskCreationPort,
@@ -81,6 +86,9 @@ __all__ = [
     "ConversationDocumentPort",
     "DesignConformancePort",
     "EventPublisherPort",
+    "ExternalReviewEvidence",
+    "ExternalReviewEvidenceError",
+    "ExternalReviewEvidencePort",
     "EpisodeTracePort",
     "EvolutionEventPort",
     "EvolutionFollowupRequestPort",

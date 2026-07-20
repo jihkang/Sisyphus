@@ -1,32 +1,42 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from typing import Any, Protocol
 
-from .loop import EVAL_LOOP_SCHEMA_VERSION, EVAL_LOOP_SHAPE, EvalLoopResult
-from ..test_first import TestFirstEvaluation, TestFirstPhaseEvent
-
-
-def encode_test_first_phase_event(value: TestFirstPhaseEvent) -> dict[str, object]:
-    return {
-        "phase": value.phase,
-        "step": value.step,
-        "source": value.source,
-    }
+from ..test_first_codec import (
+    TestFirstEvaluationView,
+    encode_test_first_evaluation,
+    encode_test_first_phase_event,
+)
 
 
-def encode_test_first_evaluation(value: TestFirstEvaluation) -> dict[str, object]:
-    return {
-        "status": value.status,
-        "required_phases": list(value.required_phases),
-        "observed_phases": [
-            encode_test_first_phase_event(event) for event in value.observed_phases
-        ],
-        "missing_phases": list(value.missing_phases),
-        "violations": list(value.violations),
-    }
+EVAL_LOOP_SCHEMA_VERSION = "sisyphus.eval_loop.v1"
+EVAL_LOOP_SHAPE = (
+    "observation_t",
+    "action_t",
+    "transition_result_t",
+    "observation_t_plus_1",
+    "reward_t",
+)
 
 
-def encode_eval_loop_result(value: EvalLoopResult) -> dict[str, object]:
+class EvalLoopResultView(Protocol):
+    task_id: str
+    mode: str
+    observation_ref: str
+    initial_observation_hash: str
+    final_observation_hash: str
+    episode_id: str | None
+    step_count: int
+    action_count: int
+    terminal_status: str
+    reward: Any
+    metrics: dict[str, float]
+    actions: tuple[dict[str, object], ...]
+    test_first: TestFirstEvaluationView
+
+
+def encode_eval_loop_result(value: EvalLoopResultView) -> dict[str, object]:
     return {
         "schema_version": EVAL_LOOP_SCHEMA_VERSION,
         "task_id": value.task_id,
@@ -60,6 +70,9 @@ def encode_eval_loop_result(value: EvalLoopResult) -> dict[str, object]:
 
 
 __all__ = [
+    "EVAL_LOOP_SCHEMA_VERSION",
+    "EVAL_LOOP_SHAPE",
+    "EvalLoopResultView",
     "encode_eval_loop_result",
     "encode_test_first_evaluation",
     "encode_test_first_phase_event",

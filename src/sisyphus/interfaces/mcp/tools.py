@@ -482,6 +482,46 @@ def mcp_tool_definitions() -> list[dict[str, object]]:
             "outputSchema": {"type": "object", "properties": {"task_id": {"type": "string"}, "workflow_phase": {"type": "string"}, "subtasks": {"type": "array"}}},
         },
         {
+            "name": "sisyphus.record_external_review",
+            "description": "Record independently produced external LLM review evidence.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "reviewer": {"type": "string"},
+                    "verdict": {"type": "string", "enum": ["pass", "fail"]},
+                    "report_path": {"type": "string"},
+                    "reviewed_head_sha": {"type": "string"},
+                    "finding_count": {"type": "integer", "minimum": 0},
+                    "blocking_finding_count": {"type": "integer", "minimum": 0},
+                    "summary": {"type": "string"},
+                },
+                "required": [
+                    "task_id",
+                    "reviewer",
+                    "verdict",
+                    "report_path",
+                    "reviewed_head_sha",
+                ],
+                "additionalProperties": False,
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "status": {"type": "string"},
+                    "provider": {"type": "string"},
+                    "reviewer": {"type": "string"},
+                    "reviewed_head_sha": {"type": "string"},
+                    "report_path": {"type": "string"},
+                    "report_digest": {"type": "string"},
+                    "finding_count": {"type": "integer"},
+                    "blocking_finding_count": {"type": "integer"},
+                    "completed_at": {"type": "string"},
+                },
+            },
+        },
+        {
             "name": "sisyphus.verify_task",
             "description": "Run verification for a task.",
             "inputSchema": {

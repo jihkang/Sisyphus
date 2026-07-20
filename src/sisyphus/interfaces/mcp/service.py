@@ -58,6 +58,7 @@ from ...composition.repository_requests import (
 )
 from ...composition.repository_requests import record_merged_pull_request
 from ...composition.repository_promotion import execute_promotion
+from ...composition.external_review import record_external_review
 from ...composition.verification import verify_task as run_verify
 import sisyphus.interfaces.mcp.evolution as evolution_handlers
 import sisyphus.interfaces.mcp.promotion_tools as promotion_tools
@@ -222,6 +223,7 @@ class SisyphusMcpCoreService:
                 freeze_spec=freeze_task_spec,
                 validate_spec_fn=validate_task_spec,
                 generate_subtasks_fn=generate_subtasks,
+                record_review=record_external_review,
                 verify_task=run_verify,
                 close_task=run_close,
                 list_agents_fn=list_agents,
@@ -285,6 +287,7 @@ _TRACEABLE_TASK_TOOLS = {
     "sisyphus.spec_freeze",
     "sisyphus.spec_validate",
     "sisyphus.subtasks_generate",
+    "sisyphus.record_external_review",
     "sisyphus.verify_task",
     "sisyphus.close_task",
     "sisyphus.execute_promotion",

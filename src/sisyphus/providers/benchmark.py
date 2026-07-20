@@ -10,6 +10,7 @@ import tempfile
 from time import perf_counter
 from urllib.parse import urlsplit, urlunsplit
 
+from ..compat.serialization import install_serialization_compat
 from ..infra.workspace import WorkspaceExecutor
 from ..shared.clock import utc_now
 from .benchmark_fixtures import (
@@ -28,6 +29,10 @@ from .benchmark_models import (
     LocalAgentBenchmarkRunResult,
 )
 from .benchmark_rendering import render_local_agent_benchmark_markdown
+from .codecs import (
+    encode_local_agent_benchmark_case_result,
+    encode_local_agent_benchmark_run_result,
+)
 from .local_agent import ChatCompletionClient, LocalAgentRunResult, LocalCodingAgent
 from .local_openai import LocalProviderConfig, OpenAICompatibleClient
 
@@ -35,6 +40,16 @@ from .local_openai import LocalProviderConfig, OpenAICompatibleClient
 LocalAgentBenchmarkClientFactory = Callable[
     [LocalProviderConfig, LocalAgentBenchmarkFixture], ChatCompletionClient
 ]
+
+
+install_serialization_compat(
+    LocalAgentBenchmarkCaseResult,
+    encode_mapping=encode_local_agent_benchmark_case_result,
+)
+install_serialization_compat(
+    LocalAgentBenchmarkRunResult,
+    encode_mapping=encode_local_agent_benchmark_run_result,
+)
 
 
 def run_local_agent_benchmark(

@@ -4,6 +4,7 @@ from types import MappingProxyType
 from pathlib import Path
 
 from ...composition.closeout import close_task as run_close
+from ...composition.external_review import record_external_review
 from ...composition.runtime import run_daemon
 from ...composition.verification import verify_task as run_verify
 from ...config import SisyphusConfig
@@ -169,6 +170,40 @@ def _verify_task(
     }
 
 
+def _record_external_review(
+    *,
+    repo_root: Path,
+    config: SisyphusConfig,
+    args: dict[str, object],
+    record_review=record_external_review,
+    **_: object,
+) -> dict[str, object]:
+    outcome = record_review(
+        repo_root=repo_root,
+        config=config,
+        task_id=str(args["task_id"]),
+        reviewer=str(args["reviewer"]),
+        verdict=str(args["verdict"]),
+        report_path=str(args["report_path"]),
+        reviewed_head_sha=str(args["reviewed_head_sha"]),
+        finding_count=int(args.get("finding_count", 0)),
+        blocking_finding_count=int(args.get("blocking_finding_count", 0)),
+        summary=optional_str(args.get("summary")),
+    )
+    return {
+        "task_id": outcome.task_id,
+        "status": outcome.status,
+        "provider": outcome.provider,
+        "reviewer": outcome.reviewer,
+        "reviewed_head_sha": outcome.reviewed_head_sha,
+        "report_path": outcome.report_path,
+        "report_digest": outcome.report_digest,
+        "finding_count": outcome.finding_count,
+        "blocking_finding_count": outcome.blocking_finding_count,
+        "completed_at": outcome.completed_at,
+    }
+
+
 def _close_task(
     *,
     repo_root: Path,
@@ -243,6 +278,7 @@ TOOL_EXECUTORS = MappingProxyType(
         "sisyphus.spec_freeze": _spec_freeze,
         "sisyphus.spec_validate": _spec_validate,
         "sisyphus.subtasks_generate": _subtasks_generate,
+        "sisyphus.record_external_review": _record_external_review,
         "sisyphus.verify_task": _verify_task,
         "sisyphus.close_task": _close_task,
         "sisyphus.list_agents": _list_agents,
@@ -263,6 +299,7 @@ def call_workflow_tool(
     freeze_spec=freeze_task_spec,
     validate_spec_fn=validate_task_spec,
     generate_subtasks_fn=generate_subtasks,
+    record_review=record_external_review,
     verify_task=run_verify,
     close_task=run_close,
     list_agents_fn=list_agents,
@@ -281,6 +318,7 @@ def call_workflow_tool(
         freeze_spec=freeze_spec,
         validate_spec_fn=validate_spec_fn,
         generate_subtasks_fn=generate_subtasks_fn,
+        record_review=record_review,
         verify_task=verify_task,
         close_task=close_task,
         list_agents_fn=list_agents_fn,

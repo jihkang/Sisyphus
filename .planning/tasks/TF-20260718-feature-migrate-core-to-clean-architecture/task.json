@@ -2,8 +2,8 @@
   "id": "TF-20260718-feature-migrate-core-to-clean-architecture",
   "type": "feature",
   "slug": "migrate-core-to-clean-architecture",
-  "status": "open",
-  "stage": "spec",
+  "status": "blocked",
+  "stage": "audit",
   "plan_status": "approved",
   "plan_reviewed_at": "2026-07-18T16:49:32Z",
   "plan_reviewed_by": "operator-directed-codex",
@@ -24,10 +24,10 @@
   "spec_frozen_at": "2026-07-18T16:49:40Z",
   "spec_reviewed_by": "operator-directed-codex",
   "spec_review_notes": "Freeze the approved full layer-adding Clean Architecture/DDD migration plan, including dependency, sequence, authority, parity, rollback, and review gates. The operator explicitly directed implementation and validation.",
-  "audit_attempts": 0,
+  "audit_attempts": 1,
   "max_audit_attempts": 10,
   "created_at": "2026-07-18T16:14:11Z",
-  "updated_at": "2026-07-18T16:50:17Z",
+  "updated_at": "2026-07-20T00:00:38Z",
   "closed_at": null,
   "repo_root": "/Users/jihokang/Documents/Sisyphus",
   "task_dir": ".planning/tasks/TF-20260718-feature-migrate-core-to-clean-architecture",
@@ -36,8 +36,8 @@
   "base_branch": "main",
   "verify_profile": "default",
   "verify_commands": [],
-  "verify_status": "not_run",
-  "last_verified_at": null,
+  "verify_status": "failed",
+  "last_verified_at": "2026-07-20T00:00:38Z",
   "last_verify_results": [],
   "test_strategy": {
     "normal_cases": [
@@ -161,8 +161,8 @@
       "frozen_at": "2026-07-18T16:49:40Z"
     },
     "assessment": {
-      "status": "not_assessed",
-      "summary": null,
+      "status": "appropriate",
+      "summary": "design depth matches the current task shape",
       "replan_required": false,
       "escalation_reason": null,
       "missing_artifacts": []
@@ -208,7 +208,15 @@
     "merge_method": null,
     "recorded_at": null
   },
-  "gates": [],
+  "gates": [
+    {
+      "code": "EXTERNAL_LLM_REVIEW_REQUIRED",
+      "message": "required external LLM review is not complete",
+      "blocking": true,
+      "source": "strategy",
+      "created_at": "2026-07-20T00:00:38Z"
+    }
+  ],
   "subtasks": [
     {
       "id": "subtask-001",
@@ -457,14 +465,14 @@
   "conformance": {
     "policy": "required",
     "status": "green",
-    "summary": "mode=full, layer=layer-adding, required=connection_diagram,sequence_diagram,boundary_note, recorded=3",
+    "summary": "design depth matches the current task shape",
     "last_spec_anchor_at": null,
     "last_spec_anchor_source": null,
     "last_design_anchor_at": "2026-07-18T16:49:40Z",
     "last_design_anchor_source": "planning.freeze_task_spec",
-    "last_checkpoint_type": "design_anchor",
-    "last_checkpoint_source": "planning.freeze_task_spec",
-    "last_checkpoint_at": "2026-07-18T16:49:40Z",
+    "last_checkpoint_type": "design_assessment",
+    "last_checkpoint_source": "audit.design",
+    "last_checkpoint_at": "2026-07-20T00:00:38Z",
     "drift_count": 0,
     "warning_count": 0,
     "unresolved_warning_count": 0,
@@ -479,6 +487,17 @@
         "summary": "mode=full, layer=layer-adding, required=connection_diagram,sequence_diagram,boundary_note, recorded=3",
         "source": "planning.freeze_task_spec",
         "timestamp": "2026-07-18T16:49:40Z",
+        "resolved": false,
+        "drift": 0,
+        "subtask_id": null
+      },
+      {
+        "id": "55ca5a05138a46f6b4b8112c0ee9dc69",
+        "checkpoint_type": "design_assessment",
+        "status": "green",
+        "summary": "design depth matches the current task shape",
+        "source": "audit.design",
+        "timestamp": "2026-07-20T00:00:38Z",
         "resolved": false,
         "drift": 0,
         "subtask_id": null
@@ -532,7 +551,8 @@
       "docs/runtime-relationship-diagrams.md"
     ],
     "requested_adopt_paths": [],
-    "spec_validation_required": true
+    "spec_validation_required": true,
+    "evidence_graph_required": true
   },
   "spec_validation": {
     "status": "passed",

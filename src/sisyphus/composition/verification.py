@@ -12,6 +12,7 @@ from ..infra.verification import (
     ConformanceVerificationAdapter,
     EvidenceGraphAdapter,
     FileVerificationDocumentAdapter,
+    GitExternalReviewEvidenceAdapter,
     ShellVerificationCommandAdapter,
 )
 from ..shared.paths import contained_path, task_dir as resolve_task_dir
@@ -27,6 +28,7 @@ def build_verification_service(repo_root: Path, config: SisyphusConfig) -> Verif
         conformance=ConformanceVerificationAdapter(clock),
         commands=ShellVerificationCommandAdapter(repo_root, config, clock),
         evidence=EvidenceGraphAdapter(repo_root, config, clock),
+        external_reviews=GitExternalReviewEvidenceAdapter(),
         events=EventPublisherAdapter(repo_root, config),
         clock=clock,
     )

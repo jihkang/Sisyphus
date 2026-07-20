@@ -43,6 +43,7 @@ WORKFLOW_TOOL_NAMES = frozenset(
         "sisyphus.spec_freeze",
         "sisyphus.spec_validate",
         "sisyphus.subtasks_generate",
+        "sisyphus.record_external_review",
         "sisyphus.verify_task",
         "sisyphus.close_task",
         "sisyphus.list_agents",

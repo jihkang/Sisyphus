@@ -46,8 +46,8 @@ may not bypass composition to select infrastructure directly.
 
 ### 2. Model, mapper, and codec ownership
 
-Domain and application models do not implement `to_dict`, `from_dict`,
-`to_json`, or `from_json`. Serialization is a boundary responsibility:
+Canonical domain and application model definitions do not declare `to_dict`,
+`from_dict`, `to_json`, or `from_json`. Serialization is a boundary responsibility:
 
 - task and agent persistence mappings live in `infra/persistence`
 - extension-preserving dataclass mapping lives in `record_mapper.py`
@@ -57,12 +57,17 @@ Domain and application models do not implement `to_dict`, `from_dict`,
 
 This prevents models from becoming an implicit persistence schema while retaining
 unknown legacy fields and omitted-field behavior where compatibility requires it.
+Published classes that exposed mapping methods before this migration regain them
+only when imported through a stable outer facade. The centralized
+`compat.serialization` helper installs delegating methods backed by the canonical
+codecs, preserving the public API without duplicating schema logic in each model.
 
 ### 3. Compatibility facades and shims
 
-Stable public modules remain thin delegates or import-only facades so existing
-imports and supported monkeypatch points retain their behavior. A facade may not
-become a second implementation root.
+Stable public modules remain thin delegates or compatibility-only facades so
+existing imports and supported monkeypatch points retain their behavior. A facade
+may additionally install codec-delegating legacy serialization methods, but may
+not become a second implementation root.
 
 Exactly two domain outward imports are temporarily accepted:
 

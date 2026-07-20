@@ -3,22 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..compat.serialization import install_serialization_compat
 from ..config import SisyphusConfig
 from ..composition.episode_trace import read_episode_steps
 from ..composition.observation import build_task_observation
 from ..reward import RewardBreakdown, reward_breakdown_metrics, score_task_outcome
 from ..state import load_task_record
 from ..test_first import TEST_FIRST_LOOP_PHASES, TestFirstEvaluation, evaluate_test_first_loop
+from .codecs import EVAL_LOOP_SCHEMA_VERSION, EVAL_LOOP_SHAPE, encode_eval_loop_result
 
 
-EVAL_LOOP_SCHEMA_VERSION = "sisyphus.eval_loop.v1"
-EVAL_LOOP_SHAPE = (
-    "observation_t",
-    "action_t",
-    "transition_result_t",
-    "observation_t_plus_1",
-    "reward_t",
-)
 @dataclass(frozen=True, slots=True)
 class EvalLoopResult:
     task_id: str
@@ -34,6 +28,11 @@ class EvalLoopResult:
     metrics: dict[str, float]
     actions: tuple[dict[str, object], ...]
     test_first: TestFirstEvaluation
+
+install_serialization_compat(
+    EvalLoopResult,
+    encode_mapping=encode_eval_loop_result,
+)
 
 def run_task_eval_loop(
     repo_root: Path,

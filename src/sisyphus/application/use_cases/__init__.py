@@ -6,6 +6,7 @@ from .agents import AgentManagementService
 from .closeout import CloseoutService
 from .conversation import ConversationEventService
 from .daemon_loop import DaemonLoopService
+from .external_review import ExternalReviewService
 from .inbox import DaemonError, InboxQueueService
 from .inbox_processing import InboxProcessingService
 from .merge_events import PullRequestMergedEventService
@@ -26,6 +27,7 @@ __all__ = [
     "ConversationEventService",
     "DaemonError",
     "DaemonLoopService",
+    "ExternalReviewService",
     "InboxProcessingService",
     "InboxQueueService",
     "ObligationConvergenceService",

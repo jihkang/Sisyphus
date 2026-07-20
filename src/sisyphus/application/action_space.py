@@ -155,6 +155,14 @@ ACTION_REGISTRY: dict[str, ActionSpec] = {
         description="Record a merged pull request receipt.",
         lifecycle_action=LifecycleAction.RECORD_MERGED_PR,
     ),
+    "sisyphus.record_external_review": ActionSpec(
+        name="sisyphus.record_external_review",
+        risk=ActionRiskLevel.HUMAN_ONLY,
+        allowed_for_policy=False,
+        requires_human=True,
+        mutates_state=True,
+        description="Record independently produced external LLM review evidence.",
+    ),
     "sisyphus.execute_promotion": ActionSpec(
         name="sisyphus.execute_promotion",
         risk=ActionRiskLevel.HUMAN_ONLY,

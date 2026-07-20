@@ -1,5 +1,31 @@
 """Compatibility facade for artifact domain models."""
 
+from .application.codecs.artifacts import (
+    decode_artifact_invariant,
+    decode_artifact_lineage,
+    decode_artifact_record as load_artifact_record,
+    decode_artifact_ref,
+    decode_atomic_artifact_record,
+    decode_collection_slot_binding,
+    decode_composite_artifact_record,
+    decode_feature_change_slot_bindings,
+    decode_named_slot_binding,
+    decode_task_run_ref,
+    decode_task_spec_ref,
+    decode_verification_claim,
+    encode_artifact_invariant,
+    encode_artifact_lineage,
+    encode_artifact_record,
+    encode_artifact_ref,
+    encode_collection_slot_binding,
+    encode_feature_change_slot_bindings,
+    encode_named_slot_binding,
+    encode_task_run_ref,
+    encode_task_spec_ref,
+    encode_verification_claim,
+)
+from .compat.serialization import install_serialization_compat
+
 from .domain.artifact.models import (
     ARTIFACT_RECORD_KIND_ATOMIC,
     ARTIFACT_RECORD_KIND_COMPOSITE,
@@ -29,7 +55,62 @@ from .domain.artifact.models import (
     TaskSpecRef,
     VerificationClaimRecord,
 )
-from .application.codecs.artifacts import decode_artifact_record as load_artifact_record
+
+install_serialization_compat(
+    ArtifactRef,
+    encode_mapping=encode_artifact_ref,
+    decode_mapping=decode_artifact_ref,
+)
+install_serialization_compat(
+    TaskSpecRef,
+    encode_mapping=encode_task_spec_ref,
+    decode_mapping=decode_task_spec_ref,
+)
+install_serialization_compat(
+    TaskRunRef,
+    encode_mapping=encode_task_run_ref,
+    decode_mapping=decode_task_run_ref,
+)
+install_serialization_compat(
+    ArtifactLineage,
+    encode_mapping=encode_artifact_lineage,
+    decode_mapping=decode_artifact_lineage,
+)
+install_serialization_compat(
+    ArtifactInvariantRecord,
+    encode_mapping=encode_artifact_invariant,
+    decode_mapping=decode_artifact_invariant,
+)
+install_serialization_compat(
+    NamedSlotBinding,
+    encode_mapping=encode_named_slot_binding,
+    decode_mapping=decode_named_slot_binding,
+)
+install_serialization_compat(
+    CollectionSlotBinding,
+    encode_mapping=encode_collection_slot_binding,
+    decode_mapping=decode_collection_slot_binding,
+)
+install_serialization_compat(
+    VerificationClaimRecord,
+    encode_mapping=encode_verification_claim,
+    decode_mapping=decode_verification_claim,
+)
+install_serialization_compat(
+    FeatureChangeSlotBindings,
+    encode_mapping=encode_feature_change_slot_bindings,
+    decode_mapping=decode_feature_change_slot_bindings,
+)
+install_serialization_compat(
+    ArtifactRecord,
+    encode_mapping=encode_artifact_record,
+    decode_mapping=decode_atomic_artifact_record,
+)
+install_serialization_compat(
+    CompositeArtifactRecord,
+    encode_mapping=encode_artifact_record,
+    decode_mapping=decode_composite_artifact_record,
+)
 
 __all__ = [
     "ARTIFACT_RECORD_KIND_ATOMIC",

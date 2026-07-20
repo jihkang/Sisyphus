@@ -1,5 +1,27 @@
 """Compatibility facade for artifact DSL models."""
 
+from .application.codecs.artifact_dsl import (
+    decode_compiled_obligation,
+    decode_execution_policy,
+    decode_input_contract,
+    decode_materialized_input_set,
+    decode_obligation_intent,
+    decode_obligation_spec,
+    decode_produced_artifact,
+    decode_protocol_spec,
+    decode_ref_selector,
+    encode_compiled_obligation,
+    encode_execution_policy,
+    encode_input_contract,
+    encode_materialized_input_set,
+    encode_obligation_intent,
+    encode_obligation_spec,
+    encode_produced_artifact,
+    encode_protocol_spec,
+    encode_ref_selector,
+)
+from .compat.serialization import install_serialization_compat
+
 from .domain.artifact.dsl import (
     COMPILED_OBLIGATION_KIND,
     DSL_SCHEMA_VERSION,
@@ -21,6 +43,53 @@ from .domain.artifact.dsl import (
     ProducedArtifactSpec,
     ProtocolSpec,
     RefSelector,
+)
+
+
+install_serialization_compat(
+    RefSelector,
+    encode_mapping=encode_ref_selector,
+    decode_mapping=decode_ref_selector,
+)
+install_serialization_compat(
+    InputContract,
+    encode_mapping=encode_input_contract,
+    decode_mapping=decode_input_contract,
+)
+install_serialization_compat(
+    ProducedArtifactSpec,
+    encode_mapping=encode_produced_artifact,
+    decode_mapping=decode_produced_artifact,
+)
+install_serialization_compat(
+    ObligationSpec,
+    encode_mapping=encode_obligation_spec,
+    decode_mapping=decode_obligation_spec,
+)
+install_serialization_compat(
+    ProtocolSpec,
+    encode_mapping=encode_protocol_spec,
+    decode_mapping=decode_protocol_spec,
+)
+install_serialization_compat(
+    ExecutionPolicy,
+    encode_mapping=encode_execution_policy,
+    decode_mapping=decode_execution_policy,
+)
+install_serialization_compat(
+    ObligationIntent,
+    encode_mapping=encode_obligation_intent,
+    decode_mapping=decode_obligation_intent,
+)
+install_serialization_compat(
+    MaterializedInputSet,
+    encode_mapping=encode_materialized_input_set,
+    decode_mapping=decode_materialized_input_set,
+)
+install_serialization_compat(
+    CompiledObligation,
+    encode_mapping=encode_compiled_obligation,
+    decode_mapping=decode_compiled_obligation,
 )
 
 __all__ = [

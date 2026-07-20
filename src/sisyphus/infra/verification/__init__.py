@@ -7,11 +7,13 @@ from .adapters import (
     RepositoryVerificationEvidenceAdapter,
     ShellVerificationCommandAdapter,
 )
+from .external_review import GitExternalReviewEvidenceAdapter
 
 __all__ = [
     "ConformanceVerificationAdapter",
     "EvidenceGraphAdapter",
     "FileVerificationDocumentAdapter",
+    "GitExternalReviewEvidenceAdapter",
     "RepositoryVerificationEvidenceAdapter",
     "ShellVerificationCommandAdapter",
 ]

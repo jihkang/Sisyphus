@@ -136,6 +136,7 @@ Application services coordinate these rules over ports. Major use cases include:
 - workflow advancement and subtask execution
 - obligation convergence
 - verification and evidence recording
+- head-bound external LLM review evidence recording
 - closeout
 - repository promotion execution and merged-PR recording
 - search, observation, lifecycle, artifact, and repository queries
@@ -152,6 +153,8 @@ application abstractions and concrete infrastructure. For example:
   obligation, provider, verification, closeout, event, and intervention adapters.
 - `composition/verification.py` wires command execution, documents, spec
   validation, conformance, evidence, events, and clock.
+- `composition/external_review.py` wires task persistence to bounded review
+  report inspection, Git HEAD binding, digesting, and time.
 - `composition/promotion.py` wires Git, GitHub CLI, task records, artifacts,
   closeout, interventions, and time.
 - `composition/repository_requests.py` wires inbox queue/processing to workflow
@@ -162,8 +165,8 @@ not contain business policy that belongs in an application service.
 
 ## Persistence And Mapping
 
-Models do not implement `to_dict`, `from_dict`, `to_json`, or `from_json`.
-Boundary shapes have explicit owners:
+Canonical domain and application model definitions do not declare `to_dict`,
+`from_dict`, `to_json`, or `from_json`. Boundary shapes have explicit owners:
 
 - task and agent persisted records: `infra/persistence/*_mapper.py`
 - generic extension-preserving dataclass mapping:
@@ -173,6 +176,11 @@ Boundary shapes have explicit owners:
 - local provider and benchmark result shapes: `providers/codecs.py`
 - evaluation wire shapes: `eval/codecs.py` and `benchmark_codec.py`
 - strict inbound inbox shapes: `interfaces/inbox/parser.py` and `mapper.py`
+
+For previously published model classes, stable outer facades restore the legacy
+methods with `compat.serialization.install_serialization_compat`. Those methods
+delegate directly to the codecs above; they do not define a second wire shape or
+move serialization policy back into the canonical model source.
 
 `DataclassRecordMapper` retains unknown fields, omitted mapped fields, and input
 field order through a `RecordEnvelope`. This preserves legacy task/agent records
@@ -199,8 +207,10 @@ domain-owned, while Git and test subprocesses are infrastructure adapters.
 ## Public Compatibility
 
 Stable top-level modules remain for Python consumers and tests. Most are
-import-only facades or thin delegates. Two outward imports remain inside domain
-only for import compatibility:
+import-only facades or thin delegates; facades for formerly model-owned
+serialization may additionally install codec-delegating legacy methods through
+the single compatibility helper. Two outward imports remain inside domain only
+for import compatibility:
 
 | Legacy import | Canonical implementation |
 | --- | --- |

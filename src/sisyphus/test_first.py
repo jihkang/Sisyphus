@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .compat.serialization import install_serialization_compat
+from .test_first_codec import (
+    encode_test_first_evaluation,
+    encode_test_first_phase_event,
+)
+
 
 TEST_FIRST_STATUS_SATISFIED = "satisfied"
 TEST_FIRST_STATUS_INCOMPLETE = "incomplete"
@@ -122,6 +128,16 @@ def _ordering_violations(events: tuple[TestFirstPhaseEvent, ...]) -> list[str]:
         max_seen = max(max_seen, current)
         previous_phase = event.phase
     return violations
+
+
+install_serialization_compat(
+    TestFirstPhaseEvent,
+    encode_mapping=encode_test_first_phase_event,
+)
+install_serialization_compat(
+    TestFirstEvaluation,
+    encode_mapping=encode_test_first_evaluation,
+)
 
 
 __all__ = [

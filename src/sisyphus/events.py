@@ -9,6 +9,14 @@ from .application.events import (
     normalize_event_envelope,
     utc_now,
 )
+from .compat.serialization import install_serialization_compat
+
+
+install_serialization_compat(
+    EventEnvelope,
+    encode_mapping=encode_event_envelope,
+    encode_json=encode_event_envelope_json,
+)
 
 __all__ = [
     "SCHEMA_VERSION",

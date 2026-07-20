@@ -13,6 +13,7 @@ if str(SRC_ROOT) not in sys.path:
 
 
 from sisyphus.application.results.artifacts import ArtifactRef  # noqa: E402
+from sisyphus.application.ports.review import ExternalReviewEvidence  # noqa: E402
 from sisyphus.application.use_cases.verification import VerificationService  # noqa: E402
 from sisyphus.domain.lifecycle import ConformanceState  # noqa: E402
 from sisyphus.domain.verification import CommandExecution, VerificationStatus  # noqa: E402
@@ -116,6 +117,18 @@ class EvidenceFake:
         self.calls.append((task_id, len(command_results)))
 
 
+class ExternalReviewsFake:
+    def __init__(self, evidence: ExternalReviewEvidence | None = None) -> None:
+        self.evidence = evidence
+        self.calls: list[tuple[str, str]] = []
+
+    def inspect(self, workspace: str, relative_path: str) -> ExternalReviewEvidence:
+        self.calls.append((workspace, relative_path))
+        if self.evidence is None:
+            raise AssertionError("external review evidence was not expected")
+        return self.evidence
+
+
 class EventsFake:
     def __init__(self) -> None:
         self.events = []
@@ -201,12 +214,47 @@ class VerificationApplicationTests(unittest.TestCase):
         self.assertIn("DESIGN_REPLAN_REQUIRED", {gate["code"] for gate in outcome.gates})
         self.assertEqual(dependencies["conformance"].appended[0]["status"], "yellow")
 
+    def test_stale_external_review_head_blocks_verification(self) -> None:
+        task = _task_with_external_review()
+        external_review = ExternalReviewEvidence(
+            relative_path="docs/reviews/external.md",
+            digest="sha256:" + "b" * 64,
+            size_bytes=128,
+            current_head_sha="c" * 40,
+            dirty_paths=("docs/reviews/external.md",),
+        )
+        service, _dependencies = _service(task, external_review=external_review)
+
+        outcome = service.verify("TF-1")
+
+        self.assertEqual(outcome.status, "failed")
+        self.assertIn("EXTERNAL_LLM_REVIEW_STALE", {gate["code"] for gate in outcome.gates})
+
+    def test_head_bound_review_allows_only_report_and_task_evidence_changes(self) -> None:
+        task = _task_with_external_review()
+        external_review = ExternalReviewEvidence(
+            relative_path="docs/reviews/external.md",
+            digest="sha256:" + "b" * 64,
+            size_bytes=128,
+            current_head_sha="a" * 40,
+            dirty_paths=(
+                ".planning/tasks/TF-1/task.json",
+                "docs/reviews/external.md",
+            ),
+        )
+        service, _dependencies = _service(task, external_review=external_review)
+
+        outcome = service.verify("TF-1")
+
+        self.assertEqual(outcome.status, "passed")
+
 
 def _service(
     task: dict,
     *,
     command_status: VerificationStatus = VerificationStatus.PASSED,
     validation_gates: tuple[dict, ...] = (),
+    external_review: ExternalReviewEvidence | None = None,
 ) -> tuple[VerificationService, dict[str, object]]:
     dependencies = {
         "tasks": MemoryTasks(task),
@@ -216,6 +264,7 @@ def _service(
         "conformance": ConformanceFake(),
         "commands": CommandsFake(command_status),
         "evidence": EvidenceFake(),
+        "external_reviews": ExternalReviewsFake(external_review),
         "events": EventsFake(),
         "clock": FixedClock(),
     }
@@ -250,6 +299,23 @@ def _task(*, plan_status: str = "approved") -> dict:
         "subtasks": [],
         "meta": {},
     }
+
+
+def _task_with_external_review() -> dict:
+    task = _task()
+    task["worktree_path"] = "/workspace"
+    task["task_dir"] = ".planning/tasks/TF-1"
+    task["test_strategy"]["external_llm"] = {
+        "required": True,
+        "provider": "independent Codex reviewer",
+        "purpose": "challenge the migration",
+        "trigger": "before promotion",
+        "status": "passed",
+        "reviewed_head_sha": "a" * 40,
+        "report_path": "docs/reviews/external.md",
+        "report_digest": "sha256:" + "b" * 64,
+    }
+    return task
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from .benchmark_codec import (
     BENCHMARK_SCHEMA_VERSION,
     encode_benchmark_run_result,
 )
+from .compat.serialization import install_serialization_compat
 
 BENCHMARK_FIXTURE_SCHEMA_VERSION = "sisyphus.benchmark.fixtures.v1"
 
@@ -74,6 +75,12 @@ class BenchmarkRunResult:
     mode_count: int
     metrics: dict[str, dict[str, float]]
     scenarios: tuple[dict[str, object], ...]
+
+
+install_serialization_compat(
+    BenchmarkRunResult,
+    encode_mapping=encode_benchmark_run_result,
+)
 
 def default_benchmark_fixture_dir(repo_root: Path) -> Path:
     return repo_root / DEFAULT_BENCHMARK_FIXTURE_DIR

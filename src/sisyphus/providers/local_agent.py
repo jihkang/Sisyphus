@@ -8,6 +8,7 @@ import re
 from typing import Protocol
 
 from ..application.ports.workspace import SUPPORTED_WORKSPACE_ACTIONS, WorkspacePort
+from ..compat.serialization import install_serialization_compat
 from ..shared.clock import utc_now
 from .codecs import encode_local_agent_run_result
 from ..infra.providers.receipt_schema import sign_local_agent_receipt
@@ -59,6 +60,12 @@ class LocalAgentRunResult:
 
     def final_message(self) -> str:
         return f"STATUS: {self.status}\n{self.summary}\n"
+
+
+install_serialization_compat(
+    LocalAgentRunResult,
+    encode_mapping=encode_local_agent_run_result,
+)
 
 
 class LocalCodingAgent:

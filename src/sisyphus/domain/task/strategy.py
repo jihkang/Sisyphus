@@ -23,14 +23,55 @@ PLACEHOLDER_VALUES = {
 
 
 def sync_test_strategy_from_content(task: dict, content: str) -> dict:
+    previous_strategy = task.get("test_strategy")
+    previous_external = (
+        previous_strategy.get("external_llm")
+        if isinstance(previous_strategy, dict)
+        and isinstance(previous_strategy.get("external_llm"), dict)
+        else {}
+    )
+    parsed_external = _extract_external_llm(content)
     task["test_strategy"] = {
         "normal_cases": _extract_checklist_items(content, "Normal Cases"),
         "edge_cases": _extract_checklist_items(content, "Edge Cases"),
         "exception_cases": _extract_checklist_items(content, "Exception Cases"),
         "verification_methods": _extract_verification_mapping(content),
-        "external_llm": _extract_external_llm(content),
+        "external_llm": _preserve_external_review_evidence(
+            parsed_external,
+            previous_external,
+        ),
     }
     return sync_design_from_content(task, content)
+
+
+_EXTERNAL_REVIEW_POLICY_FIELDS = ("required", "provider", "purpose", "trigger")
+_EXTERNAL_REVIEW_EVIDENCE_FIELDS = (
+    "status",
+    "reviewer",
+    "reviewed_at",
+    "reviewed_head_sha",
+    "report_path",
+    "report_digest",
+    "report_size_bytes",
+    "finding_count",
+    "blocking_finding_count",
+    "summary",
+)
+
+
+def _preserve_external_review_evidence(parsed: dict, previous: dict) -> dict:
+    if not parsed.get("required"):
+        return parsed
+    policy_unchanged = all(
+        parsed.get(field) == previous.get(field)
+        for field in _EXTERNAL_REVIEW_POLICY_FIELDS
+    )
+    if not policy_unchanged:
+        return parsed
+    for field in _EXTERNAL_REVIEW_EVIDENCE_FIELDS:
+        if field in previous:
+            parsed[field] = previous[field]
+    return parsed
 
 
 def _extract_checklist_items(content: str, subsection_title: str) -> list[dict]:

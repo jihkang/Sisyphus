@@ -322,7 +322,7 @@ class ArchitectureDependencyTests(unittest.TestCase):
             + _format_pairs(forbidden),
         )
 
-    def test_search_compatibility_facades_remain_import_only(self) -> None:
+    def test_search_compatibility_facades_remain_compatibility_only(self) -> None:
         for name in (
             "sisyphus.context_pack",
             "sisyphus.retrieval",
@@ -344,8 +344,11 @@ class ArchitectureDependencyTests(unittest.TestCase):
                         f"{name} may assign only __all__",
                     )
                     continue
+                if _is_serialization_compat_install(node):
+                    continue
                 self.fail(
-                    f"{name} contains {type(node).__name__}; compatibility facades must remain import-only"
+                    f"{name} contains {type(node).__name__}; compatibility facades may only "
+                    "import, export, or install legacy serialization methods"
                 )
 
     def test_service_facade_does_not_reabsorb_daemon_or_task_persistence(self) -> None:
@@ -401,7 +404,7 @@ class ArchitectureDependencyTests(unittest.TestCase):
             + _format_pairs(forbidden),
         )
 
-    def test_event_and_metric_facades_remain_import_only(self) -> None:
+    def test_event_and_metric_facades_remain_compatibility_only(self) -> None:
         for name in ("sisyphus.events", "sisyphus.metrics"):
             module = self.modules[name]
             tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
@@ -418,8 +421,11 @@ class ArchitectureDependencyTests(unittest.TestCase):
                         f"{name} may assign only __all__",
                     )
                     continue
+                if _is_serialization_compat_install(node):
+                    continue
                 self.fail(
-                    f"{name} contains {type(node).__name__}; compatibility facades must remain import-only"
+                    f"{name} contains {type(node).__name__}; compatibility facades may only "
+                    "import, export, or install legacy serialization methods"
                 )
 
     def test_observation_resource_interfaces_use_composed_queries(self) -> None:
@@ -448,7 +454,7 @@ class ArchitectureDependencyTests(unittest.TestCase):
             + _format_pairs(forbidden),
         )
 
-    def test_lifecycle_observation_and_evidence_facades_remain_import_only(self) -> None:
+    def test_lifecycle_observation_and_evidence_facades_remain_compatibility_only(self) -> None:
         for name in (
             "sisyphus.action_space",
             "sisyphus.evidence_graph",
@@ -471,8 +477,11 @@ class ArchitectureDependencyTests(unittest.TestCase):
                         f"{name} may assign only __all__",
                     )
                     continue
+                if _is_serialization_compat_install(node):
+                    continue
                 self.fail(
-                    f"{name} contains {type(node).__name__}; compatibility facades must remain import-only"
+                    f"{name} contains {type(node).__name__}; compatibility facades may only "
+                    "import, export, or install legacy serialization methods"
                 )
 
     def test_lifecycle_guard_uses_canonical_composition_and_result_types(self) -> None:
@@ -500,7 +509,7 @@ class ArchitectureDependencyTests(unittest.TestCase):
             + _format_pairs(forbidden),
         )
 
-    def test_episode_trace_facade_remains_import_only(self) -> None:
+    def test_episode_trace_facade_remains_compatibility_only(self) -> None:
         module = self.modules["sisyphus.episode_trace"]
         tree = ast.parse(module.path.read_text(encoding="utf-8"), filename=str(module.path))
         for node in tree.body:
@@ -509,8 +518,11 @@ class ArchitectureDependencyTests(unittest.TestCase):
             if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
                 self.assertIsInstance(node.value.value, str, "episode trace facade has executable code")
                 continue
+            if _is_serialization_compat_install(node):
+                continue
             self.fail(
-                f"episode trace facade contains {type(node).__name__}; it must remain import-only"
+                f"episode trace facade contains {type(node).__name__}; it may only import "
+                "or install legacy serialization methods"
             )
 
     def test_artifact_resource_interfaces_use_composed_queries(self) -> None:
@@ -551,7 +563,7 @@ class ArchitectureDependencyTests(unittest.TestCase):
                 f"artifact resource facade contains {type(node).__name__}; it must remain import-only"
             )
 
-    def test_artifact_policy_facades_remain_import_only(self) -> None:
+    def test_artifact_policy_facades_remain_compatibility_only(self) -> None:
         for name in (
             "sisyphus.artifact_evaluator",
             "sisyphus.artifact_projection",
@@ -584,8 +596,11 @@ class ArchitectureDependencyTests(unittest.TestCase):
                         f"{name} __all__ must be a literal string list",
                     )
                     continue
+                if _is_serialization_compat_install(node):
+                    continue
                 self.fail(
-                    f"{name} contains {type(node).__name__}; compatibility facade must remain import-only"
+                    f"{name} contains {type(node).__name__}; compatibility facade may only "
+                    "import, export, or install legacy serialization methods"
                 )
 
     def test_artifact_adapters_do_not_import_flat_policy_facades(self) -> None:
@@ -982,6 +997,22 @@ def _module_sources() -> dict[str, ModuleSource]:
         package = name if is_package else name.rpartition(".")[0]
         result[name] = ModuleSource(name=name, path=path, package=package)
     return result
+
+
+def _is_serialization_compat_install(node: ast.stmt) -> bool:
+    if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
+        return False
+    call = node.value
+    if not isinstance(call.func, ast.Name) or call.func.id != "install_serialization_compat":
+        return False
+    if len(call.args) != 1 or not isinstance(call.args[0], ast.Name):
+        return False
+    allowed_keywords = {"encode_mapping", "decode_mapping", "encode_json"}
+    return bool(call.keywords) and all(
+        keyword.arg in allowed_keywords
+        and isinstance(keyword.value, ast.Name)
+        for keyword in call.keywords
+    )
 
 
 def _declared_imports(module: ModuleSource) -> set[str]:

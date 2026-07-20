@@ -24,6 +24,7 @@ from .repository_requests import (
     TaskRequestResult,
 )
 from .repository_promotion import RepositoryPromotionExecutionResult
+from .review import ExternalReviewRecordResult
 from .service_runtime import ServiceStepResult, TaskNotification
 from .task_creation import CreateOutcome
 from .verification import VerificationOutcome
@@ -36,6 +37,7 @@ __all__ = [
     "CloseOutcome",
     "CreateOutcome",
     "DaemonStats",
+    "ExternalReviewRecordResult",
     "ObligationConvergenceResult",
     "ObligationExecutionResult",
     "ObligationQueueMaterialization",

@@ -52,7 +52,7 @@ inner layers call concrete infrastructure.
 | application | typed command or query plus ports | typed result, state mutation through ports | only through ports |
 | domain | values and policy snapshots | decisions, normalized values, gates | no |
 | infrastructure | application port calls | persisted records, process receipts, Git/provider results | yes |
-| compatibility facade | legacy Python call/import | canonical function or type | delegation only |
+| compatibility facade | legacy Python call/import | canonical function or type | delegation or centralized legacy-method installation only |
 
 Architecture guards enforce:
 
@@ -61,7 +61,7 @@ Architecture guards enforce:
 - interfaces do not import infrastructure
 - the internal import graph is acyclic
 - facades do not regain implementation behavior
-- models do not own boundary serialization methods
+- canonical model sources do not own boundary serialization methods
 
 ## 3. Primary Data Contracts
 
@@ -77,8 +77,11 @@ Architecture guards enforce:
 | provider and benchmark receipts | `providers/codecs.py` | explicit mappings |
 | lifecycle and conformance | `domain/lifecycle`, `application/*_records.py` | policy values plus persisted gate records |
 
-No model contains `to_dict`, `from_dict`, `to_json`, or `from_json`. A codec or
-repository mapper owns every wire shape.
+No canonical model definition declares `to_dict`, `from_dict`, `to_json`, or
+`from_json`. A codec or repository mapper owns every wire shape. Stable public
+facades use `compat.serialization.install_serialization_compat` to restore the
+previous methods on published classes, with each method delegating to the same
+canonical codec.
 
 ## 4. Request And Task-Creation Pipeline
 
@@ -265,6 +268,8 @@ Provider launch details are split across:
 sequenceDiagram
     autonumber
     participant Workflow
+    participant Review as ExternalReviewService
+    participant ReviewEvidence as ExternalReviewEvidencePort
     participant Verify as VerificationService
     participant Lifecycle as lifecycle policy
     participant Spec as SpecValidationPort
@@ -275,6 +280,9 @@ sequenceDiagram
     participant Events as EventPublisherPort
     participant Close as CloseoutService
 
+    Workflow->>Review: record independent review verdict
+    Review->>ReviewEvidence: inspect bounded report, HEAD, digest, dirty paths
+    Review->>Tasks: persist head-bound external review evidence
     Workflow->>Verify: verify(task_id)
     Verify->>Lifecycle: guarded verification transition
     Verify->>Spec: required/stale validation gates
@@ -292,6 +300,16 @@ Command parsing rejects multiline and NUL input. The shell adapter bounds output
 kills timed-out process groups, and returns typed receipts. The application
 service owns gate order and saves retryable state before publishing completion.
 VERIFY Markdown is a pure projection in `application/verification_projection.py`.
+
+When a frozen strategy requires an external LLM review,
+`ExternalReviewService` is the only status-recording path. The human-only CLI/MCP
+action binds the verdict to a contained, no-follow report, its SHA-256 digest,
+and the exact Git HEAD. It rejects unrelated dirty paths and a passing verdict
+with blocking findings. Verification re-inspects the report, digest, current
+HEAD, and dirty paths and continues to fail closed until the evidence is both
+`passed` and current. PLAN synchronization preserves runtime review evidence
+only while the frozen required/provider/purpose/trigger policy is unchanged;
+any policy change invalidates the evidence back to `pending`.
 
 Closeout does not infer success from an agent claim. It requires canonical verify
 state, evidence and conformance gates, worktree policy, and repository promotion
@@ -410,7 +428,9 @@ flowchart LR
 command projection. Worktree mutation and process execution live in
 `infra/evolution`; task creation, approval, freeze, and provider sequencing are
 owned by control-side composition. Evolution run storage is append-only and
-bounded.
+bounded. Evaluation commands share the infrastructure bounded-shell adapter with
+verification: each command has a deadline, per-stream output tails, truncation
+counts, process-group termination, and an explicit timeout/error receipt.
 
 Evolution may recommend or request. It may not approve, freeze, verify, activate,
 close, or promote canonical state.
@@ -433,7 +453,9 @@ close, or promote canonical state.
 ## 14. Compatibility And Remaining Debt
 
 Public facades preserve import and monkeypatch behavior while implementations
-move inward or outward. The only allowed domain outward edges are:
+move inward or outward. Serialization facades may install only codec-delegating
+legacy methods through the centralized compatibility helper. The only allowed
+domain outward edges are:
 
 ```text
 domain/agent/repository.py -> infra/persistence/agent_repository.py
