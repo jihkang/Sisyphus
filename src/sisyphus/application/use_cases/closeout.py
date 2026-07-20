@@ -6,7 +6,7 @@ from ..closeout_records import evaluate_closeout_lifecycle
 from ..external_review_verification import collect_external_review_evidence_gates
 from ..planning_records import dedupe_gate_records, make_gate_record
 from ..ports.clock import ClockPort
-from ..ports.closeout import CloseoutEvidencePort, WorktreeStatusPort
+from ..ports.closeout import CloseoutEvidencePort, WorktreeStatusError, WorktreeStatusPort
 from ..ports.review import ExternalReviewEvidencePort
 from ..ports.workflow import (
     EventPublisherPort,
@@ -88,7 +88,19 @@ class CloseoutService:
                 )
             )
 
-        dirty = self.worktree.is_dirty(task)
+        dirty = False
+        if not gates:
+            try:
+                dirty = self.worktree.is_dirty(task)
+            except WorktreeStatusError as exc:
+                gates.append(
+                    make_gate_record(
+                        "WORKTREE_STATUS_UNAVAILABLE",
+                        str(exc) or "working tree status could not be inspected",
+                        "close",
+                        created_at=self.clock.now(),
+                    )
+                )
         if dirty and not allow_dirty:
             gates.append(
                 make_gate_record(

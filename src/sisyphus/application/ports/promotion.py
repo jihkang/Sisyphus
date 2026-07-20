@@ -44,6 +44,8 @@ class PullRequestSpec:
 
 
 class PullRequestPort(Protocol):
+    def find_open(self, spec: PullRequestSpec) -> str | None: ...
+
     def create(self, spec: PullRequestSpec) -> str: ...
 
 

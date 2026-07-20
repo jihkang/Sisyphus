@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+import subprocess
 import sys
 import unittest
 
@@ -16,10 +17,13 @@ from sisyphus.application.commands.promotion import (  # noqa: E402
     ExecutePromotionCommand,
     RecordMergedPullRequestCommand,
 )
+from sisyphus.application.ports.promotion import PullRequestSpec  # noqa: E402
 from sisyphus.application.ports.review import ExternalReviewEvidence  # noqa: E402
 from sisyphus.application.results.artifacts import ArtifactRef  # noqa: E402
 from sisyphus.application.use_cases.promotion import PromotionService  # noqa: E402
 from sisyphus.domain.lifecycle import ConformanceState  # noqa: E402
+from sisyphus.gitops import GitOperationError  # noqa: E402
+from sisyphus.infra.promotion.adapters import GithubCliPullRequestAdapter  # noqa: E402
 
 
 class MemoryTasks:
@@ -49,6 +53,22 @@ class MemoryTasks:
         return tuple(self.records.values())
 
 
+class FailingPrStateTasks(MemoryTasks):
+    def __init__(self, *tasks: dict) -> None:
+        super().__init__(*tasks)
+        self.fail_pr_state_save = True
+
+    def load(self, task_id: str) -> dict:
+        return deepcopy(super().load(task_id))
+
+    def save(self, task: dict) -> None:
+        promotion = task.get("promotion", {})
+        if self.fail_pr_state_save and promotion.get("status") == "pr_open":
+            self.fail_pr_state_save = False
+            raise RuntimeError("task repository unavailable")
+        super().save(deepcopy(task))
+
+
 class VersionControlFake:
     def __init__(self, *, staged_changes: bool = True) -> None:
         self.staged_changes = staged_changes
@@ -67,6 +87,7 @@ class VersionControlFake:
 
     def commit(self, workspace: str, message: str) -> str:
         self.calls.append(("commit", workspace, message))
+        self.staged_changes = False
         return "commit-sha"
 
     def push(self, workspace: str, remote: str, branch: str) -> None:
@@ -87,24 +108,39 @@ class VersionControlFake:
 
 
 class PullRequestsFake:
-    def __init__(self, *, failures: int = 0) -> None:
+    def __init__(self, *, failures: int = 0, ambiguous_failures: int = 0) -> None:
         self.specs = []
+        self.find_specs = []
         self.failures = failures
+        self.ambiguous_failures = ambiguous_failures
+        self.existing_url: str | None = None
+
+    def find_open(self, spec) -> str | None:
+        self.find_specs.append(spec)
+        return self.existing_url
 
     def create(self, spec) -> str:
         self.specs.append(spec)
         if self.failures:
             self.failures -= 1
             raise RuntimeError("pull request API unavailable")
-        return "https://github.com/jihkang/Sisyphus/pull/17"
+        self.existing_url = "https://github.com/jihkang/Sisyphus/pull/17"
+        if self.ambiguous_failures:
+            self.ambiguous_failures -= 1
+            raise RuntimeError("pull request response was lost")
+        return self.existing_url
 
 
 class ArtifactsFake:
-    def __init__(self) -> None:
+    def __init__(self, *, fail_status: str | None = None) -> None:
         self.json_writes: list[tuple[str, str, dict[str, object]]] = []
         self.text_writes: list[tuple[str, str, str]] = []
+        self.fail_status = fail_status
 
     def write_json(self, task_id: str, relative_path: str, payload) -> ArtifactRef:
+        if self.fail_status is not None and self.fail_status == payload.get("status"):
+            self.fail_status = None
+            raise RuntimeError("artifact store unavailable")
         self.json_writes.append((task_id, relative_path, deepcopy(dict(payload))))
         return ArtifactRef(relative_path)
 
@@ -236,6 +272,19 @@ class PromotionApplicationTests(unittest.TestCase):
 
         self.assertEqual(result.status, "pr_open")
 
+    def test_execution_receipt_cannot_overwrite_task_authority_document(self) -> None:
+        task = _task()
+        task["promotion"]["execution_receipt_path"] = "CHANGESET.md"
+        service, dependencies = _service(task)
+
+        with self.assertRaisesRegex(ValueError, "must not collide"):
+            service.execute(ExecutePromotionCommand(task_id="TF-1"))
+
+        self.assertNotIn(
+            "stage",
+            [call[0] for call in dependencies["version_control"].calls],
+        )
+
     def test_execute_resumes_existing_commit_without_creating_another_commit(self) -> None:
         task = _task()
         task["promotion"].update({"status": "pushed", "head_sha": "existing-sha"})
@@ -246,6 +295,61 @@ class PromotionApplicationTests(unittest.TestCase):
         self.assertEqual(result.commit_sha, "existing-sha")
         self.assertNotIn("commit", [call[0] for call in dependencies["version_control"].calls])
         self.assertEqual(result.status, "pr_open")
+
+    def test_new_commit_from_pushed_state_is_pushed_before_pr_reuse(self) -> None:
+        task = _task()
+        task["promotion"].update(
+            {
+                "status": "pushed",
+                "head_sha": "old-sha",
+                "pushed_at": "2026-07-19T11:00:00Z",
+            }
+        )
+        service, dependencies = _service(task, staged_changes=True)
+
+        result = service.execute(ExecutePromotionCommand(task_id="TF-1"))
+
+        self.assertEqual(result.commit_sha, "commit-sha")
+        calls = [call[0] for call in dependencies["version_control"].calls]
+        self.assertEqual(calls.count("commit"), 1)
+        self.assertEqual(calls.count("push"), 1)
+
+    def test_retry_finds_pr_created_before_ambiguous_api_failure(self) -> None:
+        service, dependencies = _service(_task(), ambiguous_pr_failures=1)
+
+        with self.assertRaisesRegex(RuntimeError, "response was lost"):
+            service.execute(ExecutePromotionCommand(task_id="TF-1"))
+        result = service.execute(ExecutePromotionCommand(task_id="TF-1"))
+
+        self.assertEqual(result.status, "pr_open")
+        self.assertEqual(len(dependencies["pull_requests"].specs), 1)
+        self.assertEqual(len(dependencies["pull_requests"].find_specs), 1)
+
+    def test_retry_finds_pr_after_pr_state_save_failure(self) -> None:
+        service, dependencies = _service(_task(), fail_pr_state_save=True)
+
+        with self.assertRaisesRegex(RuntimeError, "task repository unavailable"):
+            service.execute(ExecutePromotionCommand(task_id="TF-1"))
+        self.assertEqual(
+            dependencies["tasks"].load("TF-1")["promotion"]["status"],
+            "pushed",
+        )
+        result = service.execute(ExecutePromotionCommand(task_id="TF-1"))
+
+        self.assertEqual(result.status, "pr_open")
+        self.assertEqual(len(dependencies["pull_requests"].specs), 1)
+        self.assertEqual(len(dependencies["pull_requests"].find_specs), 1)
+
+    def test_retry_repairs_final_receipt_after_artifact_failure(self) -> None:
+        service, dependencies = _service(_task(), artifact_fail_status="pr_open")
+
+        with self.assertRaisesRegex(RuntimeError, "artifact store unavailable"):
+            service.execute(ExecutePromotionCommand(task_id="TF-1"))
+        result = service.execute(ExecutePromotionCommand(task_id="TF-1"))
+
+        self.assertEqual(result.status, "pr_open")
+        self.assertEqual(len(dependencies["pull_requests"].specs), 1)
+        self.assertEqual(dependencies["artifacts"].json_writes[-1][2]["status"], "pr_open")
 
     def test_reviewed_promotion_pushes_exact_reviewed_head_without_staging(self) -> None:
         task = _reviewed_task()
@@ -312,6 +416,18 @@ class PromotionApplicationTests(unittest.TestCase):
             )
 
         self.assertEqual(dependencies["tasks"].load("TF-1")["verify_status"], "not_run")
+
+    def test_reviewed_promotion_rejects_unreviewed_integration_target_override(self) -> None:
+        service, dependencies = _service(_reviewed_task())
+
+        with self.assertRaisesRegex(ValueError, "base branch differs"):
+            service.execute(
+                ExecutePromotionCommand(task_id="TF-1", base_branch="release/2026")
+            )
+
+        persisted = dependencies["tasks"].load("TF-1")
+        self.assertEqual(persisted["verify_status"], "not_run")
+        self.assertTrue(persisted["promotion"]["reverify_required"])
 
     def test_reviewed_promotion_resumes_after_pr_failure_without_repush(self) -> None:
         task = _reviewed_task()
@@ -380,17 +496,74 @@ class PromotionApplicationTests(unittest.TestCase):
         self.assertEqual(dependencies["reopened_tasks"].calls[0]["task_id"], "TF-child")
 
 
+class PullRequestAdapterTests(unittest.TestCase):
+    def test_find_open_parses_gh_json_response(self) -> None:
+        calls: list[list[str]] = []
+
+        def runner(repo_root: Path, args: list[str], *, error_prefix: str):
+            calls.append(args)
+            return subprocess.CompletedProcess(
+                args=["gh", *args],
+                returncode=0,
+                stdout='[{"url":"https://github.com/jihkang/Sisyphus/pull/17"}]\n',
+                stderr="",
+            )
+
+        result = GithubCliPullRequestAdapter(runner).find_open(_pull_request_spec())
+
+        self.assertEqual(result, "https://github.com/jihkang/Sisyphus/pull/17")
+        self.assertEqual(calls[0][:2], ["pr", "list"])
+        self.assertIn("--head", calls[0])
+        self.assertIn("--base", calls[0])
+
+    def test_find_open_returns_none_for_empty_gh_result(self) -> None:
+        def runner(repo_root: Path, args: list[str], *, error_prefix: str):
+            return subprocess.CompletedProcess(
+                args=["gh", *args],
+                returncode=0,
+                stdout="[]\n",
+                stderr="",
+            )
+
+        self.assertIsNone(
+            GithubCliPullRequestAdapter(runner).find_open(_pull_request_spec())
+        )
+
+    def test_find_open_rejects_malformed_gh_result(self) -> None:
+        def runner(repo_root: Path, args: list[str], *, error_prefix: str):
+            return subprocess.CompletedProcess(
+                args=["gh", *args],
+                returncode=0,
+                stdout="not-json",
+                stderr="",
+            )
+
+        with self.assertRaisesRegex(GitOperationError, "invalid JSON"):
+            GithubCliPullRequestAdapter(runner).find_open(_pull_request_spec())
+
+
 def _service(
     *tasks: dict,
     staged_changes: bool = True,
     external_dirty_paths: tuple[str, ...] = (),
     pr_failures: int = 0,
+    ambiguous_pr_failures: int = 0,
+    artifact_fail_status: str | None = None,
+    fail_pr_state_save: bool = False,
 ) -> tuple[PromotionService, dict[str, object]]:
+    tasks = (
+        FailingPrStateTasks(*tasks)
+        if fail_pr_state_save
+        else MemoryTasks(*tasks)
+    )
     dependencies = {
-        "tasks": MemoryTasks(*tasks),
+        "tasks": tasks,
         "version_control": VersionControlFake(staged_changes=staged_changes),
-        "pull_requests": PullRequestsFake(failures=pr_failures),
-        "artifacts": ArtifactsFake(),
+        "pull_requests": PullRequestsFake(
+            failures=pr_failures,
+            ambiguous_failures=ambiguous_pr_failures,
+        ),
+        "artifacts": ArtifactsFake(fail_status=artifact_fail_status),
         "conformance": ConformanceFake(),
         "external_reviews": ExternalReviewsFake(dirty_paths=external_dirty_paths),
         "closeout": CloseoutFake(),
@@ -399,6 +572,18 @@ def _service(
         "clock": FixedClock(),
     }
     return PromotionService(**dependencies), dependencies
+
+
+def _pull_request_spec() -> PullRequestSpec:
+    return PullRequestSpec(
+        workspace="/workspace",
+        repo_full_name="jihkang/Sisyphus",
+        base_branch="main",
+        head_branch="codex/clean",
+        title="Clean boundaries",
+        body="Body",
+        draft=False,
+    )
 
 
 def _task(*, task_id: str = "TF-1", verify_status: str = "passed") -> dict:

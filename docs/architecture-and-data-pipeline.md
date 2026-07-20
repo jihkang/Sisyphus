@@ -310,6 +310,8 @@ only a task ID and a JSON envelope path under that task's
 derives reviewer, findings, and pass/fail status from its contents, verifies the
 bounded no-follow Markdown report and both SHA-256 digests, and binds it to the
 exact Git HEAD plus a normalized task/spec/verification-policy scope digest.
+That digest includes the immutable integration-base commit, resolving the
+configured remote-tracking branch before a local branch of the same name.
 Only the two review artifacts may be dirty when a review is recorded.
 
 Recording any new review atomically invalidates prior verification and marks
@@ -329,7 +331,8 @@ any policy change invalidates the evidence back to `pending`.
 
 Closeout does not infer success from an agent claim. It requires canonical verify
 state, evidence and conformance gates, worktree policy, and repository promotion
-when the task requires it.
+when the task requires it. Git inspection errors produce a dedicated blocking
+gate and cannot be converted to a clean result or bypassed by `allow_dirty`.
 
 ## 9. Repository Promotion Pipeline
 
@@ -369,6 +372,13 @@ For externally reviewed tasks, execution refuses to stage workspace changes and
 pushes the already-reviewed HEAD before PR creation. Merge recording writes the
 receipt and changeset, persists promotion state, optionally attempts close, then
 marks open stacked children for retarget and reverify.
+
+Promotion retries distinguish an old pushed phase from a commit created in the
+current attempt. A new commit is always pushed. After a durable push, the pull
+request adapter searches for an existing open PR for the exact head/base pair;
+this makes an ambiguous create response or a later task-save failure retryable
+without duplicate PRs. Durable open-PR state also regenerates a missing final
+execution receipt.
 
 ## 10. Artifact And Obligation Pipeline
 
@@ -461,6 +471,9 @@ close, or promote canonical state.
 - task support-file mirrors reject unsafe document paths and use bounded,
   descriptor-relative no-follow reads plus atomic target replacement
 - Git patch application compares tree hashes before and after execution
+- review scope binds both HEAD and the remote-first integration-base commit
+- generated verification/promotion outputs cannot overlap task authority inputs
+- closeout treats unavailable Git status as a non-overridable blocking gate
 - artifact and evolution stores reject unsafe IDs and symlinked targets
 - inbound parsers enforce exact scalar/container types, limits, and JSON budgets
 - provider receipts are bounded and can be bound to request digests

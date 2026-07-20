@@ -4,6 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 import subprocess
 
+from ...application.ports.closeout import WorktreeStatusError
 from ...application.ports.workflow import TaskRecord
 
 
@@ -15,24 +16,31 @@ def is_dirty_worktree(path: Path) -> bool:
         result = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=path,
-            check=True,
+            check=False,
             capture_output=True,
             text=True,
         )
-        return bool(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError, NotADirectoryError, OSError):
-        return False
+    except (FileNotFoundError, NotADirectoryError, OSError) as exc:
+        raise WorktreeStatusError(f"failed to inspect working tree status: {exc}") from exc
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip() or "git status failed"
+        raise WorktreeStatusError(f"failed to inspect working tree status: {detail}")
+    return bool(result.stdout.strip())
 
 
 def resolve_dirty_check_path(repo_root: Path, task: TaskRecord) -> Path:
-    candidates = [task.get("worktree_path"), task.get("repo_root"), str(repo_root)]
-    for candidate in candidates:
+    candidates = (
+        ("task worktree_path", task.get("worktree_path")),
+        ("task repo_root", task.get("repo_root")),
+        ("configured repo_root", str(repo_root)),
+    )
+    for _field, candidate in candidates:
         if not candidate:
             continue
         resolved = Path(str(candidate))
         if resolved.is_dir():
             return resolved
-    return repo_root
+    raise WorktreeStatusError("no working tree path is available for closeout inspection")
 
 
 class GitWorktreeStatusAdapter:

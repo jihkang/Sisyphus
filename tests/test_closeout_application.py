@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
+import subprocess
+import tempfile
 import unittest
+from unittest import mock
 
+from sisyphus.application.ports.closeout import WorktreeStatusError
 from sisyphus.application.ports.review import ExternalReviewEvidence
 from sisyphus.application.use_cases.closeout import CloseoutService
+from sisyphus.infra.closeout.git_status import (
+    GitWorktreeStatusAdapter,
+    is_dirty_worktree,
+)
 
 
 class MemoryTasks:
@@ -42,12 +51,21 @@ class EvidenceFake:
 
 
 class WorktreeFake:
-    def __init__(self, calls: list[str], *, dirty: bool = False) -> None:
+    def __init__(
+        self,
+        calls: list[str],
+        *,
+        dirty: bool = False,
+        error: WorktreeStatusError | None = None,
+    ) -> None:
         self.calls = calls
         self.dirty = dirty
+        self.error = error
 
     def is_dirty(self, task: dict) -> bool:
         self.calls.append("worktree.is_dirty")
+        if self.error is not None:
+            raise self.error
         return self.dirty
 
 
@@ -150,6 +168,18 @@ class CloseoutApplicationTests(unittest.TestCase):
         self.assertTrue(closed.closed)
         self.assertEqual(closed.gates, [])
         self.assertTrue(dependencies["tasks"].task["meta"]["close_override_used"])
+
+    def test_worktree_inspection_failure_cannot_be_bypassed_by_dirty_override(self) -> None:
+        service, dependencies, _ = _service(
+            _task(),
+            worktree_error=WorktreeStatusError("git status unavailable"),
+        )
+
+        outcome = service.close("TF-1", allow_dirty=True)
+
+        self.assertFalse(outcome.closed)
+        self.assertIn("WORKTREE_STATUS_UNAVAILABLE", {gate["code"] for gate in outcome.gates})
+        self.assertFalse(dependencies["tasks"].task["meta"]["close_override_used"])
 
     def test_promotion_only_gate_preserves_verified_state_and_requests_operator(self) -> None:
         task = _task()
@@ -255,11 +285,43 @@ class CloseoutApplicationTests(unittest.TestCase):
         self.assertEqual(dependencies["tasks"].save_count, 1)
         self.assertEqual(dependencies["tasks"].task["status"], "closed")
 
+    def test_git_status_adapter_raises_when_git_cannot_run(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with mock.patch(
+                "sisyphus.infra.closeout.git_status.subprocess.run",
+                side_effect=FileNotFoundError("git"),
+            ):
+                with self.assertRaisesRegex(WorktreeStatusError, "failed to inspect"):
+                    is_dirty_worktree(Path(temp_dir))
+
+    def test_git_status_adapter_raises_for_invalid_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            completed = subprocess.CompletedProcess(
+                args=["git", "status"],
+                returncode=128,
+                stdout="",
+                stderr="fatal: not a git repository",
+            )
+            with mock.patch(
+                "sisyphus.infra.closeout.git_status.subprocess.run",
+                return_value=completed,
+            ):
+                with self.assertRaisesRegex(WorktreeStatusError, "not a git repository"):
+                    is_dirty_worktree(Path(temp_dir))
+
+    def test_git_status_adapter_rejects_when_no_candidate_directory_exists(self) -> None:
+        missing = Path(tempfile.gettempdir()) / "sisyphus-missing-closeout-worktree"
+        adapter = GitWorktreeStatusAdapter(missing)
+
+        with self.assertRaisesRegex(WorktreeStatusError, "no working tree path"):
+            adapter.is_dirty({"worktree_path": str(missing)})
+
 
 def _service(
     task: dict,
     *,
     dirty: bool = False,
+    worktree_error: WorktreeStatusError | None = None,
     evidence_gates: tuple[dict, ...] = (),
     event_failure: bool = False,
     external_review: ExternalReviewsFake | None = None,
@@ -268,7 +330,7 @@ def _service(
     dependencies = {
         "tasks": MemoryTasks(task, calls),
         "evidence": EvidenceFake(calls, evidence_gates),
-        "worktree": WorktreeFake(calls, dirty=dirty),
+        "worktree": WorktreeFake(calls, dirty=dirty, error=worktree_error),
         "events": EventsFake(calls, fail=event_failure),
         "interventions": InterventionsFake(calls),
         "clock": FixedClock(),

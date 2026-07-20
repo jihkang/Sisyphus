@@ -126,6 +126,18 @@ def current_head_sha(repo_root: Path) -> str:
     return completed.stdout.strip()
 
 
+def revision_sha(repo_root: Path, revision: str) -> str:
+    normalized_revision = revision.strip()
+    if not normalized_revision:
+        raise GitOperationError("revision must be non-empty")
+    completed = _run_git(
+        repo_root,
+        ["rev-parse", "--verify", f"{normalized_revision}^{{commit}}"],
+        error_prefix=f"failed to resolve revision `{normalized_revision}`",
+    )
+    return completed.stdout.strip()
+
+
 def commit_staged_changes(repo_root: Path, message: str) -> str:
     normalized_message = message.strip()
     if not normalized_message:

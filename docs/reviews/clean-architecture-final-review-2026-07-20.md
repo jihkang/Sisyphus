@@ -13,6 +13,29 @@ No known unresolved High or Medium implementation defect remains in the current
 working tree. The independent challenge findings described below are implemented
 locally but still require re-review against an immutable commit.
 
+### Independent challenge round 4: concurrency and external-effect findings
+
+The independent reviewer rejected commit `3244624` for four P1 and two P2 gaps:
+
+1. verification could overwrite a gate added while commands were running
+2. a retry from `pushed` could commit new changes and skip the corresponding push
+3. generated output paths could replace `task.json`, frozen inputs, or review evidence
+4. closeout treated Git inspection failures as a clean worktree
+5. PR creation and the final execution receipt were not fully retry-idempotent
+6. review scope named the base branch without binding its immutable revision
+
+Current remediation:
+
+- verification snapshots canonical gate content and, on any authority change,
+  preserves every latest-record gate while adding only attempt-local findings
+- promotion tracks whether the current attempt created a commit, discovers an
+  already-open head/base PR before retrying creation, and repairs a missing final receipt
+- verification and promotion outputs reject equality and ancestor/descendant
+  collisions with task authority, frozen inputs, and review artifacts
+- Git status failures produce a non-overridable `WORKTREE_STATUS_UNAVAILABLE` gate
+- scope digests include the remote-first base commit SHA and reviewed promotion
+  target; execution rejects remote, head, or base overrides outside that scope
+
 ### Independent challenge round 3: output and retry findings
 
 The independent reviewer rejected commit `c44e9c7` for four additional P1 gaps:
@@ -171,12 +194,12 @@ The final local evidence after review fixes is:
 | Gate | Result |
 | --- | --- |
 | lock consistency | `uv lock --check` passed |
-| review/security/architecture target | 145 tests passed |
+| review/security/architecture target | 186 tests passed |
 | persistence/path/inbox/lifecycle/spec/workflow target | 71 tests passed before the focused security additions |
 | Python/MCP/Evolution target | 238 tests passed |
-| supported Python matrix | 785 tests passed on each of Python 3.11, 3.12, 3.13, and 3.14 |
-| final full suite | 785 tests passed after round-3 remediation |
-| branch coverage | 85.1%, threshold 80% |
+| supported Python matrix | 805 tests passed on each of Python 3.11, 3.12, 3.13, and 3.14 |
+| final full suite | 805 tests passed after round-4 remediation |
+| branch coverage | 85.2%, threshold 80% |
 | standard build | sdist and wheel passed |
 | offline build | cached sdist and wheel build passed |
 | installed wheel | Python 3.11 import, all inbox compatibility methods, CLI/review help, 26 MCP tools, and 32 MCP resources passed outside the source tree |
@@ -196,7 +219,7 @@ The implementation debt ledger is authoritative. At this review point:
   retirement conditions
 - mutable-record and Evolution-coordinator watch points are future migration
   triggers, not additional authority exceptions
-- immutable-commit independent round-3 re-review, Sisyphus verify, GitHub CI, PR merge,
+- immutable-commit independent round-4 re-review, Sisyphus verify, GitHub CI, PR merge,
   merge receipt, and merged-main revalidation remain release gates
 
 The separate Sisyphus Harness work for Docker service separation, Hermes agent

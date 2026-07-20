@@ -12,7 +12,6 @@ from ..review_scope import (
     PROMOTION_OUTPUT_PATHS_FIELD,
     VERIFICATION_OUTPUT_PATHS_FIELD,
     external_review_promotion_output_paths,
-    external_review_scope_digest,
     external_review_verification_output_paths,
 )
 
@@ -120,15 +119,15 @@ class ExternalReviewService:
             latest_policy = tuple(
                 latest_review.get(field) for field in _REVIEW_POLICY_FIELDS
             )
-            latest_scope_digest = external_review_scope_digest(
-                latest,
-                dict(inspected.document_digests),
-            )
             if (
                 latest_policy != policy_fingerprint
                 or latest_workspace != workspace
-                or latest_scope_digest != inspected.current_scope_digest
             ):
+                raise ValueError(
+                    "external review policy, scope, or worktree changed during recording"
+                )
+            latest_scope = self.evidence.scope(latest_workspace, latest)
+            if latest_scope.scope_digest != inspected.current_scope_digest:
                 raise ValueError(
                     "external review policy, scope, or worktree changed during recording"
                 )

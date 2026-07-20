@@ -23,11 +23,13 @@ The result contains:
 - `scope_digest`: SHA-256 over the task identity, branch and base, frozen plan
   and design policy, complete task-document mapping, verification profile and
   commands, test strategy, promotion policy, exact service-generated output
-  paths, owned paths, and authority-document digests
+  paths, owned paths, authority-document digests, and the immutable base commit
+  resolved from the configured remote before the local branch
 - `document_digests`: the BRIEF, PLAN or issue documents, frozen design
   artifacts, and spec-validation report used by the scope digest
 
-Any change to the reviewed Git HEAD or canonical scope makes the review stale.
+Any change to the reviewed Git HEAD, integration-base revision, or canonical
+scope makes the review stale.
 
 ## Artifact Location
 
@@ -96,17 +98,19 @@ older verification result and marks promotion as requiring re-verification.
 Recording also stores the exact task-relative paths that verification and
 promotion are allowed to generate. They are derived from the reviewed task, not
 accepted from the caller. Output paths must be distinct, normalized, contained,
-and unchanged from the reviewed scope.
+and unchanged from the reviewed scope. They cannot equal, contain, or be nested
+under `task.json`, non-verification task documents, frozen design artifacts, the
+spec-validation report, or the review-artifact directory.
 
 `sisyphus verify <task-id>` checks the evidence before commands, writes only the
 recorded verification outputs, and then reloads the latest task under the
 repository update lock. It compares the latest verification authority with the
 pre-command snapshot and re-inspects the envelope, report, HEAD, scope, and dirty
 paths before committing a pass. A final inspection runs after generated outputs
-and task support files are synchronized. Concurrent changes are preserved and
-turn the attempt into a failed verification instead of being overwritten. A pass
-stores a binding over the envelope digest, report digest, reviewed HEAD, and
-scope digest.
+and task support files are synchronized. Concurrent authority and gate changes
+are preserved and turn the attempt into a failed verification instead of being
+overwritten. A pass stores a binding over the envelope digest, report digest,
+reviewed HEAD, and scope digest.
 
 Close and promotion independently re-inspect the envelope, report, HEAD, scope,
 and exact dirty paths; `allow_dirty` never bypasses this review check. For a
@@ -114,8 +118,15 @@ review-gated task promotion never stages new work. Only the two review files,
 `task.json`, the recorded verification outputs, and the recorded promotion
 receipt may remain as service-generated artifacts. Promotion pushes the exact
 reviewed commit SHA. If PR creation fails after that push, the durable pushed
-state and receipt allow a retry to resume without committing or pushing again.
+state allows a retry to discover the already-open head/base PR without creating
+a duplicate. A failed final receipt write is repaired from durable PR state on
+the next attempt. A newly created commit is always pushed even when the attempt
+started from a previously pushed state.
 Any other workspace change requires a new review and verification cycle.
+
+Closeout distinguishes a dirty worktree from an unavailable Git inspection.
+The former can use the explicit dirty override; the latter records
+`WORKTREE_STATUS_UNAVAILABLE` and cannot be bypassed by that override.
 
 ## MCP Authorization
 

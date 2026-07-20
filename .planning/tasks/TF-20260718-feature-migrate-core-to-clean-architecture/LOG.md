@@ -89,6 +89,10 @@
 - 2026-07-20: Bound complete document/output mappings into review scope, changed verify to a latest-record atomic commit plus post-output evidence check, made promotion receipt retries idempotent, and made closeout re-inspect evidence independently of dirty overrides.
 - 2026-07-20: Added regressions for verify-path substitution, persisted command mutation, post-output HEAD change, PR API retry, closeout HEAD drift, dirty-override review bypass, and missing closeout evidence adapters; the expanded 785-test suite passes locally.
 - 2026-07-20: Passed 785 tests on each supported Python 3.11-3.14, 85.1% branch coverage, 145 focused review/security/architecture tests, lock validation, standard and offline builds, and installed-wheel CLI/MCP/serialization smoke checks after round-3 remediation.
+- 2026-07-20: The fourth independent review rejected concurrent-gate loss, stale pushed-state reuse after a new commit, authority-path output collisions, fail-open closeout Git inspection, non-idempotent PR/final-receipt retries, and a mutable integration-base review scope.
+- 2026-07-20: Preserved latest-record gates across verification races, protected all authority/frozen/review paths, made Git inspection failure non-overridable, made commit/push and PR/receipt retries idempotent, and bound review scope to the remote-first base commit plus promotion target.
+- 2026-07-20: Passed 805 tests on each supported Python 3.11-3.14, 85.2% branch coverage, 186 focused review/security/architecture tests, lock validation, and standard/offline sdist and wheel builds after round-4 remediation.
+- 2026-07-20: Installed the built wheel into an isolated Python 3.11 environment and passed CLI/review help, all eight inbox compatibility methods, 26 MCP tools, and 32 MCP resources outside the source tree.
 
 ## Notes
 
@@ -99,6 +103,6 @@
 
 ## Follow-ups
 
-- Commit the round-3 remediation and obtain an independent review against that immutable commit.
+- Commit the round-4 remediation and obtain an independent review against that immutable commit.
 - Record the resulting strict review envelope and run Sisyphus verification.
 - Push the branch, open the PR, wait for CI, merge, record the merge receipt, and revalidate the updated `main` worktree.

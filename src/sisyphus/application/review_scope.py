@@ -57,6 +57,8 @@ def external_review_scope_document_paths(task: Mapping[str, object]) -> tuple[st
 def build_external_review_scope_payload(
     task: Mapping[str, object],
     document_digests: Mapping[str, str | None],
+    *,
+    base_revision_sha: str | None = None,
 ) -> dict[str, object]:
     strategy = task.get("test_strategy")
     strategy_mapping = strategy if isinstance(strategy, Mapping) else {}
@@ -109,7 +111,22 @@ def build_external_review_scope_payload(
         "promotion_policy": {
             **_select(
                 promotion_mapping,
-                ("required", "strategy", "base_branch", "parent_task_id", "parent_artifact_id"),
+                (
+                    "required",
+                    "strategy",
+                    "base_branch",
+                    "base_override",
+                    "parent_task_id",
+                    "parent_artifact_id",
+                    "repo_full_name",
+                ),
+            ),
+            "remote_name": str(promotion_mapping.get("remote_name") or "origin"),
+            "head_branch": (
+                promotion_mapping.get("head_branch") or task.get("branch")
+            ),
+            "base_revision_sha": (
+                str(base_revision_sha).strip().lower() if base_revision_sha else None
             ),
             "execution_receipt_path": (
                 _normalized_relative_path(
@@ -136,8 +153,14 @@ def build_external_review_scope_payload(
 def external_review_scope_digest(
     task: Mapping[str, object],
     document_digests: Mapping[str, str | None],
+    *,
+    base_revision_sha: str | None = None,
 ) -> str:
-    payload = build_external_review_scope_payload(task, document_digests)
+    payload = build_external_review_scope_payload(
+        task,
+        document_digests,
+        base_revision_sha=base_revision_sha,
+    )
     canonical = json.dumps(
         payload,
         ensure_ascii=True,
@@ -155,15 +178,13 @@ def external_review_artifact_prefix(task: Mapping[str, object]) -> str:
 def external_review_verification_output_paths(
     task: Mapping[str, object],
 ) -> tuple[str, ...]:
-    paths = {DEFAULT_EVIDENCE_GRAPH_PATH}
     docs = task.get("docs")
     if not isinstance(docs, Mapping) or docs.get("verify") in (None, ""):
         raise ValueError("docs.verify must identify the verification document")
     verify_path = _normalized_relative_path(docs.get("verify"), field="docs.verify")
-    if verify_path == DEFAULT_EVIDENCE_GRAPH_PATH:
-        raise ValueError("docs.verify must not collide with the evidence graph")
-    paths.add(verify_path)
-    return tuple(sorted(paths))
+    normalized = (DEFAULT_EVIDENCE_GRAPH_PATH, verify_path)
+    _validate_generated_output_paths(task, normalized, field="verification outputs")
+    return tuple(sorted(normalized))
 
 
 def external_review_promotion_output_paths(
@@ -177,9 +198,34 @@ def external_review_promotion_output_paths(
         or DEFAULT_PROMOTION_EXECUTION_RECEIPT_PATH,
         field="promotion.execution_receipt_path",
     )
-    if receipt_path in external_review_verification_output_paths(task):
+    receipt_path = validate_promotion_execution_receipt_path(task, receipt_path)
+    if any(
+        _paths_overlap(receipt_path, path)
+        for path in external_review_verification_output_paths(task)
+    ):
         raise ValueError("promotion receipt must not collide with verification outputs")
     return (receipt_path,)
+
+
+def validate_promotion_execution_receipt_path(
+    task: Mapping[str, object],
+    value: object,
+) -> str:
+    receipt_path = _normalized_relative_path(
+        value,
+        field="promotion.execution_receipt_path",
+    )
+    _validate_generated_output_paths(task, (receipt_path,), field="promotion receipt")
+
+    verification_paths = {DEFAULT_EVIDENCE_GRAPH_PATH}
+    docs = task.get("docs")
+    if isinstance(docs, Mapping) and docs.get("verify") not in (None, ""):
+        verification_paths.add(
+            _normalized_relative_path(docs.get("verify"), field="docs.verify")
+        )
+    if any(_paths_overlap(receipt_path, path) for path in verification_paths):
+        raise ValueError("promotion receipt must not collide with verification outputs")
+    return receipt_path
 
 
 def external_review_recorded_output_paths(
@@ -336,6 +382,72 @@ def _add_task_document_path(
     paths.add((PurePosixPath(task_dir) / relative).as_posix())
 
 
+def _protected_authority_paths(task: Mapping[str, object]) -> tuple[str, ...]:
+    paths = {"task.json"}
+    docs = task.get("docs")
+    if isinstance(docs, Mapping):
+        for key, value in docs.items():
+            if key == "verify" or value in (None, ""):
+                continue
+            paths.add(_normalized_relative_path(value, field=f"docs.{key}"))
+
+    design = task.get("design")
+    if isinstance(design, Mapping):
+        frozen = design.get("frozen")
+        if isinstance(frozen, Mapping):
+            artifacts = frozen.get("artifacts")
+            if isinstance(artifacts, Mapping):
+                for key, value in artifacts.items():
+                    if value in (None, ""):
+                        continue
+                    paths.add(
+                        _normalized_relative_path(
+                            value,
+                            field=f"design.frozen.artifacts.{key}",
+                        )
+                    )
+
+    validation = task.get("spec_validation")
+    if isinstance(validation, Mapping) and validation.get("report_path") not in (None, ""):
+        paths.add(
+            _normalized_relative_path(
+                validation.get("report_path"),
+                field="spec_validation.report_path",
+            )
+        )
+    return tuple(sorted(paths))
+
+
+def _validate_generated_output_paths(
+    task: Mapping[str, object],
+    paths: tuple[str, ...],
+    *,
+    field: str,
+) -> None:
+    review_prefix = PurePosixPath("artifacts/reviews")
+    protected_paths = _protected_authority_paths(task)
+    for path in paths:
+        if _paths_overlap(path, review_prefix.as_posix()):
+            raise ValueError(f"{field} must not collide with external review artifacts")
+        for protected in protected_paths:
+            if _paths_overlap(path, protected):
+                raise ValueError(
+                    f"{field} must not collide with protected task authority path `{protected}`"
+                )
+
+    for index, path in enumerate(paths):
+        for other in paths[index + 1 :]:
+            if _paths_overlap(path, other):
+                raise ValueError(f"{field} must not collide with each other")
+
+
+def _paths_overlap(left: str, right: str) -> bool:
+    left_parts = PurePosixPath(left).parts
+    right_parts = PurePosixPath(right).parts
+    shared = min(len(left_parts), len(right_parts))
+    return left_parts[:shared] == right_parts[:shared]
+
+
 def _normalized_relative_path(value: object, *, field: str) -> str:
     raw = str(value or "").strip()
     if not raw or "\\" in raw or "\x00" in raw:
@@ -387,5 +499,6 @@ __all__ = [
     "external_review_scope_document_paths",
     "external_review_verification_output_paths",
     "external_review_verify_document_path",
+    "validate_promotion_execution_receipt_path",
     "validate_external_review_output_paths",
 ]

@@ -331,6 +331,37 @@ class VerificationApplicationTests(unittest.TestCase):
             persisted["test_strategy"]["external_llm"],
         )
 
+    def test_concurrently_added_gate_is_preserved_when_verification_commits(self) -> None:
+        task = _task_with_external_review()
+        service, dependencies = _service(
+            task,
+            external_review=_external_review_evidence(),
+        )
+        concurrent_gate = {
+            "code": "HUMAN_APPROVAL_REQUIRED",
+            "message": "operator approval was requested while verification ran",
+            "blocking": True,
+            "source": "operator",
+            "created_at": "2026-07-19T12:00:01Z",
+        }
+        def add_concurrent_gate() -> None:
+            dependencies["tasks"].task["gates"].append(concurrent_gate)
+            dependencies["tasks"].task["updated_at"] = "2026-07-19T12:00:01Z"
+
+        dependencies["commands"].on_run = add_concurrent_gate
+
+        outcome = service.verify("TF-1")
+
+        self.assertEqual(outcome.status, "failed")
+        codes = {gate["code"] for gate in outcome.gates}
+        self.assertIn("HUMAN_APPROVAL_REQUIRED", codes)
+        self.assertIn("VERIFY_SCOPE_CHANGED", codes)
+        self.assertIn(concurrent_gate, dependencies["tasks"].task["gates"])
+        self.assertEqual(
+            dependencies["tasks"].task["updated_at"],
+            "2026-07-19T12:00:01Z",
+        )
+
     def test_mutated_verify_path_never_overwrites_unreviewed_document(self) -> None:
         task = _task_with_external_review()
         task["docs"]["verify"] = "LOG.md"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
 import subprocess
@@ -59,6 +60,58 @@ class GitVersionControlAdapter:
 class GithubCliPullRequestAdapter:
     def __init__(self, runner: GhRunner) -> None:
         self._runner = runner
+
+    def find_open(self, spec: PullRequestSpec) -> str | None:
+        args = [
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--base",
+            spec.base_branch,
+            "--head",
+            spec.head_branch,
+            "--json",
+            "url",
+            "--limit",
+            "1",
+        ]
+        if spec.repo_full_name:
+            args.extend(["--repo", spec.repo_full_name])
+        completed = self._runner(
+            Path(spec.workspace),
+            args,
+            error_prefix="failed to find existing pull request",
+        )
+        output = (completed.stdout or "").strip()
+        if not output:
+            return None
+        try:
+            payload = json.loads(output)
+        except json.JSONDecodeError:
+            pull_request_url = _extract_pull_request_url(output)
+            if pull_request_url is not None:
+                return pull_request_url
+            raise GitOperationError(
+                "failed to find existing pull request: gh returned invalid JSON"
+            )
+        if not isinstance(payload, list):
+            raise GitOperationError(
+                "failed to find existing pull request: gh returned a non-array response"
+            )
+        if not payload:
+            return None
+        first = payload[0]
+        if not isinstance(first, dict):
+            raise GitOperationError(
+                "failed to find existing pull request: gh returned an invalid entry"
+            )
+        pull_request_url = _extract_pull_request_url(str(first.get("url") or ""))
+        if pull_request_url is None:
+            raise GitOperationError(
+                "failed to find existing pull request: gh omitted the pull request URL"
+            )
+        return pull_request_url
 
     def create(self, spec: PullRequestSpec) -> str:
         args = [

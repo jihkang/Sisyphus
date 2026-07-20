@@ -793,7 +793,8 @@ class SisyphusVerifyTests(unittest.TestCase):
         }
         task_file.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
 
-        outcome = run_close(self.repo_root, self.config, task["id"], allow_dirty=False)
+        with mock.patch("sisyphus.closeout.is_dirty_worktree", return_value=False):
+            outcome = run_close(self.repo_root, self.config, task["id"], allow_dirty=False)
 
         self.assertTrue(outcome.closed)
         reloaded, _ = load_task_record(self.repo_root, self.config.task_dir, task["id"])

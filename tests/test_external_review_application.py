@@ -45,6 +45,7 @@ class MemoryTasks:
     def __init__(self, task: dict) -> None:
         self.task = deepcopy(task)
         self.saved = 0
+        self.before_update = None
 
     def load(self, task_id: str) -> dict:
         if task_id != self.task["id"]:
@@ -60,6 +61,8 @@ class MemoryTasks:
 
     def update(self, task_id: str, mutator) -> dict:
         task = self.load(task_id)
+        if self.before_update is not None:
+            self.before_update()
         replacement = mutator(task)
         if replacement is not None:
             task = replacement
@@ -197,6 +200,40 @@ class ExternalReviewApplicationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must not collide"):
             external_review_scope_digest(task, {})
 
+    def test_scope_rejects_verification_document_over_evidence_graph(self) -> None:
+        task = _task()
+        task["docs"]["verify"] = "artifacts/evidence/evidence-graph.json"
+
+        with self.assertRaisesRegex(ValueError, "must not collide"):
+            external_review_scope_digest(task, {})
+
+    def test_scope_rejects_verification_output_over_protected_authority(self) -> None:
+        for protected_path in (
+            "task.json",
+            "PLAN.md",
+            "artifacts",
+            "artifacts/reviews/review.md",
+        ):
+            with self.subTest(protected_path=protected_path):
+                task = _task()
+                task["docs"]["verify"] = protected_path
+
+                with self.assertRaisesRegex(ValueError, "must not collide"):
+                    external_review_scope_digest(task, {})
+
+    def test_scope_rejects_promotion_receipt_over_protected_authority(self) -> None:
+        for protected_path in (
+            "PLAN.md",
+            "artifacts",
+            "artifacts/reviews/promotion.json",
+        ):
+            with self.subTest(protected_path=protected_path):
+                task = _task()
+                task["promotion"]["execution_receipt_path"] = protected_path
+
+                with self.assertRaisesRegex(ValueError, "must not collide"):
+                    external_review_scope_digest(task, {})
+
     def test_rejects_review_for_a_stale_head(self) -> None:
         task = _task()
         service = ExternalReviewService(
@@ -248,6 +285,25 @@ class ExternalReviewApplicationTests(unittest.TestCase):
         self.assertEqual(tasks.saved, 0)
         self.assertEqual(tasks.task["verify_status"], "passed")
 
+    def test_rejects_changed_worktree_before_inspecting_the_new_location(self) -> None:
+        task = _task()
+        tasks = MemoryTasks(task)
+        evidence = EvidenceFake(task)
+        service = ExternalReviewService(
+            tasks=tasks,
+            evidence=evidence,
+            clock=FixedClock(),
+        )
+        tasks.before_update = lambda: tasks.task.update(
+            {"worktree_path": "/unreviewed-workspace"}
+        )
+
+        with self.assertRaisesRegex(ValueError, "worktree changed"):
+            service.record(_command())
+
+        self.assertEqual(evidence.inspect_calls, 1)
+        self.assertEqual(tasks.saved, 0)
+
     def test_blocking_findings_derive_failed_status(self) -> None:
         task = _task()
         finding = ExternalReviewFinding(
@@ -290,6 +346,48 @@ class GitExternalReviewEvidenceAdapterTests(unittest.TestCase):
             self.assertEqual(evidence.status, "passed")
             self.assertEqual(evidence.dirty_paths, (ENVELOPE_PATH, REPORT_PATH))
             self.assertTrue(evidence.envelope_digest.startswith("sha256:"))
+
+    def test_scope_changes_when_base_revision_moves_without_head_change(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            task = _initialize_review_repo(root)
+            adapter = GitExternalReviewEvidenceAdapter()
+            original = adapter.scope(str(root), task)
+
+            _git(root, "checkout", "main")
+            (root / "BASE.txt").write_text("advanced base\n", encoding="utf-8")
+            _git(root, "add", "BASE.txt")
+            _git(root, "commit", "-m", "advance base")
+            _git(root, "checkout", "feature/review")
+            moved = adapter.scope(str(root), task)
+
+            self.assertEqual(moved.current_head_sha, original.current_head_sha)
+            self.assertNotEqual(moved.scope_digest, original.scope_digest)
+
+    def test_scope_prefers_remote_base_and_changes_only_after_remote_moves(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "worktree"
+            remote = Path(temp_dir) / "remote.git"
+            root.mkdir()
+            remote.mkdir()
+            task = _initialize_review_repo(root)
+            _git(remote, "init", "--bare")
+            _git(root, "remote", "add", "origin", str(remote))
+            _git(root, "push", "origin", "main")
+            adapter = GitExternalReviewEvidenceAdapter()
+            original = adapter.scope(str(root), task)
+
+            _git(root, "checkout", "main")
+            (root / "BASE.txt").write_text("local base only\n", encoding="utf-8")
+            _git(root, "add", "BASE.txt")
+            _git(root, "commit", "-m", "advance local base")
+            _git(root, "checkout", "feature/review")
+            local_only = adapter.scope(str(root), task)
+
+            self.assertEqual(local_only.scope_digest, original.scope_digest)
+            _git(root, "push", "origin", "main")
+            remote_moved = adapter.scope(str(root), task)
+            self.assertNotEqual(remote_moved.scope_digest, original.scope_digest)
 
     def test_rejects_arbitrary_repository_file_instead_of_review_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -364,11 +462,12 @@ class GitExternalReviewEvidenceAdapterTests(unittest.TestCase):
                     json.dumps(task, indent=2, sort_keys=True) + "\n",
                     encoding="utf-8",
                 )
-            _git(worktree, "init")
+            _git(worktree, "init", "-b", "main")
             _git(worktree, "config", "user.email", "test@example.com")
             _git(worktree, "config", "user.name", "Test")
             _git(worktree, "add", ".")
             _git(worktree, "commit", "-m", "baseline")
+            _git(worktree, "checkout", "-b", "feature/review")
             config = load_config(repo)
             scope = external_review_scope(
                 repo_root=repo,
@@ -413,6 +512,8 @@ def _task() -> dict:
         "last_verify_results": [{"status": "passed"}],
         "worktree_path": "/workspace",
         "task_dir": ".planning/tasks/TF-1",
+        "branch": "feature/review",
+        "base_branch": "main",
         "docs": {"brief": "BRIEF.md", "plan": "PLAN.md", "verify": "VERIFY.md"},
         "gates": [
             {
@@ -421,7 +522,13 @@ def _task() -> dict:
                 "source": "strategy",
             }
         ],
-        "promotion": {"required": True, "status": "promotion_pending", "reverify_required": False},
+        "promotion": {
+            "required": True,
+            "status": "promotion_pending",
+            "reverify_required": False,
+            "base_branch": "main",
+            "head_branch": "feature/review",
+        },
         "test_strategy": {
             "normal_cases": [{"name": "normal", "checked": True}],
             "edge_cases": [{"name": "edge", "checked": True}],
@@ -445,7 +552,7 @@ def _command() -> RecordExternalReviewCommand:
 def _initialize_review_repo(root: Path) -> dict:
     task = _task()
     task["worktree_path"] = str(root)
-    _git(root, "init")
+    _git(root, "init", "-b", "main")
     _git(root, "config", "user.email", "test@example.com")
     _git(root, "config", "user.name", "Test")
     task_dir = root / task["task_dir"]
@@ -454,6 +561,7 @@ def _initialize_review_repo(root: Path) -> dict:
     (task_dir / "PLAN.md").write_text("# Plan\n", encoding="utf-8")
     _git(root, "add", ".")
     _git(root, "commit", "-m", "baseline")
+    _git(root, "checkout", "-b", "feature/review")
     return task
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+import json
 
 from ..contracts.spec_validation import SPEC_VALIDATION_GATE_CODES, SPEC_VALIDATION_SOURCES
 from ..external_review_verification import (
@@ -102,6 +103,7 @@ class VerificationService:
         task = deepcopy(self.tasks.load(task_id))
         task = self.planning_documents.sync_strategy(task_id, task)
         authority_snapshot = _verification_authority_snapshot(task)
+        authority_gates = tuple(deepcopy(task.get("gates", [])))
         verify_document_path = self._verify_document_path(task)
         lifecycle = record_verification_lifecycle_transition(
             task,
@@ -126,6 +128,7 @@ class VerificationService:
                 task_id,
                 candidate=task,
                 authority_snapshot=authority_snapshot,
+                authority_gates=authority_gates,
                 command_results=(),
                 recheck_review=False,
             )
@@ -237,6 +240,7 @@ class VerificationService:
             task_id,
             candidate=task,
             authority_snapshot=authority_snapshot,
+            authority_gates=authority_gates,
             command_results=command_results,
             recheck_review=True,
         )
@@ -265,13 +269,19 @@ class VerificationService:
         *,
         candidate: TaskRecord,
         authority_snapshot: tuple[object, ...],
+        authority_gates: tuple[dict, ...],
         command_results: tuple[CommandExecution, ...],
         recheck_review: bool,
     ) -> TaskRecord:
         def commit(latest: TaskRecord) -> TaskRecord:
             snapshot_matches = _verification_authority_snapshot(latest) == authority_snapshot
-            gates = list(candidate.get("gates", []))
-            if not snapshot_matches:
+            if snapshot_matches:
+                gates = list(candidate.get("gates", []))
+            else:
+                gates = [
+                    *latest.get("gates", []),
+                    *_verification_attempt_gates(candidate, authority_gates),
+                ]
                 gates.append(
                     self._gate(
                         "VERIFY_SCOPE_CHANGED",
@@ -294,7 +304,8 @@ class VerificationService:
                     command_execution_to_record(result) for result in command_results
                 ]
                 committed["last_verified_at"] = candidate.get("last_verified_at")
-                committed["updated_at"] = candidate.get("updated_at")
+                if not committed.get("updated_at"):
+                    committed["updated_at"] = candidate.get("updated_at")
                 committed.setdefault("meta", {})["evidence_graph_required"] = bool(
                     candidate.get("meta", {}).get("evidence_graph_required")
                 )
@@ -623,10 +634,42 @@ def _required_external_review(task: TaskRecord) -> dict | None:
 def _verification_authority_snapshot(task: TaskRecord) -> tuple[object, ...]:
     return (
         external_review_scope_digest(task, {}),
+        _canonical_gate_snapshot(task.get("gates", [])),
         task.get("updated_at"),
         int(task.get("audit_attempts", 0)),
         task.get("verify_status"),
         task.get("last_verified_at"),
+    )
+
+
+def _verification_attempt_gates(
+    candidate: TaskRecord,
+    authority_gates: tuple[dict, ...],
+) -> list[dict]:
+    authority_identities = {_gate_identity(gate) for gate in authority_gates}
+    return [
+        gate
+        for gate in candidate.get("gates", [])
+        if _gate_identity(gate) not in authority_identities
+    ]
+
+
+def _gate_identity(gate: dict) -> str:
+    semantic_gate = {key: value for key, value in gate.items() if key != "created_at"}
+    return json.dumps(
+        semantic_gate,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def _canonical_gate_snapshot(gates: object) -> str:
+    return json.dumps(
+        gates,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
     )
 
 

@@ -48,6 +48,7 @@ from ..review_scope import (
     external_review_post_verification_paths,
     external_review_recorded_output_paths,
     PROMOTION_OUTPUT_PATHS_FIELD,
+    validate_promotion_execution_receipt_path,
 )
 
 
@@ -148,6 +149,31 @@ class PromotionExecutionService:
             raise ValueError(f"task `{command.task_id}` is missing a head branch for promotion")
 
         base = self.resolve_base(task, explicit_base_branch=command.base_branch)
+        if review is not None:
+            reviewed_base = self.resolve_base(task)
+            reviewed_remote = str(promotion.get("remote_name") or "origin").strip()
+            reviewed_head = (
+                str(promotion.get("head_branch") or "").strip()
+                or str(task.get("branch") or "").strip()
+            )
+            if remote != reviewed_remote:
+                self._block_for_stale_review(
+                    task,
+                    promotion,
+                    message="promotion remote differs from the externally reviewed target",
+                )
+            if head_branch != reviewed_head:
+                self._block_for_stale_review(
+                    task,
+                    promotion,
+                    message="promotion head branch differs from the externally reviewed target",
+                )
+            if base.base_branch != reviewed_base.base_branch:
+                self._block_for_stale_review(
+                    task,
+                    promotion,
+                    message="promotion base branch differs from the externally reviewed target",
+                )
         title = str(command.title or "").strip() or default_promotion_title(task)
         body = str(command.body or "").strip() or default_promotion_body(task, title=title)
         commit_message = (
@@ -181,6 +207,7 @@ class PromotionExecutionService:
                 promotion.get("execution_receipt_path")
                 or DEFAULT_PROMOTION_EXECUTION_RECEIPT_PATH
             )
+        receipt_path = validate_promotion_execution_receipt_path(task, receipt_path)
         promotion.update(
             {
                 "execution_receipt_path": receipt_path,
@@ -198,6 +225,7 @@ class PromotionExecutionService:
         if repo_full_name:
             promotion["repo_full_name"] = repo_full_name
 
+        created_commit = False
         if reviewed_commit_sha is not None:
             commit_sha = reviewed_commit_sha
             promotion["head_sha"] = commit_sha
@@ -207,6 +235,7 @@ class PromotionExecutionService:
             commit_sha = str(promotion.get("head_sha") or "").strip()
             if staged_changes:
                 commit_sha = self.version_control.commit(workspace, commit_message)
+                created_commit = True
                 promotion.update(
                     {
                         "required": True,
@@ -222,7 +251,8 @@ class PromotionExecutionService:
                 raise PromotionExecutionError("no staged changes available for promotion")
 
         already_pushed = (
-            current_status in {PROMOTION_STATUS_PUSHED, PROMOTION_STATUS_PR_OPEN}
+            not created_commit
+            and current_status in {PROMOTION_STATUS_PUSHED, PROMOTION_STATUS_PR_OPEN}
             and str(promotion.get("head_sha") or "").strip() == commit_sha
             and bool(promotion.get("pushed_at"))
         )
@@ -245,22 +275,27 @@ class PromotionExecutionService:
             self._write_execution_receipt(task, receipt_path, draft=command.draft)
 
         if not task_has_open_pr(task):
-            pr_url = self.pull_requests.create(
-                PullRequestSpec(
-                    workspace=workspace,
-                    repo_full_name=repo_full_name or None,
-                    base_branch=base.base_branch,
-                    head_branch=head_branch,
-                    title=title,
-                    body=body,
-                    draft=command.draft,
-                )
+            pull_request_spec = PullRequestSpec(
+                workspace=workspace,
+                repo_full_name=repo_full_name or None,
+                base_branch=base.base_branch,
+                head_branch=head_branch,
+                title=title,
+                body=body,
+                draft=command.draft,
             )
+            pr_url = None
+            if current_status in {PROMOTION_STATUS_PUSHED, PROMOTION_STATUS_PR_OPEN}:
+                pr_url = self.pull_requests.find_open(pull_request_spec)
+            if pr_url is None:
+                pr_url = self.pull_requests.create(pull_request_spec)
             promotion["status"] = PROMOTION_STATUS_PR_OPEN
             promotion["pr_url"] = pr_url
             promotion["pr_number"] = pull_request_number_from_url(pr_url)
             promotion["pr_opened_at"] = self.clock.now()
             self.tasks.save(task)
+            self._write_execution_receipt(task, receipt_path, draft=command.draft)
+        else:
             self._write_execution_receipt(task, receipt_path, draft=command.draft)
 
         return PromotionExecutionResult(

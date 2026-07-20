@@ -17,7 +17,7 @@ from ...application.review_scope import (
     external_review_scope_digest,
     external_review_scope_document_paths,
 )
-from ...gitops import GitOperationError, current_head_sha, list_dirty_paths
+from ...gitops import GitOperationError, current_head_sha, list_dirty_paths, revision_sha
 from ..workspace import SecureWorkspaceFiles
 from ..workspace.errors import WorkspaceFileSafetyError
 
@@ -65,7 +65,11 @@ class GitExternalReviewEvidenceAdapter:
                     document_digests[relative_path] = _digest(content.encode("utf-8"))
             return ExternalReviewScopeEvidence(
                 current_head_sha=current_head_sha(root).lower(),
-                scope_digest=external_review_scope_digest(task, document_digests),
+                scope_digest=external_review_scope_digest(
+                    task,
+                    document_digests,
+                    base_revision_sha=_base_revision_sha(root, task),
+                ),
                 document_digests=tuple(sorted(document_digests.items())),
             )
         except ExternalReviewEvidenceError:
@@ -315,6 +319,34 @@ def _workspace_root(workspace: str) -> Path:
     if not root.is_absolute() or not root.is_dir():
         raise ExternalReviewEvidenceError(f"task worktree does not exist: {workspace}")
     return root
+
+
+def _base_revision_sha(root: Path, task: Mapping[str, object]) -> str:
+    promotion = task.get("promotion")
+    promotion_mapping = promotion if isinstance(promotion, Mapping) else {}
+    base_branch = str(
+        promotion_mapping.get("base_override")
+        or promotion_mapping.get("resolved_parent_branch")
+        or promotion_mapping.get("base_branch")
+        or task.get("base_branch")
+        or ""
+    ).strip()
+    if not base_branch:
+        raise ValueError("external review scope requires a promotion base branch")
+    remote_name = str(promotion_mapping.get("remote_name") or "origin").strip()
+    candidates = (
+        f"refs/remotes/{remote_name}/{base_branch}",
+        f"refs/heads/{base_branch}",
+        base_branch,
+    )
+    for candidate in candidates:
+        try:
+            return revision_sha(root, candidate).lower()
+        except GitOperationError:
+            continue
+    raise ValueError(
+        f"external review base branch `{base_branch}` cannot be resolved to a commit"
+    )
 
 
 def _digest(payload: bytes) -> str:
