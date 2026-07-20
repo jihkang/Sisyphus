@@ -17,6 +17,7 @@ from ..infra.orchestration.common_adapters import (
     FileTaskRecordAdapter,
     ManualInterventionAdapter,
 )
+from ..infra.verification import GitExternalReviewEvidenceAdapter
 
 
 def build_closeout_service(
@@ -33,6 +34,7 @@ def build_closeout_service(
         events=EventPublisherAdapter(repo_root, config),
         interventions=ManualInterventionAdapter(repo_root, config),
         clock=clock,
+        external_reviews=GitExternalReviewEvidenceAdapter(),
     )
 
 

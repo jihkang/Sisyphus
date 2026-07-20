@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 import unittest
 
+from sisyphus.application.ports.review import ExternalReviewEvidence
 from sisyphus.application.use_cases.closeout import CloseoutService
 
 
@@ -48,6 +49,43 @@ class WorktreeFake:
     def is_dirty(self, task: dict) -> bool:
         self.calls.append("worktree.is_dirty")
         return self.dirty
+
+
+class ExternalReviewsFake:
+    def __init__(
+        self,
+        *,
+        current_head_sha: str = "a" * 40,
+        dirty_paths: tuple[str, ...] = (),
+    ) -> None:
+        self.current_head_sha = current_head_sha
+        self.dirty_paths = dirty_paths
+        self.inspect_calls = 0
+
+    def scope(self, workspace: str, task: dict):
+        raise AssertionError("closeout must inspect the recorded envelope")
+
+    def inspect(self, workspace: str, envelope_path: str, task: dict):
+        self.inspect_calls += 1
+        review = task["test_strategy"]["external_llm"]
+        return ExternalReviewEvidence(
+            envelope_path=envelope_path,
+            envelope_digest=review["envelope_digest"],
+            envelope_size_bytes=256,
+            provider=review["provider"],
+            reviewer=review["reviewer"],
+            reviewed_head_sha=review["reviewed_head_sha"],
+            scope_digest=review["scope_digest"],
+            report_path=review["report_path"],
+            report_digest=review["report_digest"],
+            report_size_bytes=128,
+            summary="No blocking findings.",
+            findings=(),
+            current_head_sha=self.current_head_sha,
+            current_scope_digest=review["scope_digest"],
+            document_digests=(),
+            dirty_paths=self.dirty_paths,
+        )
 
 
 class EventsFake:
@@ -147,12 +185,63 @@ class CloseoutApplicationTests(unittest.TestCase):
         self.assertEqual(dependencies["interventions"].requests, [])
 
     def test_close_rejects_verify_status_not_bound_to_current_external_review(self) -> None:
-        task = _task()
-        task["test_strategy"] = {"external_llm": _review_with_binding()}
+        task = _reviewed_task()
         task["test_strategy"]["external_llm"]["report_digest"] = "sha256:" + "c" * 64
         service, _dependencies, _calls = _service(task)
 
         outcome = service.close("TF-1", allow_dirty=False)
+
+        self.assertFalse(outcome.closed)
+        self.assertIn("EXTERNAL_LLM_REVIEW_STALE", {gate["code"] for gate in outcome.gates})
+
+    def test_close_reinspects_review_head_even_for_clean_commit(self) -> None:
+        task = _reviewed_task()
+        service, _dependencies, _calls = _service(
+            task,
+            external_review=ExternalReviewsFake(current_head_sha="c" * 40),
+        )
+
+        outcome = service.close("TF-1", allow_dirty=True)
+
+        self.assertFalse(outcome.closed)
+        self.assertIn("EXTERNAL_LLM_REVIEW_STALE", {gate["code"] for gate in outcome.gates})
+
+    def test_allow_dirty_does_not_bypass_unreviewed_code_change(self) -> None:
+        task = _reviewed_task()
+        service, _dependencies, _calls = _service(
+            task,
+            dirty=True,
+            external_review=ExternalReviewsFake(
+                dirty_paths=("src/sisyphus/runtime.py",),
+            ),
+        )
+
+        outcome = service.close("TF-1", allow_dirty=True)
+
+        self.assertFalse(outcome.closed)
+        self.assertIn("EXTERNAL_LLM_REVIEW_STALE", {gate["code"] for gate in outcome.gates})
+
+    def test_legacy_constructor_remains_valid_for_task_without_review(self) -> None:
+        _service_with_adapter, dependencies, _calls = _service(_task())
+        legacy_dependencies = {
+            key: value
+            for key, value in dependencies.items()
+            if key != "external_reviews"
+        }
+
+        outcome = CloseoutService(**legacy_dependencies).close("TF-1", allow_dirty=False)
+
+        self.assertTrue(outcome.closed)
+
+    def test_review_required_task_fails_closed_without_evidence_adapter(self) -> None:
+        _service_with_adapter, dependencies, _calls = _service(_reviewed_task())
+        legacy_dependencies = {
+            key: value
+            for key, value in dependencies.items()
+            if key != "external_reviews"
+        }
+
+        outcome = CloseoutService(**legacy_dependencies).close("TF-1", allow_dirty=True)
 
         self.assertFalse(outcome.closed)
         self.assertIn("EXTERNAL_LLM_REVIEW_STALE", {gate["code"] for gate in outcome.gates})
@@ -173,6 +262,7 @@ def _service(
     dirty: bool = False,
     evidence_gates: tuple[dict, ...] = (),
     event_failure: bool = False,
+    external_review: ExternalReviewsFake | None = None,
 ) -> tuple[CloseoutService, dict[str, object], list[str]]:
     calls: list[str] = []
     dependencies = {
@@ -182,6 +272,7 @@ def _service(
         "events": EventsFake(calls, fail=event_failure),
         "interventions": InterventionsFake(calls),
         "clock": FixedClock(),
+        "external_reviews": external_review or ExternalReviewsFake(),
     }
     return CloseoutService(**dependencies), dependencies, calls
 
@@ -214,12 +305,36 @@ def _review_with_binding() -> dict:
     return {
         "required": True,
         "status": "passed",
+        "provider": "independent Codex reviewer",
+        "reviewer": "independent-codex-agent",
+        "envelope_path": ".planning/tasks/TF-1/artifacts/reviews/review.json",
+        "report_path": ".planning/tasks/TF-1/artifacts/reviews/review.md",
+        "finding_count": 0,
+        "blocking_finding_count": 0,
+        "verification_output_paths": [
+            "VERIFY.md",
+            "artifacts/evidence/evidence-graph.json",
+        ],
+        "promotion_output_paths": [],
         **values,
         "verification_binding": {
             **values,
             "verified_at": "2026-07-19T12:00:00Z",
         },
     }
+
+
+def _reviewed_task() -> dict:
+    task = _task()
+    task.update(
+        {
+            "worktree_path": "/workspace",
+            "task_dir": ".planning/tasks/TF-1",
+            "docs": {"verify": "VERIFY.md"},
+            "test_strategy": {"external_llm": _review_with_binding()},
+        }
+    )
+    return task
 
 
 if __name__ == "__main__":

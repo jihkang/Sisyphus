@@ -44,7 +44,10 @@ from ..results.artifacts import ArtifactRef
 from ..results.promotion import PromotionExecutionResult
 from ..review_scope import (
     external_review_binding_is_current,
+    external_review_post_promotion_paths,
     external_review_post_verification_paths,
+    external_review_recorded_output_paths,
+    PROMOTION_OUTPUT_PATHS_FIELD,
 )
 
 
@@ -106,6 +109,13 @@ class PromotionExecutionService:
                     promotion,
                     message="external review evidence adapter is unavailable",
                 )
+            try:
+                allowed_generated_paths = (
+                    *external_review_post_verification_paths(task, review),
+                    *external_review_post_promotion_paths(task, review),
+                )
+            except (TypeError, ValueError):
+                allowed_generated_paths = ()
             review_gates = collect_external_review_evidence_gates(
                 task,
                 review,
@@ -116,9 +126,7 @@ class PromotionExecutionService:
                     source,
                     created_at=self.clock.now(),
                 ),
-                additional_allowed_dirty_paths=external_review_post_verification_paths(
-                    task
-                ),
+                additional_allowed_dirty_paths=allowed_generated_paths,
             )
             if review_gates:
                 self._block_for_stale_review(
@@ -156,10 +164,23 @@ class PromotionExecutionService:
                 or ""
             )
         )
-        receipt_path = str(
-            promotion.get("execution_receipt_path")
-            or DEFAULT_PROMOTION_EXECUTION_RECEIPT_PATH
-        )
+        if review is not None:
+            recorded_receipt_paths = external_review_recorded_output_paths(
+                review,
+                field=PROMOTION_OUTPUT_PATHS_FIELD,
+            )
+            if len(recorded_receipt_paths) != 1:
+                self._block_for_stale_review(
+                    task,
+                    promotion,
+                    message="external review must bind exactly one promotion receipt",
+                )
+            receipt_path = recorded_receipt_paths[0]
+        else:
+            receipt_path = str(
+                promotion.get("execution_receipt_path")
+                or DEFAULT_PROMOTION_EXECUTION_RECEIPT_PATH
+            )
         promotion.update(
             {
                 "execution_receipt_path": receipt_path,
@@ -200,22 +221,28 @@ class PromotionExecutionService:
             elif not commit_sha:
                 raise PromotionExecutionError("no staged changes available for promotion")
 
-        if reviewed_commit_sha is not None:
-            self.version_control.push_revision(
-                workspace,
-                remote,
-                reviewed_commit_sha,
-                head_branch,
-            )
-        else:
-            self.version_control.push(workspace, remote, head_branch)
-        promotion["status"] = (
-            PROMOTION_STATUS_PR_OPEN if task_has_open_pr(task) else PROMOTION_STATUS_PUSHED
+        already_pushed = (
+            current_status in {PROMOTION_STATUS_PUSHED, PROMOTION_STATUS_PR_OPEN}
+            and str(promotion.get("head_sha") or "").strip() == commit_sha
+            and bool(promotion.get("pushed_at"))
         )
-        promotion["head_sha"] = commit_sha
-        promotion["pushed_at"] = self.clock.now()
-        self.tasks.save(task)
-        self._write_execution_receipt(task, receipt_path, draft=command.draft)
+        if not already_pushed:
+            if reviewed_commit_sha is not None:
+                self.version_control.push_revision(
+                    workspace,
+                    remote,
+                    reviewed_commit_sha,
+                    head_branch,
+                )
+            else:
+                self.version_control.push(workspace, remote, head_branch)
+            promotion["status"] = (
+                PROMOTION_STATUS_PR_OPEN if task_has_open_pr(task) else PROMOTION_STATUS_PUSHED
+            )
+            promotion["head_sha"] = commit_sha
+            promotion["pushed_at"] = self.clock.now()
+            self.tasks.save(task)
+            self._write_execution_receipt(task, receipt_path, draft=command.draft)
 
         if not task_has_open_pr(task):
             pr_url = self.pull_requests.create(

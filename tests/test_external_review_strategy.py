@@ -26,6 +26,8 @@ class ExternalReviewStrategyTests(unittest.TestCase):
         self.assertEqual(review["report_digest"], "sha256:" + "b" * 64)
         self.assertEqual(review["envelope_digest"], "sha256:" + "e" * 64)
         self.assertEqual(review["verification_binding"]["scope_digest"], "sha256:" + "s" * 64)
+        self.assertEqual(review["verification_output_paths"], ["VERIFY.md"])
+        self.assertEqual(review["promotion_output_paths"], ["receipt.json"])
 
     def test_plan_sync_invalidates_evidence_when_review_policy_changes(self) -> None:
         task = {"type": "feature", "test_strategy": {"external_llm": _recorded_review()}}
@@ -61,6 +63,8 @@ def _recorded_review() -> dict:
         "finding_count": 0,
         "blocking_finding_count": 0,
         "summary": "No blocking findings.",
+        "verification_output_paths": ["VERIFY.md"],
+        "promotion_output_paths": ["receipt.json"],
         "verification_binding": {
             "envelope_digest": "sha256:" + "e" * 64,
             "report_digest": "sha256:" + "b" * 64,

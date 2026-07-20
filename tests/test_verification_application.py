@@ -92,9 +92,12 @@ class CommandsFake:
     def __init__(self, status: VerificationStatus = VerificationStatus.PASSED) -> None:
         self.status = status
         self.calls: list[tuple[str, tuple[str, ...]]] = []
+        self.on_run = None
 
     def run(self, task_id: str, commands: tuple[str, ...]) -> tuple[CommandExecution, ...]:
         self.calls.append((task_id, commands))
+        if self.on_run is not None:
+            self.on_run()
         if not commands:
             return ()
         exit_code = 0 if self.status == VerificationStatus.PASSED else 1
@@ -124,6 +127,7 @@ class ExternalReviewsFake:
     def __init__(self, evidence: ExternalReviewEvidence | None = None) -> None:
         self.evidence = evidence
         self.evidence_after: ExternalReviewEvidence | None = None
+        self.evidence_after_call = 2
         self.calls: list[tuple[str, str]] = []
 
     def scope(self, workspace: str, task: dict) -> ExternalReviewScopeEvidence:
@@ -144,7 +148,7 @@ class ExternalReviewsFake:
         self.calls.append((workspace, envelope_path))
         if self.evidence is None:
             raise AssertionError("external review evidence was not expected")
-        if len(self.calls) > 1 and self.evidence_after is not None:
+        if len(self.calls) >= self.evidence_after_call and self.evidence_after is not None:
             return self.evidence_after
         return self.evidence
 
@@ -306,6 +310,65 @@ class VerificationApplicationTests(unittest.TestCase):
         review = dependencies["tasks"].task["test_strategy"]["external_llm"]
         self.assertNotIn("verification_binding", review)
 
+    def test_persisted_command_mutation_is_preserved_and_fails_atomic_commit(self) -> None:
+        task = _task_with_external_review()
+        service, dependencies = _service(
+            task,
+            external_review=_external_review_evidence(),
+        )
+        dependencies["commands"].on_run = lambda: dependencies["tasks"].task.update(
+            {"verify_commands": ["python -m unreviewed"]}
+        )
+
+        outcome = service.verify("TF-1")
+
+        self.assertEqual(outcome.status, "failed")
+        self.assertIn("VERIFY_SCOPE_CHANGED", {gate["code"] for gate in outcome.gates})
+        persisted = dependencies["tasks"].task
+        self.assertEqual(persisted["verify_commands"], ["python -m unreviewed"])
+        self.assertNotIn(
+            "verification_binding",
+            persisted["test_strategy"]["external_llm"],
+        )
+
+    def test_mutated_verify_path_never_overwrites_unreviewed_document(self) -> None:
+        task = _task_with_external_review()
+        task["docs"]["verify"] = "LOG.md"
+        service, dependencies = _service(
+            task,
+            external_review=_external_review_evidence(),
+        )
+
+        outcome = service.verify("TF-1")
+
+        self.assertEqual(outcome.status, "failed")
+        self.assertIn("EXTERNAL_LLM_REVIEW_STALE", {gate["code"] for gate in outcome.gates})
+        self.assertEqual(
+            {path for path, _content in dependencies["documents"].writes},
+            {"VERIFY.md"},
+        )
+        self.assertNotIn("LOG.md", dependencies["documents"].contents)
+
+    def test_review_change_after_generated_outputs_invalidates_binding(self) -> None:
+        task = _task_with_external_review()
+        service, dependencies = _service(
+            task,
+            external_review=_external_review_evidence(),
+        )
+        dependencies["external_reviews"].evidence_after_call = 3
+        dependencies["external_reviews"].evidence_after = _external_review_evidence(
+            current_head_sha="c" * 40,
+        )
+
+        outcome = service.verify("TF-1")
+
+        self.assertEqual(outcome.status, "failed")
+        self.assertIn("EXTERNAL_LLM_REVIEW_STALE", {gate["code"] for gate in outcome.gates})
+        self.assertNotIn(
+            "verification_binding",
+            dependencies["tasks"].task["test_strategy"]["external_llm"],
+        )
+
 
 def _service(
     task: dict,
@@ -379,6 +442,11 @@ def _task_with_external_review() -> dict:
         "report_digest": "sha256:" + "b" * 64,
         "finding_count": 0,
         "blocking_finding_count": 0,
+        "verification_output_paths": [
+            "VERIFY.md",
+            "artifacts/evidence/evidence-graph.json",
+        ],
+        "promotion_output_paths": ["artifacts/promotion/open_pr_receipt.json"],
     }
     task["promotion"] = {"required": True, "reverify_required": True}
     return task

@@ -8,7 +8,13 @@ from ..ports.clock import ClockPort
 from ..ports.review import ExternalReviewEvidencePort
 from ..ports.workflow import TaskRecordPort
 from ..results.review import ExternalReviewRecordResult, ExternalReviewScopeResult
-from ..review_scope import external_review_scope_digest
+from ..review_scope import (
+    PROMOTION_OUTPUT_PATHS_FIELD,
+    VERIFICATION_OUTPUT_PATHS_FIELD,
+    external_review_promotion_output_paths,
+    external_review_scope_digest,
+    external_review_verification_output_paths,
+)
 
 
 _REVIEW_POLICY_FIELDS = ("required", "provider", "purpose", "trigger")
@@ -101,6 +107,12 @@ class ExternalReviewService:
                 for finding in inspected.findings
             ],
             "summary": inspected.summary,
+            VERIFICATION_OUTPUT_PATHS_FIELD: list(
+                external_review_verification_output_paths(task)
+            ),
+            PROMOTION_OUTPUT_PATHS_FIELD: list(
+                external_review_promotion_output_paths(task)
+            ),
         }
 
         def persist(latest: dict) -> None:

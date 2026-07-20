@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable
 
 from .ports.review import ExternalReviewEvidenceError, ExternalReviewEvidencePort
 from .ports.workflow import TaskRecord
-from .review_scope import external_review_binding
+from .review_scope import external_review_binding, validate_external_review_output_paths
 
 
 GateFactory = Callable[[str, str, str], dict]
@@ -40,6 +40,16 @@ def collect_external_review_evidence_gates(
             gate(
                 "EXTERNAL_LLM_REVIEW_STALE",
                 "external LLM review is missing head-bound evidence metadata",
+                "strategy",
+            )
+        ]
+    try:
+        validate_external_review_output_paths(task, review)
+    except (TypeError, ValueError) as exc:
+        return [
+            gate(
+                "EXTERNAL_LLM_REVIEW_STALE",
+                f"external LLM review output paths are stale: {exc}",
                 "strategy",
             )
         ]

@@ -62,6 +62,8 @@ _EXTERNAL_REVIEW_EVIDENCE_FIELDS = (
     "findings",
     "summary",
     "verification_binding",
+    "verification_output_paths",
+    "promotion_output_paths",
 )
 
 

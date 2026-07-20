@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 
 from ..contracts.spec_validation import SPEC_VALIDATION_GATE_CODES, SPEC_VALIDATION_SOURCES
@@ -31,6 +32,11 @@ from ..ports.verification import (
 )
 from ..ports.workflow import EventPublisherPort, TaskRecord, TaskRecordPort, WorkflowEvent
 from ..results.verification import VerificationOutcome
+from ..review_scope import (
+    external_review_post_verification_paths,
+    external_review_scope_digest,
+    external_review_verify_document_path,
+)
 from ..verification_projection import looks_like_unfilled_template, render_verify_markdown
 from ..verification_records import (
     blocked_phase,
@@ -55,6 +61,7 @@ VERIFY_GATE_CODES = {
     "TEST_STRATEGY_MISSING",
     "EXTERNAL_LLM_REVIEW_REQUIRED",
     "EXTERNAL_LLM_REVIEW_STALE",
+    "VERIFY_SCOPE_CHANGED",
     "VERIFY_REQUIRED",
     "PLAN_APPROVAL_REQUIRED",
     "PLAN_CHANGES_REQUESTED",
@@ -92,8 +99,10 @@ class VerificationService:
     clock: ClockPort
 
     def verify(self, task_id: str) -> VerificationOutcome:
-        task = self.tasks.load(task_id)
+        task = deepcopy(self.tasks.load(task_id))
         task = self.planning_documents.sync_strategy(task_id, task)
+        authority_snapshot = _verification_authority_snapshot(task)
+        verify_document_path = self._verify_document_path(task)
         lifecycle = record_verification_lifecycle_transition(
             task,
             self.conformance.snapshot(task),
@@ -107,12 +116,25 @@ class VerificationService:
             task["workflow_phase"] = blocked_phase(lifecycle)
             task["last_verify_results"] = []
             task["last_verified_at"] = self.clock.now()
+            candidate_projection = _verification_projection(task)
             artifact = self.documents.write(
                 task_id,
-                str(task["docs"]["verify"]),
+                verify_document_path,
                 render_verify_markdown(task, ()),
             )
-            self.tasks.save(task)
+            task = self._commit_latest(
+                task_id,
+                candidate=task,
+                authority_snapshot=authority_snapshot,
+                command_results=(),
+                recheck_review=False,
+            )
+            if _verification_projection(task) != candidate_projection:
+                artifact = self.documents.write(
+                    task_id,
+                    verify_document_path,
+                    render_verify_markdown(task, ()),
+                )
             self._publish_completion(task)
             return _outcome(task, (), artifact)
 
@@ -169,16 +191,6 @@ class VerificationService:
                 task_id,
                 tuple(str(command) for command in task.get("verify_commands", [])),
             )
-            external_llm = task.get("test_strategy", {}).get("external_llm", {})
-            if external_llm.get("required") and external_llm.get("status") == "passed":
-                gates.extend(
-                    collect_external_review_evidence_gates(
-                        task,
-                        external_llm,
-                        evidence=self.external_reviews,
-                        gate=self._gate,
-                    )
-                )
         task["last_verify_results"] = [
             command_execution_to_record(result) for result in command_results
         ]
@@ -198,11 +210,7 @@ class VerificationService:
         task["verify_status"] = (
             VerificationStatus.PASSED.value if passed else VerificationStatus.FAILED.value
         )
-        record_external_review_verification_binding(
-            task,
-            passed=passed,
-            verified_at=str(task.get("last_verified_at") or self.clock.now()),
-        )
+        record_external_review_verification_binding(task, passed=False, verified_at=self.clock.now())
         task["status"] = "verified" if passed else "blocked"
         if passed:
             task["stage"] = "done"
@@ -219,14 +227,151 @@ class VerificationService:
 
         artifact = self.documents.write(
             task_id,
-            str(task["docs"]["verify"]),
+            verify_document_path,
             render_verify_markdown(task, command_results),
         )
         task.setdefault("meta", {})["evidence_graph_required"] = True
         self.evidence.write(task_id, task, command_results)
-        self.tasks.save(task)
+        candidate_projection = _verification_projection(task)
+        task = self._commit_latest(
+            task_id,
+            candidate=task,
+            authority_snapshot=authority_snapshot,
+            command_results=command_results,
+            recheck_review=True,
+        )
+        if _verification_projection(task) != candidate_projection:
+            artifact = self.documents.write(
+                task_id,
+                verify_document_path,
+                render_verify_markdown(task, command_results),
+            )
+            self.evidence.write(task_id, task, command_results)
+        post_write_gates = self._collect_post_write_review_gates(task)
+        if post_write_gates:
+            task = self._fail_after_output_change(task_id, post_write_gates)
+            artifact = self.documents.write(
+                task_id,
+                verify_document_path,
+                render_verify_markdown(task, command_results),
+            )
+            self.evidence.write(task_id, task, command_results)
         self._publish_completion(task)
         return _outcome(task, command_results, artifact)
+
+    def _commit_latest(
+        self,
+        task_id: str,
+        *,
+        candidate: TaskRecord,
+        authority_snapshot: tuple[object, ...],
+        command_results: tuple[CommandExecution, ...],
+        recheck_review: bool,
+    ) -> TaskRecord:
+        def commit(latest: TaskRecord) -> TaskRecord:
+            snapshot_matches = _verification_authority_snapshot(latest) == authority_snapshot
+            gates = list(candidate.get("gates", []))
+            if not snapshot_matches:
+                gates.append(
+                    self._gate(
+                        "VERIFY_SCOPE_CHANGED",
+                        "task verification authority changed while verify commands were running",
+                        "verify",
+                    )
+                )
+            if recheck_review:
+                gates.extend(self._collect_review_policy_gates(latest))
+
+            if snapshot_matches:
+                committed = deepcopy(candidate)
+            else:
+                committed = latest
+                committed["audit_attempts"] = max(
+                    int(committed.get("audit_attempts", 0)),
+                    int(candidate.get("audit_attempts", 0)),
+                )
+                committed["last_verify_results"] = [
+                    command_execution_to_record(result) for result in command_results
+                ]
+                committed["last_verified_at"] = candidate.get("last_verified_at")
+                committed["updated_at"] = candidate.get("updated_at")
+                committed.setdefault("meta", {})["evidence_graph_required"] = bool(
+                    candidate.get("meta", {}).get("evidence_graph_required")
+                )
+
+            committed["gates"] = dedupe_gate_records(gates)
+            passed = not committed["gates"]
+            committed["verify_status"] = (
+                VerificationStatus.PASSED.value
+                if passed
+                else VerificationStatus.FAILED.value
+            )
+            committed["status"] = "verified" if passed else "blocked"
+            if passed:
+                committed["stage"] = "done"
+                committed["workflow_phase"] = "verified"
+            elif not snapshot_matches:
+                committed["stage"] = "audit"
+                committed["workflow_phase"] = "execution"
+            record_external_review_verification_binding(
+                committed,
+                passed=passed,
+                verified_at=str(committed.get("last_verified_at") or self.clock.now()),
+            )
+            return committed
+
+        return self.tasks.update(task_id, commit)
+
+    def _collect_post_write_review_gates(self, task: TaskRecord) -> list[dict]:
+        if task.get("verify_status") != VerificationStatus.PASSED.value:
+            return []
+        review = _required_external_review(task)
+        if review is None:
+            return []
+        return self._collect_external_review_evidence_gates(task, review)
+
+    def _collect_review_policy_gates(self, task: TaskRecord) -> list[dict]:
+        review = _required_external_review(task)
+        if review is None:
+            return []
+        if review.get("status") != "passed":
+            return [
+                self._gate(
+                    "EXTERNAL_LLM_REVIEW_REQUIRED",
+                    "required external LLM review is not complete",
+                    "strategy",
+                )
+            ]
+        return self._collect_external_review_evidence_gates(task, review)
+
+    def _fail_after_output_change(
+        self,
+        task_id: str,
+        gates: list[dict],
+    ) -> TaskRecord:
+        def fail(latest: TaskRecord) -> TaskRecord:
+            latest["gates"] = dedupe_gate_records([*latest.get("gates", []), *gates])
+            latest["verify_status"] = VerificationStatus.FAILED.value
+            latest["status"] = "blocked"
+            latest["stage"] = "audit"
+            latest["workflow_phase"] = "execution"
+            record_external_review_verification_binding(
+                latest,
+                passed=False,
+                verified_at=str(latest.get("last_verified_at") or self.clock.now()),
+            )
+            return latest
+
+        return self.tasks.update(task_id, fail)
+
+    def _verify_document_path(self, task: TaskRecord) -> str:
+        review = _required_external_review(task)
+        try:
+            return external_review_verify_document_path(task, review)
+        except (TypeError, ValueError):
+            if review is None:
+                raise
+            return "VERIFY.md"
 
     def _collect_doc_gates(self, task_id: str, task: TaskRecord) -> list[dict]:
         gates: list[dict] = []
@@ -376,15 +521,25 @@ class VerificationService:
                 )
             )
         elif external_llm.get("required"):
-            gates.extend(
-                collect_external_review_evidence_gates(
-                    task,
-                    external_llm,
-                    evidence=self.external_reviews,
-                    gate=self._gate,
-                )
-            )
+            gates.extend(self._collect_external_review_evidence_gates(task, external_llm))
         return gates
+
+    def _collect_external_review_evidence_gates(
+        self,
+        task: TaskRecord,
+        review: dict,
+    ) -> list[dict]:
+        try:
+            allowed_paths = external_review_post_verification_paths(task, review)
+        except (TypeError, ValueError):
+            allowed_paths = ()
+        return collect_external_review_evidence_gates(
+            task,
+            review,
+            evidence=self.external_reviews,
+            gate=self._gate,
+            additional_allowed_dirty_paths=allowed_paths,
+        )
 
     def _evaluate_and_record_design(self, task: TaskRecord) -> None:
         ensure_task_design_defaults(task)
@@ -452,6 +607,39 @@ def _outcome(task: TaskRecord, commands: tuple[CommandExecution, ...], artifact)
         gates=tuple(task["gates"]),
         command_results=commands,
         verify_artifact=artifact,
+    )
+
+
+def _required_external_review(task: TaskRecord) -> dict | None:
+    strategy = task.get("test_strategy")
+    if not isinstance(strategy, dict):
+        return None
+    review = strategy.get("external_llm")
+    if not isinstance(review, dict) or not review.get("required"):
+        return None
+    return review
+
+
+def _verification_authority_snapshot(task: TaskRecord) -> tuple[object, ...]:
+    return (
+        external_review_scope_digest(task, {}),
+        task.get("updated_at"),
+        int(task.get("audit_attempts", 0)),
+        task.get("verify_status"),
+        task.get("last_verified_at"),
+    )
+
+
+def _verification_projection(task: TaskRecord) -> tuple[object, ...]:
+    return (
+        task.get("verify_status"),
+        task.get("status"),
+        task.get("stage"),
+        task.get("workflow_phase"),
+        tuple(
+            (gate.get("code"), gate.get("message"), gate.get("source"))
+            for gate in task.get("gates", [])
+        ),
     )
 
 

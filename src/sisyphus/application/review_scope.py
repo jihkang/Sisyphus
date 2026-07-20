@@ -6,6 +6,7 @@ import json
 import math
 from pathlib import PurePosixPath
 
+from .promotion_projection import DEFAULT_PROMOTION_EXECUTION_RECEIPT_PATH
 from .verification_evidence import DEFAULT_EVIDENCE_GRAPH_PATH
 
 
@@ -15,6 +16,8 @@ REVIEW_BINDING_FIELDS = (
     "reviewed_head_sha",
     "scope_digest",
 )
+VERIFICATION_OUTPUT_PATHS_FIELD = "verification_output_paths"
+PROMOTION_OUTPUT_PATHS_FIELD = "promotion_output_paths"
 
 
 def external_review_scope_document_paths(task: Mapping[str, object]) -> tuple[str, ...]:
@@ -83,8 +86,11 @@ def build_external_review_scope_payload(
                 "spec_frozen_at",
                 "verify_profile",
                 "verify_commands",
+                "task_dir",
+                "worktree_path",
             ),
         ),
+        "task_docs": _json_value(task.get("docs", {})),
         "test_strategy": {
             **_select(
                 strategy_mapping,
@@ -100,10 +106,25 @@ def build_external_review_scope_payload(
             validation_mapping,
             ("status", "stale", "report_path", "source_fingerprint", "error_count", "warning_count"),
         ),
-        "promotion_policy": _select(
-            promotion_mapping,
-            ("required", "strategy", "base_branch", "parent_task_id", "parent_artifact_id"),
-        ),
+        "promotion_policy": {
+            **_select(
+                promotion_mapping,
+                ("required", "strategy", "base_branch", "parent_task_id", "parent_artifact_id"),
+            ),
+            "execution_receipt_path": (
+                _normalized_relative_path(
+                    promotion_mapping.get("execution_receipt_path")
+                    or DEFAULT_PROMOTION_EXECUTION_RECEIPT_PATH,
+                    field="promotion.execution_receipt_path",
+                )
+                if promotion_mapping.get("required")
+                else None
+            ),
+        },
+        "generated_outputs": {
+            "verification": list(external_review_verification_output_paths(task)),
+            "promotion": list(external_review_promotion_output_paths(task)),
+        },
         "owned_paths": _json_value(meta_mapping.get("owned_paths", [])),
         "documents": {
             str(path): document_digests[path]
@@ -131,22 +152,144 @@ def external_review_artifact_prefix(task: Mapping[str, object]) -> str:
     return (PurePosixPath(task_dir) / "artifacts" / "reviews").as_posix()
 
 
-def external_review_post_verification_paths(
+def external_review_verification_output_paths(
     task: Mapping[str, object],
 ) -> tuple[str, ...]:
-    task_dir = _normalized_relative_path(task.get("task_dir"), field="task_dir")
-    paths = {
-        (PurePosixPath(task_dir) / DEFAULT_EVIDENCE_GRAPH_PATH).as_posix(),
-    }
+    paths = {DEFAULT_EVIDENCE_GRAPH_PATH}
     docs = task.get("docs")
-    if isinstance(docs, Mapping) and docs.get("verify") not in (None, ""):
-        _add_task_document_path(
-            paths,
-            task_dir,
-            docs.get("verify"),
-            field="docs.verify",
-        )
+    if not isinstance(docs, Mapping) or docs.get("verify") in (None, ""):
+        raise ValueError("docs.verify must identify the verification document")
+    verify_path = _normalized_relative_path(docs.get("verify"), field="docs.verify")
+    if verify_path == DEFAULT_EVIDENCE_GRAPH_PATH:
+        raise ValueError("docs.verify must not collide with the evidence graph")
+    paths.add(verify_path)
     return tuple(sorted(paths))
+
+
+def external_review_promotion_output_paths(
+    task: Mapping[str, object],
+) -> tuple[str, ...]:
+    promotion = task.get("promotion")
+    if not isinstance(promotion, Mapping) or not promotion.get("required"):
+        return ()
+    receipt_path = _normalized_relative_path(
+        promotion.get("execution_receipt_path")
+        or DEFAULT_PROMOTION_EXECUTION_RECEIPT_PATH,
+        field="promotion.execution_receipt_path",
+    )
+    if receipt_path in external_review_verification_output_paths(task):
+        raise ValueError("promotion receipt must not collide with verification outputs")
+    return (receipt_path,)
+
+
+def external_review_recorded_output_paths(
+    review: Mapping[str, object],
+    *,
+    field: str,
+) -> tuple[str, ...]:
+    raw = review.get(field)
+    if not isinstance(raw, (list, tuple)) or not raw:
+        raise ValueError(f"external review is missing {field}")
+    paths = tuple(
+        sorted(
+            {
+                _normalized_relative_path(value, field=f"external_review.{field}")
+                for value in raw
+            }
+        )
+    )
+    if len(paths) != len(raw):
+        raise ValueError(f"external review {field} contains duplicate paths")
+    return paths
+
+
+def validate_external_review_output_paths(
+    task: Mapping[str, object],
+    review: Mapping[str, object],
+) -> None:
+    expected_verification = external_review_verification_output_paths(task)
+    recorded_verification = external_review_recorded_output_paths(
+        review,
+        field=VERIFICATION_OUTPUT_PATHS_FIELD,
+    )
+    if recorded_verification != expected_verification:
+        raise ValueError("external review verification output paths no longer match the task")
+
+    expected_promotion = external_review_promotion_output_paths(task)
+    raw_promotion = review.get(PROMOTION_OUTPUT_PATHS_FIELD)
+    if expected_promotion:
+        recorded_promotion = external_review_recorded_output_paths(
+            review,
+            field=PROMOTION_OUTPUT_PATHS_FIELD,
+        )
+    elif raw_promotion in (None, [], ()):
+        recorded_promotion = ()
+    else:
+        recorded_promotion = external_review_recorded_output_paths(
+            review,
+            field=PROMOTION_OUTPUT_PATHS_FIELD,
+        )
+    if recorded_promotion != expected_promotion:
+        raise ValueError("external review promotion output paths no longer match the task")
+
+
+def external_review_post_verification_paths(
+    task: Mapping[str, object],
+    review: Mapping[str, object] | None = None,
+) -> tuple[str, ...]:
+    task_dir = _normalized_relative_path(task.get("task_dir"), field="task_dir")
+    relative_paths = (
+        external_review_recorded_output_paths(
+            review,
+            field=VERIFICATION_OUTPUT_PATHS_FIELD,
+        )
+        if review is not None
+        else external_review_verification_output_paths(task)
+    )
+    return tuple(
+        sorted((PurePosixPath(task_dir) / path).as_posix() for path in relative_paths)
+    )
+
+
+def external_review_post_promotion_paths(
+    task: Mapping[str, object],
+    review: Mapping[str, object] | None = None,
+) -> tuple[str, ...]:
+    task_dir = _normalized_relative_path(task.get("task_dir"), field="task_dir")
+    if review is not None:
+        raw = review.get(PROMOTION_OUTPUT_PATHS_FIELD)
+        relative_paths = (
+            ()
+            if raw in (None, [], ())
+            else external_review_recorded_output_paths(
+                review,
+                field=PROMOTION_OUTPUT_PATHS_FIELD,
+            )
+        )
+    else:
+        relative_paths = external_review_promotion_output_paths(task)
+    return tuple(
+        sorted((PurePosixPath(task_dir) / path).as_posix() for path in relative_paths)
+    )
+
+
+def external_review_verify_document_path(
+    task: Mapping[str, object],
+    review: Mapping[str, object] | None,
+) -> str:
+    if review is None:
+        docs = task.get("docs")
+        if not isinstance(docs, Mapping):
+            raise ValueError("task docs must be a mapping")
+        return _normalized_relative_path(docs.get("verify"), field="docs.verify")
+    paths = external_review_recorded_output_paths(
+        review,
+        field=VERIFICATION_OUTPUT_PATHS_FIELD,
+    )
+    documents = tuple(path for path in paths if path != DEFAULT_EVIDENCE_GRAPH_PATH)
+    if len(documents) != 1:
+        raise ValueError("external review must bind exactly one verification document")
+    return documents[0]
 
 
 def external_review_binding(review: Mapping[str, object], *, verified_at: str) -> dict[str, str]:
@@ -229,12 +372,20 @@ def _json_value(value: object) -> object:
 
 
 __all__ = [
+    "PROMOTION_OUTPUT_PATHS_FIELD",
     "REVIEW_BINDING_FIELDS",
+    "VERIFICATION_OUTPUT_PATHS_FIELD",
     "build_external_review_scope_payload",
     "external_review_artifact_prefix",
     "external_review_binding",
     "external_review_binding_is_current",
+    "external_review_post_promotion_paths",
     "external_review_post_verification_paths",
+    "external_review_promotion_output_paths",
+    "external_review_recorded_output_paths",
     "external_review_scope_digest",
     "external_review_scope_document_paths",
+    "external_review_verification_output_paths",
+    "external_review_verify_document_path",
+    "validate_external_review_output_paths",
 ]

@@ -87,11 +87,15 @@ class VersionControlFake:
 
 
 class PullRequestsFake:
-    def __init__(self) -> None:
+    def __init__(self, *, failures: int = 0) -> None:
         self.specs = []
+        self.failures = failures
 
     def create(self, spec) -> str:
         self.specs.append(spec)
+        if self.failures:
+            self.failures -= 1
+            raise RuntimeError("pull request API unavailable")
         return "https://github.com/jihkang/Sisyphus/pull/17"
 
 
@@ -309,6 +313,35 @@ class PromotionApplicationTests(unittest.TestCase):
 
         self.assertEqual(dependencies["tasks"].load("TF-1")["verify_status"], "not_run")
 
+    def test_reviewed_promotion_resumes_after_pr_failure_without_repush(self) -> None:
+        task = _reviewed_task()
+        allowed_dirty_paths = (
+            task["test_strategy"]["external_llm"]["envelope_path"],
+            task["test_strategy"]["external_llm"]["report_path"],
+            ".planning/tasks/TF-1/task.json",
+            ".planning/tasks/TF-1/VERIFY.md",
+            ".planning/tasks/TF-1/artifacts/evidence/evidence-graph.json",
+            ".planning/tasks/TF-1/artifacts/promotion/open_pr_receipt.json",
+        )
+        service, dependencies = _service(
+            task,
+            external_dirty_paths=allowed_dirty_paths,
+            pr_failures=1,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "API unavailable"):
+            service.execute(ExecutePromotionCommand(task_id="TF-1"))
+        result = service.execute(ExecutePromotionCommand(task_id="TF-1"))
+
+        self.assertEqual(result.status, "pr_open")
+        self.assertEqual(
+            [call[0] for call in dependencies["version_control"].calls].count(
+                "push_revision"
+            ),
+            1,
+        )
+        self.assertEqual(len(dependencies["pull_requests"].specs), 2)
+
     def test_record_merge_retargets_verified_stacked_child_and_closes_parent(self) -> None:
         parent = _task(task_id="TF-parent")
         child = _task(task_id="TF-child")
@@ -351,11 +384,12 @@ def _service(
     *tasks: dict,
     staged_changes: bool = True,
     external_dirty_paths: tuple[str, ...] = (),
+    pr_failures: int = 0,
 ) -> tuple[PromotionService, dict[str, object]]:
     dependencies = {
         "tasks": MemoryTasks(*tasks),
         "version_control": VersionControlFake(staged_changes=staged_changes),
-        "pull_requests": PullRequestsFake(),
+        "pull_requests": PullRequestsFake(failures=pr_failures),
         "artifacts": ArtifactsFake(),
         "conformance": ConformanceFake(),
         "external_reviews": ExternalReviewsFake(dirty_paths=external_dirty_paths),
@@ -416,6 +450,11 @@ def _reviewed_task() -> dict:
         "report_digest": "sha256:" + "r" * 64,
         "finding_count": 0,
         "blocking_finding_count": 0,
+        "verification_output_paths": [
+            "VERIFY.md",
+            "artifacts/evidence/evidence-graph.json",
+        ],
+        "promotion_output_paths": ["artifacts/promotion/open_pr_receipt.json"],
     }
     review["verification_binding"] = {
         field: review[field]

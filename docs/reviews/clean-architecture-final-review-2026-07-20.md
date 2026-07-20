@@ -10,8 +10,31 @@
 ## Findings
 
 No known unresolved High or Medium implementation defect remains in the current
-working tree. The second independent challenge findings described below are
-implemented locally but still require re-review against an immutable commit.
+working tree. The independent challenge findings described below are implemented
+locally but still require re-review against an immutable commit.
+
+### Independent challenge round 3: output and retry findings
+
+The independent reviewer rejected commit `c44e9c7` for four additional P1 gaps:
+
+1. `docs.verify` and generated output authority were not fully review-bound
+2. a verify command could mutate persisted task authority before the stale
+   in-memory task was saved
+3. a PR API failure left a promotion receipt that made the next attempt stale
+4. closeout compared a stored binding but did not re-inspect current HEAD and
+   evidence
+
+Current remediation:
+
+- scope includes the complete document mapping, worktree/task directory, and
+  exact non-colliding verification and promotion output paths
+- verification writes only the recorded path, commits through atomic
+  latest-record update, preserves concurrent authority changes, and performs a
+  final evidence inspection after generated outputs are synchronized
+- promotion accepts only its recorded receipt and resumes durable pushed state
+  without a second push after PR creation fails
+- closeout re-inspects the strict evidence and current HEAD; `allow_dirty` can
+  suppress only the generic dirty-worktree gate, never the review gate
 
 ### Independent challenge round 2: trust-boundary findings
 
@@ -148,11 +171,11 @@ The final local evidence after review fixes is:
 | Gate | Result |
 | --- | --- |
 | lock consistency | `uv lock --check` passed |
-| review/security/architecture target | 142 tests passed |
+| review/security/architecture target | 145 tests passed |
 | persistence/path/inbox/lifecycle/spec/workflow target | 71 tests passed before the focused security additions |
 | Python/MCP/Evolution target | 238 tests passed |
-| supported Python matrix | 775 tests passed on each of Python 3.11, 3.12, 3.13, and 3.14 |
-| final full suite | 775 tests passed after round-2 remediation and promotion hardening |
+| supported Python matrix | 785 tests passed on each of Python 3.11, 3.12, 3.13, and 3.14 |
+| final full suite | 785 tests passed after round-3 remediation |
 | branch coverage | 85.1%, threshold 80% |
 | standard build | sdist and wheel passed |
 | offline build | cached sdist and wheel build passed |
@@ -173,7 +196,7 @@ The implementation debt ledger is authoritative. At this review point:
   retirement conditions
 - mutable-record and Evolution-coordinator watch points are future migration
   triggers, not additional authority exceptions
-- immutable-commit independent re-review, Sisyphus verify, GitHub CI, PR merge,
+- immutable-commit independent round-3 re-review, Sisyphus verify, GitHub CI, PR merge,
   merge receipt, and merged-main revalidation remain release gates
 
 The separate Sisyphus Harness work for Docker service separation, Hermes agent

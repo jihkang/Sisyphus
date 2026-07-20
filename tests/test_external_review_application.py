@@ -154,6 +154,14 @@ class ExternalReviewApplicationTests(unittest.TestCase):
         review = tasks.task["test_strategy"]["external_llm"]
         self.assertEqual(review["envelope_path"], ENVELOPE_PATH)
         self.assertEqual(review["finding_count"], 0)
+        self.assertEqual(
+            review["verification_output_paths"],
+            ["VERIFY.md", "artifacts/evidence/evidence-graph.json"],
+        )
+        self.assertEqual(
+            review["promotion_output_paths"],
+            ["artifacts/promotion/open_pr_receipt.json"],
+        )
         self.assertEqual(tasks.task["verify_status"], "not_run")
         self.assertIsNone(tasks.task["last_verified_at"])
         self.assertEqual(tasks.task["last_verify_results"], [])
@@ -173,6 +181,21 @@ class ExternalReviewApplicationTests(unittest.TestCase):
 
         self.assertEqual(result.current_head_sha, HEAD_SHA)
         self.assertEqual(result.scope_digest, external_review_scope_digest(task, {}))
+
+    def test_scope_binds_verification_document_mapping(self) -> None:
+        task = _task()
+        original = external_review_scope_digest(task, {})
+
+        task["docs"]["verify"] = "LOG.md"
+
+        self.assertNotEqual(external_review_scope_digest(task, {}), original)
+
+    def test_scope_rejects_colliding_generated_outputs(self) -> None:
+        task = _task()
+        task["promotion"]["execution_receipt_path"] = "VERIFY.md"
+
+        with self.assertRaisesRegex(ValueError, "must not collide"):
+            external_review_scope_digest(task, {})
 
     def test_rejects_review_for_a_stale_head(self) -> None:
         task = _task()
@@ -390,7 +413,7 @@ def _task() -> dict:
         "last_verify_results": [{"status": "passed"}],
         "worktree_path": "/workspace",
         "task_dir": ".planning/tasks/TF-1",
-        "docs": {"brief": "BRIEF.md", "plan": "PLAN.md"},
+        "docs": {"brief": "BRIEF.md", "plan": "PLAN.md", "verify": "VERIFY.md"},
         "gates": [
             {
                 "code": "EXTERNAL_LLM_REVIEW_REQUIRED",

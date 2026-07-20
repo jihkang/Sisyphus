@@ -85,6 +85,10 @@
 - 2026-07-20: Restored all four inbox model serialization contracts through the outer compatibility bootstrap, made Git status NUL-delimited and fail-closed, and made concurrent Evolution parent creation race-safe while retaining exclusive run IDs.
 - 2026-07-20: Passed 775 tests on each of Python 3.11-3.14 and 85.1% branch coverage after round-2 remediation and promotion hardening; lock, standard/offline builds, and installed-wheel CLI/MCP/serialization smoke checks also pass.
 - 2026-07-20: Closed a promotion-time review bypass found during final self-review: review-gated promotion now re-inspects evidence and pushes only the reviewed commit without staging later workspace changes.
+- 2026-07-20: The third independent review rejected mutable verification output authority, stale-record verification persistence, non-retryable promotion receipts, and closeout that did not re-inspect current review evidence.
+- 2026-07-20: Bound complete document/output mappings into review scope, changed verify to a latest-record atomic commit plus post-output evidence check, made promotion receipt retries idempotent, and made closeout re-inspect evidence independently of dirty overrides.
+- 2026-07-20: Added regressions for verify-path substitution, persisted command mutation, post-output HEAD change, PR API retry, closeout HEAD drift, dirty-override review bypass, and missing closeout evidence adapters; the expanded 785-test suite passes locally.
+- 2026-07-20: Passed 785 tests on each supported Python 3.11-3.14, 85.1% branch coverage, 145 focused review/security/architecture tests, lock validation, standard and offline builds, and installed-wheel CLI/MCP/serialization smoke checks after round-3 remediation.
 
 ## Notes
 
@@ -95,6 +99,6 @@
 
 ## Follow-ups
 
-- Commit the round-2 remediation and obtain an independent review against that immutable commit.
+- Commit the round-3 remediation and obtain an independent review against that immutable commit.
 - Record the resulting strict review envelope and run Sisyphus verification.
 - Push the branch, open the PR, wait for CI, merge, record the merge receipt, and revalidate the updated `main` worktree.
